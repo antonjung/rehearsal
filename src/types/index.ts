@@ -1,0 +1,58 @@
+export type LineType = 'dialogue' | 'direction' | 'heading'
+
+export interface ScriptLine {
+  id: string
+  type: LineType
+  character?: string
+  text: string
+  lineIndex: number
+}
+
+export interface Scene {
+  id: string
+  title: string
+  actTitle: string
+  sceneTitle: string
+  startLineIndex: number
+  endLineIndex: number
+  characters: string[]
+}
+
+export interface Script {
+  id: string
+  name: string
+  lines: ScriptLine[]
+  characters: string[]
+  scenes: Scene[]
+  createdAt: number
+}
+
+export type MyLineMode = 'silence' | 'read' | 'gap-before' | 'gap-after'
+
+export interface RehearsalSettings {
+  scriptId: string
+  myCharacter: string
+  readStageDirections: boolean
+  myLineMode: MyLineMode
+  speechRate: number
+  accuracyWarningThreshold: number
+  voiceMap: Record<string, string>
+  defaultVoiceURI: string
+  accuracyEnabled: boolean
+  sceneId: string | null
+  endLineSilenceMs: number
+  errorPromptEnabled: boolean
+  errorPromptPhrase: string
+}
+
+export interface MarkedBlock {
+  startIndex: number
+  endIndex: number
+}
+
+export type RepeatMode = 'always' | 'below-threshold' | 'off'
+
+export interface WordDiff {
+  word: string
+  match: boolean
+}

@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-stage-bg: #0f0e17;
+  --color-stage-surface: #1a1830;
+  --color-stage-border: #2d2b4e;
+  --color-stage-accent: #7c3aed;
+  --color-stage-accent-light: #a78bfa;
+  --color-stage-gold: #f59e0b;
+  --color-stage-text: #e2e0ff;
+  --color-stage-muted: #6b6994;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  background-color: var(--color-stage-bg);
+  color: var(--color-stage-text);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-stage-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-stage-border);
+  border-radius: 3px;
+}
+
+.select-field {
+  background-color: var(--color-stage-bg);
+  border: 1px solid var(--color-stage-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  color: var(--color-stage-text);
+  outline: none;
+}
+.select-field:focus {
+  border-color: var(--color-stage-accent);
+}
