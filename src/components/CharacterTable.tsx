@@ -212,12 +212,14 @@ function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightC
   return (
     <div
       className={`rounded px-2 py-1.5 ${
-        isHighlighted ? 'bg-[var(--color-stage-accent)]/15 ring-1 ring-[var(--color-stage-accent)]/40' : ''
+        isHighlighted
+          ? 'bg-[var(--color-stage-accent)]/35 ring-1 ring-[var(--color-stage-accent)]/70'
+          : ''
       }`}
     >
       <span
         className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
-          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
+          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'
         }`}
       >
         {group.character}
@@ -225,7 +227,7 @@ function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightC
       {group.lines.map((line, i) => (
         <span
           key={i}
-          className={`block text-sm ${isHighlighted ? 'text-white' : 'text-[var(--color-stage-text)]'}`}
+          className={`block text-sm ${isHighlighted ? 'text-white font-medium' : 'text-[var(--color-stage-muted)]'}`}
         >
           {line.text}
         </span>
