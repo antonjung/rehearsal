@@ -5,13 +5,21 @@ import type { ScriptLine } from '../types'
 export function CharacterTable() {
   const { scripts, selectedScriptId } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
-  const [view, setView] = useState<'all' | string>('all')
-  const [sceneView, setSceneView] = useState<{ char: string; sceneId: string } | null>(null)
+  // '' = blank (no scene info), 'all' = all scene chips per row, scene ID = specific scene
+  const [sceneMode, setSceneMode] = useState<string>('')
+  // set when user clicks a chip in 'all' mode to highlight a character in a scene
+  const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (sceneView) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [sceneView])
+    if (sceneMode !== '' && sceneMode !== 'all') setCharHighlight(null)
+  }, [sceneMode])
+
+  useEffect(() => {
+    if (charHighlight || (sceneMode !== '' && sceneMode !== 'all')) {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [charHighlight, sceneMode])
 
   if (!script) {
     return (
@@ -22,10 +30,12 @@ export function CharacterTable() {
   }
 
   const hasScenes = script.scenes.length > 0
-  const activeScene = view !== 'all' ? script.scenes.find((s) => s.id === view) : null
+  const specificScene = sceneMode !== '' && sceneMode !== 'all'
+    ? script.scenes.find((s) => s.id === sceneMode) ?? null
+    : null
 
-  const relevantLines = activeScene
-    ? script.lines.slice(activeScene.startLineIndex, activeScene.endLineIndex + 1)
+  const relevantLines = specificScene
+    ? script.lines.slice(specificScene.startLineIndex, specificScene.endLineIndex + 1)
     : script.lines
 
   const lineCounts: Record<string, number> = {}
@@ -35,16 +45,20 @@ export function CharacterTable() {
     }
   })
 
-  const characters = activeScene ? activeScene.characters : script.characters
+  const characters = specificScene ? specificScene.characters : script.characters
   const sorted = characters.slice().sort((a, b) => (lineCounts[b] ?? 0) - (lineCounts[a] ?? 0))
 
-  const focusedScene = sceneView ? script.scenes.find((s) => s.id === sceneView.sceneId) : null
-  const sceneLines = focusedScene
-    ? script.lines.slice(focusedScene.startLineIndex, focusedScene.endLineIndex + 1)
+  // Scene panel: either from chip click (with highlight) or specific-scene dropdown (no highlight)
+  const panelScene = charHighlight
+    ? script.scenes.find((s) => s.id === charHighlight.sceneId) ?? null
+    : specificScene
+  const panelLines = panelScene
+    ? script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1)
     : []
+  const panelHighlightChar = charHighlight?.char ?? null
 
-  const toggleSceneView = (char: string, sceneId: string) =>
-    setSceneView((prev) =>
+  const toggleChip = (char: string, sceneId: string) =>
+    setCharHighlight((prev) =>
       prev?.char === char && prev?.sceneId === sceneId ? null : { char, sceneId },
     )
 
@@ -57,10 +71,11 @@ export function CharacterTable() {
         </h2>
         {hasScenes && (
           <select
-            value={view}
-            onChange={(e) => setView(e.target.value)}
+            value={sceneMode}
+            onChange={(e) => setSceneMode(e.target.value)}
             className="text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
           >
+            <option value="">— scene —</option>
             <option value="all">All scenes</option>
             {script.scenes.map((s) => (
               <option key={s.id} value={s.id}>{s.title}</option>
@@ -68,12 +83,6 @@ export function CharacterTable() {
           </select>
         )}
       </div>
-
-      {hasScenes && view === 'all' && (
-        <p className="text-xs text-[var(--color-stage-muted)]">
-          {script.scenes.length} scenes extracted — tap a scene tag to view a character's lines
-        </p>
-      )}
 
       <div className="rounded-xl overflow-hidden border border-[var(--color-stage-border)]">
         <table className="w-full text-sm">
@@ -85,7 +94,7 @@ export function CharacterTable() {
           </thead>
           <tbody>
             {sorted.map((char, i) => {
-              const charScenes = hasScenes
+              const charScenes = sceneMode === 'all'
                 ? script.scenes.filter((s) => s.characters.includes(char))
                 : []
               return (
@@ -100,11 +109,11 @@ export function CharacterTable() {
                     {charScenes.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {charScenes.map((s) => {
-                          const active = sceneView?.char === char && sceneView?.sceneId === s.id
+                          const active = charHighlight?.char === char && charHighlight?.sceneId === s.id
                           return (
                             <button
                               key={s.id}
-                              onClick={() => toggleSceneView(char, s.id)}
+                              onClick={() => toggleChip(char, s.id)}
                               className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
                                 active
                                   ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)]'
@@ -128,25 +137,32 @@ export function CharacterTable() {
         </table>
       </div>
 
-      {/* Inline scene view */}
-      {sceneView && focusedScene && (
+      {/* Scene panel — shown when a chip is clicked (with highlight) or a specific scene is selected */}
+      {panelScene && (
         <div ref={panelRef} className="rounded-xl border border-[var(--color-stage-accent)]/40 bg-[var(--color-stage-surface)] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] sticky top-0 bg-[var(--color-stage-surface)]">
             <div className="text-sm">
-              <span className="font-semibold text-[var(--color-stage-accent-light)]">{sceneView.char}</span>
-              <span className="text-[var(--color-stage-muted)]"> in </span>
-              <span className="text-[var(--color-stage-gold)]">{focusedScene.title}</span>
+              {panelHighlightChar && (
+                <>
+                  <span className="font-semibold text-[var(--color-stage-accent-light)]">{panelHighlightChar}</span>
+                  <span className="text-[var(--color-stage-muted)]"> in </span>
+                </>
+              )}
+              <span className="text-[var(--color-stage-gold)]">{panelScene.title}</span>
             </div>
             <button
-              onClick={() => setSceneView(null)}
+              onClick={() => {
+                setCharHighlight(null)
+                if (specificScene) setSceneMode('')
+              }}
               className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm px-1"
             >
               ✕
             </button>
           </div>
           <div className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
-            {sceneLines.map((line, idx) => (
-              <SceneLine key={line.id ?? idx} line={line} highlightChar={sceneView.char} />
+            {panelLines.map((line, idx) => (
+              <SceneLine key={line.id ?? idx} line={line} highlightChar={panelHighlightChar} />
             ))}
           </div>
         </div>
@@ -155,7 +171,7 @@ export function CharacterTable() {
   )
 }
 
-function SceneLine({ line, highlightChar }: { line: ScriptLine; highlightChar: string }) {
+function SceneLine({ line, highlightChar }: { line: ScriptLine; highlightChar: string | null }) {
   if (line.type === 'heading') {
     return (
       <div className="py-2 text-center text-[var(--color-stage-gold)] font-semibold text-xs uppercase tracking-widest">
@@ -172,7 +188,7 @@ function SceneLine({ line, highlightChar }: { line: ScriptLine; highlightChar: s
     )
   }
 
-  const isHighlighted = line.character === highlightChar
+  const isHighlighted = highlightChar !== null && line.character === highlightChar
 
   return (
     <div
