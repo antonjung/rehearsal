@@ -48,24 +48,21 @@ function VoiceSelect({
 
 export function VoiceAssignment() {
   const { voices, speak, refreshVoices } = useSpeechSynthesis()
-  const { scripts, selectedScriptId, rehearsalSettings, updateVoiceMap, saveRehearsalSettings } = useAppStore()
+  const { scripts, selectedScriptId, rehearsalSettings, voicePrefs, saveVoicePrefs } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
 
   const { female, male, unknown } = groupVoices(voices)
   const grouped: GroupedVoices = { female, male, unknown }
 
-  const voiceMap = rehearsalSettings?.voiceMap ?? {}
-  const defaultVoiceURI = rehearsalSettings?.defaultVoiceURI ?? ''
+  const { voiceMap, defaultVoiceURI } = voicePrefs
   const myCharacter = rehearsalSettings?.myCharacter ?? ''
   const rate = rehearsalSettings?.speechRate ?? 1
 
   const updateVoice = (character: string, voiceURI: string) =>
-    updateVoiceMap({ ...voiceMap, [character]: voiceURI })
+    saveVoicePrefs({ voiceMap: { ...voiceMap, [character]: voiceURI } })
 
-  const updateDefaultVoice = (voiceURI: string) => {
-    if (!rehearsalSettings) return
-    saveRehearsalSettings({ ...rehearsalSettings, defaultVoiceURI: voiceURI })
-  }
+  const updateDefaultVoice = (voiceURI: string) =>
+    saveVoicePrefs({ defaultVoiceURI: voiceURI })
 
   const preview = (voiceURI: string) =>
     speak(PREVIEW_TEXT, { voiceURI: voiceURI || defaultVoiceURI, rate })
