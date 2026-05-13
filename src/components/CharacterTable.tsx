@@ -211,29 +211,25 @@ function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightC
 
   return (
     <div
-      className={`rounded px-2 py-1 ${
+      className={`rounded px-2 py-1.5 ${
         isHighlighted ? 'bg-[var(--color-stage-accent)]/15 ring-1 ring-[var(--color-stage-accent)]/40' : ''
       }`}
     >
-      <div className="flex items-baseline gap-2">
+      <span
+        className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
+          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
+        }`}
+      >
+        {group.character}
+      </span>
+      {group.lines.map((line, i) => (
         <span
-          className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
-            isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
-          }`}
+          key={i}
+          className={`block text-sm ${isHighlighted ? 'text-white' : 'text-[var(--color-stage-text)]'}`}
         >
-          {group.character}
+          {line.text}
         </span>
-        <div className="flex-1">
-          {group.lines.map((line, i) => (
-            <span
-              key={i}
-              className={`block text-sm ${isHighlighted ? 'text-white' : 'text-[var(--color-stage-text)]'}`}
-            >
-              {line.text}
-            </span>
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   )
 }
