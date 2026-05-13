@@ -24,6 +24,7 @@ Choose to repeat block of text always or if accuracy below a set level
 Highlight differences in the text and your speech
 
 From the characters screen add a button to select one of the scenes they are in and display the scene with their lines highlighted.
-In settings choose the voice that is used if onisnt selected for each character
-in voice selection only inlcude British voices and split them by Gender so its easy to choose male or female
-The gap shouldnt be a fixed time but the time it would take to say the characters line
+In settings choose the voice that is used if one isn't selected for each character
+Voice selection groups voices by language/region (matching iOS Settings structure), with British English first. All voices returned by the Web Speech API are shown — no filtering by locale.
+Note: voices listed under "Eloquence" in iOS Settings are not available to browser apps (Apple restriction) — only standard voices such as Daniel are accessible.
+The gap shouldn't be a fixed time but the time it would take to say the character's line
