@@ -4,6 +4,7 @@ import { CharacterTable } from './components/CharacterTable'
 import { VoiceAssignment } from './components/VoiceAssignment'
 import { RehearsalSetup } from './components/RehearsalSetup'
 import { RehearsalMode } from './components/RehearsalMode'
+import { SplashScreen } from './components/SplashScreen'
 
 type Tab = 'scripts' | 'characters' | 'voices' | 'rehearse'
 
@@ -15,8 +16,11 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ]
 
 export default function App() {
+  const [splashDone, setSplashDone] = useState(false)
   const [tab, setTab] = useState<Tab>('scripts')
   const [rehearsing, setRehearsing] = useState(false)
+
+  if (!splashDone) return <SplashScreen onDone={() => setSplashDone(true)} />
 
   if (rehearsing) {
     return (
