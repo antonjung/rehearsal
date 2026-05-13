@@ -88,13 +88,8 @@ export function VoiceAssignment() {
       <div>
         <h2 className="text-lg font-semibold text-[var(--color-stage-text)] mb-1">Voice Assignment</h2>
         <p className="text-sm text-[var(--color-stage-muted)]">
-          {voiceLabel} — grouped by gender. Set a default voice, then override per character.
+          {voiceLabel} — grouped by gender, British voices first. Set a default, then override per character.
         </p>
-        {isFallback && (
-          <p className="text-xs text-amber-400 mt-1">
-            Few British voices found. On iPhone: Settings → Accessibility → Spoken Content → Voices → English to download more.
-          </p>
-        )}
       </div>
 
       {/* Default voice */}

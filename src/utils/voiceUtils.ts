@@ -51,15 +51,12 @@ export function groupBritishVoices(voices: SpeechSynthesisVoice[]): GroupedVoice
   return groupByGender(voices.filter(isBritishVoice))
 }
 
-// Falls back to all English voices, then all voices, when British voices are scarce.
+// All available voices, grouped by gender. British voices sort to the top within each group.
 export function groupVoices(voices: SpeechSynthesisVoice[]): GroupedVoicesWithLabel {
-  const british = voices.filter(isBritishVoice)
-  if (british.length >= 1) {
-    return { ...groupByGender(british), label: 'British voices', isFallback: false }
-  }
-  const english = voices.filter((v) => v.lang.replace('_', '-').startsWith('en-'))
-  if (english.length >= 1) {
-    return { ...groupByGender(english), label: 'English voices', isFallback: true }
-  }
-  return { ...groupByGender(voices), label: 'Available voices', isFallback: true }
+  const sorted = [...voices].sort((a, b) => {
+    const ab = isBritishVoice(a) ? 0 : 1
+    const bb = isBritishVoice(b) ? 0 : 1
+    return ab - bb
+  })
+  return { ...groupByGender(sorted), label: 'All voices', isFallback: false }
 }

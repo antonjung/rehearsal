@@ -219,7 +219,7 @@ function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightC
     >
       <span
         className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
-          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'
+          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
         }`}
       >
         {group.character}
@@ -227,7 +227,7 @@ function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightC
       {group.lines.map((line, i) => (
         <span
           key={i}
-          className={`block text-sm ${isHighlighted ? 'text-white font-medium' : 'text-[var(--color-stage-muted)]'}`}
+          className={`block text-sm ${isHighlighted ? 'text-white font-medium' : 'text-[var(--color-stage-text)]'}`}
         >
           {line.text}
         </span>
