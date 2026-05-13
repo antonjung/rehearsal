@@ -72,6 +72,9 @@ export function VoiceAssignment() {
             On iPhone: Settings → Accessibility → Spoken Content → Voices → English to download voices.
           </p>
         )}
+        <p className="text-xs text-[var(--color-stage-muted)] mt-1">
+          Note: voices listed under "Eloquence" in iOS Settings are not available in browsers.
+        </p>
       </div>
 
       {/* Default voice */}

@@ -19,12 +19,11 @@ export function useSpeechSynthesis() {
     setVoices([...v])
   }, [])
 
-  // On iOS, cancel+getVoices sometimes surfaces enhanced voices not in the initial list
   const forceLoad = useCallback(() => {
-    speechSynthesis.cancel()
     load()
-    const t = setTimeout(load, 300)
-    return () => clearTimeout(t)
+    setTimeout(load, 200)
+    setTimeout(load, 800)
+    setTimeout(load, 2000)
   }, [load])
 
   useEffect(() => {
