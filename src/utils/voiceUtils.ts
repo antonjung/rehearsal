@@ -34,9 +34,30 @@ export interface GroupedVoices {
   unknown: SpeechSynthesisVoice[]
 }
 
-export function groupBritishVoices(voices: SpeechSynthesisVoice[]): GroupedVoices {
-  const british = voices.filter(isBritishVoice)
+export interface GroupedVoicesWithLabel extends GroupedVoices {
+  label: string
+  isFallback: boolean
+}
+
+function groupByGender(voices: SpeechSynthesisVoice[]): GroupedVoices {
   const result: GroupedVoices = { male: [], female: [], unknown: [] }
-  for (const v of british) result[guessVoiceGender(v)].push(v)
+  for (const v of voices) result[guessVoiceGender(v)].push(v)
   return result
+}
+
+export function groupBritishVoices(voices: SpeechSynthesisVoice[]): GroupedVoices {
+  return groupByGender(voices.filter(isBritishVoice))
+}
+
+// Falls back to all English voices, then all voices, when British voices are scarce.
+export function groupVoices(voices: SpeechSynthesisVoice[]): GroupedVoicesWithLabel {
+  const british = voices.filter(isBritishVoice)
+  if (british.length >= 2) {
+    return { ...groupByGender(british), label: 'British voices', isFallback: false }
+  }
+  const english = voices.filter((v) => v.lang.startsWith('en-'))
+  if (english.length >= 2) {
+    return { ...groupByGender(english), label: 'English voices', isFallback: true }
+  }
+  return { ...groupByGender(voices), label: 'Available voices', isFallback: true }
 }

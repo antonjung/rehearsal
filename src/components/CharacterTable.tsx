@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import type { ScriptLine } from '../types'
 
 export function CharacterTable() {
   const { scripts, selectedScriptId } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
   const [view, setView] = useState<'all' | string>('all')
+  const [sceneView, setSceneView] = useState<{ char: string; sceneId: string } | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (sceneView) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [sceneView])
 
   if (!script) {
     return (
@@ -14,6 +21,7 @@ export function CharacterTable() {
     )
   }
 
+  const hasScenes = script.scenes.length > 0
   const activeScene = view !== 'all' ? script.scenes.find((s) => s.id === view) : null
 
   const relevantLines = activeScene
@@ -30,6 +38,16 @@ export function CharacterTable() {
   const characters = activeScene ? activeScene.characters : script.characters
   const sorted = characters.slice().sort((a, b) => (lineCounts[b] ?? 0) - (lineCounts[a] ?? 0))
 
+  const focusedScene = sceneView ? script.scenes.find((s) => s.id === sceneView.sceneId) : null
+  const sceneLines = focusedScene
+    ? script.lines.slice(focusedScene.startLineIndex, focusedScene.endLineIndex + 1)
+    : []
+
+  const toggleSceneView = (char: string, sceneId: string) =>
+    setSceneView((prev) =>
+      prev?.char === char && prev?.sceneId === sceneId ? null : { char, sceneId },
+    )
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -37,7 +55,7 @@ export function CharacterTable() {
           Characters in{' '}
           <span className="text-[var(--color-stage-accent-light)]">{script.name}</span>
         </h2>
-        {script.scenes.length > 0 && (
+        {hasScenes && (
           <select
             value={view}
             onChange={(e) => setView(e.target.value)}
@@ -51,9 +69,9 @@ export function CharacterTable() {
         )}
       </div>
 
-      {script.scenes.length > 0 && view === 'all' && (
+      {hasScenes && view === 'all' && (
         <p className="text-xs text-[var(--color-stage-muted)]">
-          {script.scenes.length} scenes extracted
+          {script.scenes.length} scenes extracted — tap a scene tag to view a character's lines
         </p>
       )}
 
@@ -66,22 +84,114 @@ export function CharacterTable() {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((char, i) => (
-              <tr
-                key={char}
-                className={`border-t border-[var(--color-stage-border)] ${
-                  i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
-                }`}
-              >
-                <td className="px-4 py-2.5 font-medium text-[var(--color-stage-text)]">{char}</td>
-                <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">
-                  {lineCounts[char] ?? 0}
-                </td>
-              </tr>
-            ))}
+            {sorted.map((char, i) => {
+              const charScenes = hasScenes
+                ? script.scenes.filter((s) => s.characters.includes(char))
+                : []
+              return (
+                <tr
+                  key={char}
+                  className={`border-t border-[var(--color-stage-border)] ${
+                    i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
+                  }`}
+                >
+                  <td className="px-4 py-2.5">
+                    <span className="font-medium text-[var(--color-stage-text)]">{char}</span>
+                    {charScenes.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {charScenes.map((s) => {
+                          const active = sceneView?.char === char && sceneView?.sceneId === s.id
+                          return (
+                            <button
+                              key={s.id}
+                              onClick={() => toggleSceneView(char, s.id)}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                active
+                                  ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)]'
+                                  : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)]/50'
+                              }`}
+                            >
+                              {s.title}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)] align-top">
+                    {lineCounts[char] ?? 0}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Inline scene view */}
+      {sceneView && focusedScene && (
+        <div ref={panelRef} className="rounded-xl border border-[var(--color-stage-accent)]/40 bg-[var(--color-stage-surface)] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] sticky top-0 bg-[var(--color-stage-surface)]">
+            <div className="text-sm">
+              <span className="font-semibold text-[var(--color-stage-accent-light)]">{sceneView.char}</span>
+              <span className="text-[var(--color-stage-muted)]"> in </span>
+              <span className="text-[var(--color-stage-gold)]">{focusedScene.title}</span>
+            </div>
+            <button
+              onClick={() => setSceneView(null)}
+              className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm px-1"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
+            {sceneLines.map((line, idx) => (
+              <SceneLine key={line.id ?? idx} line={line} highlightChar={sceneView.char} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SceneLine({ line, highlightChar }: { line: ScriptLine; highlightChar: string }) {
+  if (line.type === 'heading') {
+    return (
+      <div className="py-2 text-center text-[var(--color-stage-gold)] font-semibold text-xs uppercase tracking-widest">
+        {line.text}
+      </div>
+    )
+  }
+
+  if (line.type === 'direction') {
+    return (
+      <div className="text-xs italic text-[var(--color-stage-muted)] px-2 py-0.5">
+        {line.text}
+      </div>
+    )
+  }
+
+  const isHighlighted = line.character === highlightChar
+
+  return (
+    <div
+      className={`rounded px-2 py-1 ${
+        isHighlighted
+          ? 'bg-[var(--color-stage-accent)]/15 ring-1 ring-[var(--color-stage-accent)]/40'
+          : ''
+      }`}
+    >
+      <span
+        className={`text-[10px] font-bold uppercase tracking-wider mr-2 ${
+          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
+        }`}
+      >
+        {line.character}
+      </span>
+      <span className={`text-sm ${isHighlighted ? 'text-white' : 'text-[var(--color-stage-text)]'}`}>
+        {line.text}
+      </span>
     </div>
   )
 }
