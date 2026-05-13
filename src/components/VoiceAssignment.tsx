@@ -1,47 +1,32 @@
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { useAppStore } from '../store/useAppStore'
-import { groupVoices } from '../utils/voiceUtils'
-import type { GroupedVoices } from '../utils/voiceUtils'
+import { groupVoicesByLocale } from '../utils/voiceUtils'
 
 const PREVIEW_TEXT = 'To be, or not to be, that is the question.'
 
 function VoiceSelect({
-  value, onChange, grouped,
+  value, onChange, voices,
 }: {
   value: string
   onChange: (v: string) => void
-  grouped: GroupedVoices
+  voices: SpeechSynthesisVoice[]
 }) {
-  const total = grouped.female.length + grouped.male.length + grouped.unknown.length
+  const groups = groupVoicesByLocale(voices)
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      disabled={total === 0}
+      disabled={voices.length === 0}
       className="w-full bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-3 py-1.5 text-sm text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)] disabled:opacity-50"
     >
       <option value="">— system default —</option>
-      {grouped.female.length > 0 && (
-        <optgroup label="Female">
-          {grouped.female.map((v) => (
+      {groups.map((group) => (
+        <optgroup key={group.lang} label={group.label}>
+          {group.voices.map((v) => (
             <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
           ))}
         </optgroup>
-      )}
-      {grouped.male.length > 0 && (
-        <optgroup label="Male">
-          {grouped.male.map((v) => (
-            <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-          ))}
-        </optgroup>
-      )}
-      {grouped.unknown.length > 0 && (
-        <optgroup label="Other">
-          {grouped.unknown.map((v) => (
-            <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-          ))}
-        </optgroup>
-      )}
+      ))}
     </select>
   )
 }
@@ -50,9 +35,6 @@ export function VoiceAssignment() {
   const { voices, speak, refreshVoices } = useSpeechSynthesis()
   const { scripts, selectedScriptId, rehearsalSettings, voicePrefs, saveVoicePrefs } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
-
-  const { female, male, unknown } = groupVoices(voices)
-  const grouped: GroupedVoices = { female, male, unknown }
 
   const { voiceMap, defaultVoiceURI } = voicePrefs
   const myCharacter = rehearsalSettings?.myCharacter ?? ''
@@ -83,7 +65,7 @@ export function VoiceAssignment() {
         <p className="text-sm text-[var(--color-stage-muted)]">
           {voices.length === 0
             ? 'No voices detected yet — tap Refresh, or wait a moment.'
-            : `${voices.length} voice${voices.length === 1 ? '' : 's'} found, grouped by gender, British voices first.`}
+            : `${voices.length} voice${voices.length === 1 ? '' : 's'} found, grouped by language, British English first.`}
         </p>
         {voices.length === 0 && (
           <p className="text-xs text-amber-400 mt-1.5">
@@ -106,7 +88,7 @@ export function VoiceAssignment() {
             ▶ Preview
           </button>
         </div>
-        <VoiceSelect value={defaultVoiceURI} onChange={updateDefaultVoice} grouped={grouped} />
+        <VoiceSelect value={defaultVoiceURI} onChange={updateDefaultVoice} voices={voices} />
         {!rehearsalSettings && (
           <p className="text-xs text-[var(--color-stage-muted)] mt-1">
             Set up a rehearsal on the Rehearse tab to save this.
@@ -140,7 +122,7 @@ export function VoiceAssignment() {
               <VoiceSelect
                 value={voiceMap[char] ?? ''}
                 onChange={(v) => updateVoice(char, v)}
-                grouped={grouped}
+                voices={voices}
               />
             </div>
           ))}

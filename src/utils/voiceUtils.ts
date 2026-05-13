@@ -1,63 +1,36 @@
-export type VoiceGender = 'male' | 'female' | 'unknown'
-
-const FEMALE_NAMES = [
-  'hazel', 'serena', 'susan', 'emma', 'amy', 'kate', 'libby',
-  'martha', 'ava', 'alice', 'eleanor', 'karen', 'victoria', 'moira',
-  'tessa', 'fiona', 'veena', 'samantha', 'zoe',
-]
-const MALE_NAMES = [
-  'daniel', 'george', 'arthur', 'oliver', 'harry', 'james', 'thomas',
-  'peter', 'william', 'gordon', 'lee', 'freddie', 'rishi', 'callum',
-  'jamie', 'malcolm', 'liam', 'aaron', 'stefan', 'eddy', 'reed',
-]
-
-export function guessVoiceGender(v: SpeechSynthesisVoice): VoiceGender {
-  const name = v.name.toLowerCase()
-  if (/\bfemale\b/.test(name)) return 'female'
-  if (/\bmale\b/.test(name)) return 'male'
-  for (const n of FEMALE_NAMES) if (name.includes(n)) return 'female'
-  for (const n of MALE_NAMES) if (name.includes(n)) return 'male'
-  return 'unknown'
-}
-
-export function isBritishVoice(v: SpeechSynthesisVoice): boolean {
-  // iOS uses en_GB (underscore) rather than en-GB in some voice entries
-  const lang = v.lang.replace('_', '-')
-  return (
-    lang === 'en-GB' ||
-    lang.startsWith('en-GB') ||
-    v.name.toLowerCase().includes('uk english') ||
-    v.name.toLowerCase().includes('british')
-  )
-}
-
-export interface GroupedVoices {
-  male: SpeechSynthesisVoice[]
-  female: SpeechSynthesisVoice[]
-  unknown: SpeechSynthesisVoice[]
-}
-
-export interface GroupedVoicesWithLabel extends GroupedVoices {
+export interface VoiceLocaleGroup {
+  lang: string
   label: string
-  isFallback: boolean
+  voices: SpeechSynthesisVoice[]
 }
 
-function groupByGender(voices: SpeechSynthesisVoice[]): GroupedVoices {
-  const result: GroupedVoices = { male: [], female: [], unknown: [] }
-  for (const v of voices) result[guessVoiceGender(v)].push(v)
-  return result
+function localeLabel(lang: string): string {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(lang) ?? lang
+  } catch {
+    return lang
+  }
 }
 
-export function groupBritishVoices(voices: SpeechSynthesisVoice[]): GroupedVoices {
-  return groupByGender(voices.filter(isBritishVoice))
-}
-
-// All available voices, grouped by gender. British voices sort to the top within each group.
-export function groupVoices(voices: SpeechSynthesisVoice[]): GroupedVoicesWithLabel {
-  const sorted = [...voices].sort((a, b) => {
-    const ab = isBritishVoice(a) ? 0 : 1
-    const bb = isBritishVoice(b) ? 0 : 1
-    return ab - bb
-  })
-  return { ...groupByGender(sorted), label: 'All voices', isFallback: false }
+// Group voices by language/region, same structure as iOS Settings.
+// British English sorts first; within each group voices are alphabetical.
+export function groupVoicesByLocale(voices: SpeechSynthesisVoice[]): VoiceLocaleGroup[] {
+  const map = new Map<string, SpeechSynthesisVoice[]>()
+  for (const v of voices) {
+    const lang = v.lang.replace('_', '-') || 'unknown'
+    if (!map.has(lang)) map.set(lang, [])
+    map.get(lang)!.push(v)
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => {
+      const ukA = a === 'en-GB' || a.startsWith('en-GB-') ? 0 : 1
+      const ukB = b === 'en-GB' || b.startsWith('en-GB-') ? 0 : 1
+      if (ukA !== ukB) return ukA - ukB
+      return localeLabel(a).localeCompare(localeLabel(b))
+    })
+    .map(([lang, vs]) => ({
+      lang,
+      label: localeLabel(lang),
+      voices: vs.slice().sort((a, b) => a.name.localeCompare(b.name)),
+    }))
 }
