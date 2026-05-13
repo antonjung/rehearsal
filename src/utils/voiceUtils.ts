@@ -20,9 +20,11 @@ export function guessVoiceGender(v: SpeechSynthesisVoice): VoiceGender {
 }
 
 export function isBritishVoice(v: SpeechSynthesisVoice): boolean {
+  // iOS uses en_GB (underscore) rather than en-GB in some voice entries
+  const lang = v.lang.replace('_', '-')
   return (
-    v.lang === 'en-GB' ||
-    v.lang.startsWith('en-GB') ||
+    lang === 'en-GB' ||
+    lang.startsWith('en-GB') ||
     v.name.toLowerCase().includes('uk english') ||
     v.name.toLowerCase().includes('british')
   )
@@ -52,11 +54,11 @@ export function groupBritishVoices(voices: SpeechSynthesisVoice[]): GroupedVoice
 // Falls back to all English voices, then all voices, when British voices are scarce.
 export function groupVoices(voices: SpeechSynthesisVoice[]): GroupedVoicesWithLabel {
   const british = voices.filter(isBritishVoice)
-  if (british.length >= 2) {
+  if (british.length >= 1) {
     return { ...groupByGender(british), label: 'British voices', isFallback: false }
   }
-  const english = voices.filter((v) => v.lang.startsWith('en-'))
-  if (english.length >= 2) {
+  const english = voices.filter((v) => v.lang.replace('_', '-').startsWith('en-'))
+  if (english.length >= 1) {
     return { ...groupByGender(english), label: 'English voices', isFallback: true }
   }
   return { ...groupByGender(voices), label: 'Available voices', isFallback: true }

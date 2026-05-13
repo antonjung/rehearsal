@@ -2,24 +2,50 @@ import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type { ScriptLine } from '../types'
 
+interface LineGroup {
+  type: 'dialogue' | 'direction' | 'heading'
+  character?: string
+  lines: ScriptLine[]
+}
+
+function groupSceneLines(lines: ScriptLine[]): LineGroup[] {
+  const groups: LineGroup[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (line.type === 'dialogue') {
+      const g: LineGroup = { type: 'dialogue', character: line.character, lines: [line] }
+      while (
+        i + 1 < lines.length &&
+        lines[i + 1].type === 'dialogue' &&
+        lines[i + 1].character === line.character
+      ) {
+        i++
+        g.lines.push(lines[i])
+      }
+      groups.push(g)
+    } else {
+      groups.push({ type: line.type, character: line.character, lines: [line] })
+    }
+    i++
+  }
+  return groups
+}
+
 export function CharacterTable() {
   const { scripts, selectedScriptId } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
-  // '' = blank (no scene info), 'all' = all scene chips per row, scene ID = specific scene
+  // '' = no scene info | 'all' = all scene chips | scene ID = one chip per character
   const [sceneMode, setSceneMode] = useState<string>('')
-  // set when user clicks a chip in 'all' mode to highlight a character in a scene
   const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (sceneMode !== '' && sceneMode !== 'all') setCharHighlight(null)
-  }, [sceneMode])
+  // Clear panel when scene mode changes
+  useEffect(() => { setCharHighlight(null) }, [sceneMode])
 
   useEffect(() => {
-    if (charHighlight || (sceneMode !== '' && sceneMode !== 'all')) {
-      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [charHighlight, sceneMode])
+    if (charHighlight) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [charHighlight])
 
   if (!script) {
     return (
@@ -40,22 +66,26 @@ export function CharacterTable() {
 
   const lineCounts: Record<string, number> = {}
   relevantLines.forEach((l) => {
-    if (l.type === 'dialogue' && l.character) {
+    if (l.type === 'dialogue' && l.character)
       lineCounts[l.character] = (lineCounts[l.character] ?? 0) + 1
-    }
   })
 
   const characters = specificScene ? specificScene.characters : script.characters
   const sorted = characters.slice().sort((a, b) => (lineCounts[b] ?? 0) - (lineCounts[a] ?? 0))
 
-  // Scene panel: either from chip click (with highlight) or specific-scene dropdown (no highlight)
+  // Which chips to show per character row
+  const getChips = (char: string) => {
+    if (sceneMode === '') return []
+    if (sceneMode === 'all') return script.scenes.filter((s) => s.characters.includes(char))
+    return specificScene?.characters.includes(char) ? [specificScene] : []
+  }
+
   const panelScene = charHighlight
     ? script.scenes.find((s) => s.id === charHighlight.sceneId) ?? null
-    : specificScene
-  const panelLines = panelScene
-    ? script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1)
+    : null
+  const panelGroups = panelScene
+    ? groupSceneLines(script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1))
     : []
-  const panelHighlightChar = charHighlight?.char ?? null
 
   const toggleChip = (char: string, sceneId: string) =>
     setCharHighlight((prev) =>
@@ -94,9 +124,7 @@ export function CharacterTable() {
           </thead>
           <tbody>
             {sorted.map((char, i) => {
-              const charScenes = sceneMode === 'all'
-                ? script.scenes.filter((s) => s.characters.includes(char))
-                : []
+              const chips = getChips(char)
               return (
                 <tr
                   key={char}
@@ -106,9 +134,9 @@ export function CharacterTable() {
                 >
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-[var(--color-stage-text)]">{char}</span>
-                    {charScenes.length > 0 && (
+                    {chips.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
-                        {charScenes.map((s) => {
+                        {chips.map((s) => {
                           const active = charHighlight?.char === char && charHighlight?.sceneId === s.id
                           return (
                             <button
@@ -137,32 +165,24 @@ export function CharacterTable() {
         </table>
       </div>
 
-      {/* Scene panel — shown when a chip is clicked (with highlight) or a specific scene is selected */}
-      {panelScene && (
+      {panelScene && charHighlight && (
         <div ref={panelRef} className="rounded-xl border border-[var(--color-stage-accent)]/40 bg-[var(--color-stage-surface)] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] sticky top-0 bg-[var(--color-stage-surface)]">
             <div className="text-sm">
-              {panelHighlightChar && (
-                <>
-                  <span className="font-semibold text-[var(--color-stage-accent-light)]">{panelHighlightChar}</span>
-                  <span className="text-[var(--color-stage-muted)]"> in </span>
-                </>
-              )}
+              <span className="font-semibold text-[var(--color-stage-accent-light)]">{charHighlight.char}</span>
+              <span className="text-[var(--color-stage-muted)]"> in </span>
               <span className="text-[var(--color-stage-gold)]">{panelScene.title}</span>
             </div>
             <button
-              onClick={() => {
-                setCharHighlight(null)
-                if (specificScene) setSceneMode('')
-              }}
+              onClick={() => setCharHighlight(null)}
               className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm px-1"
             >
               ✕
             </button>
           </div>
           <div className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
-            {panelLines.map((line, idx) => (
-              <SceneLine key={line.id ?? idx} line={line} highlightChar={panelHighlightChar} />
+            {panelGroups.map((group, idx) => (
+              <SceneLineGroup key={idx} group={group} highlightChar={charHighlight.char} />
             ))}
           </div>
         </div>
@@ -171,43 +191,49 @@ export function CharacterTable() {
   )
 }
 
-function SceneLine({ line, highlightChar }: { line: ScriptLine; highlightChar: string | null }) {
-  if (line.type === 'heading') {
+function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightChar: string }) {
+  if (group.type === 'heading') {
     return (
       <div className="py-2 text-center text-[var(--color-stage-gold)] font-semibold text-xs uppercase tracking-widest">
-        {line.text}
+        {group.lines[0].text}
       </div>
     )
   }
-
-  if (line.type === 'direction') {
+  if (group.type === 'direction') {
     return (
       <div className="text-xs italic text-[var(--color-stage-muted)] px-2 py-0.5">
-        {line.text}
+        {group.lines[0].text}
       </div>
     )
   }
 
-  const isHighlighted = highlightChar !== null && line.character === highlightChar
+  const isHighlighted = group.character === highlightChar
 
   return (
     <div
       className={`rounded px-2 py-1 ${
-        isHighlighted
-          ? 'bg-[var(--color-stage-accent)]/15 ring-1 ring-[var(--color-stage-accent)]/40'
-          : ''
+        isHighlighted ? 'bg-[var(--color-stage-accent)]/15 ring-1 ring-[var(--color-stage-accent)]/40' : ''
       }`}
     >
-      <span
-        className={`text-[10px] font-bold uppercase tracking-wider mr-2 ${
-          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
-        }`}
-      >
-        {line.character}
-      </span>
-      <span className={`text-sm ${isHighlighted ? 'text-white' : 'text-[var(--color-stage-text)]'}`}>
-        {line.text}
-      </span>
+      <div className="flex items-baseline gap-2">
+        <span
+          className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+            isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
+          }`}
+        >
+          {group.character}
+        </span>
+        <div className="flex-1">
+          {group.lines.map((line, i) => (
+            <span
+              key={i}
+              className={`block text-sm ${isHighlighted ? 'text-white' : 'text-[var(--color-stage-text)]'}`}
+            >
+              {line.text}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

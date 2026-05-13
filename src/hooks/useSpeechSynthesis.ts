@@ -22,7 +22,14 @@ export function useSpeechSynthesis() {
     }
     load()
     speechSynthesis.addEventListener('voiceschanged', load)
-    return () => speechSynthesis.removeEventListener('voiceschanged', load)
+    // iOS sometimes doesn't fire voiceschanged; poll a couple of times as fallback
+    const t1 = setTimeout(load, 200)
+    const t2 = setTimeout(load, 1000)
+    return () => {
+      speechSynthesis.removeEventListener('voiceschanged', load)
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
   }, [])
 
   const speak = useCallback(
