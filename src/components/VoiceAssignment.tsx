@@ -74,7 +74,7 @@ export function VoiceAssignment() {
           <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Voice Assignment</h2>
           <button
             onClick={refreshVoices}
-            className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors flex items-center gap-1"
+            className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] min-h-[44px]"
           >
             ↻ Refresh
             <span className="text-[var(--color-stage-muted)]">({voices.length})</span>
