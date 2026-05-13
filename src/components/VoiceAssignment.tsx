@@ -12,11 +12,13 @@ function VoiceSelect({
   onChange: (v: string) => void
   grouped: GroupedVoices
 }) {
+  const total = grouped.female.length + grouped.male.length + grouped.unknown.length
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-3 py-1.5 text-sm text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
+      disabled={total === 0}
+      className="w-full bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-3 py-1.5 text-sm text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)] disabled:opacity-50"
     >
       <option value="">— system default —</option>
       {grouped.female.length > 0 && (
@@ -45,27 +47,12 @@ function VoiceSelect({
 }
 
 export function VoiceAssignment() {
-  const { voices, speak } = useSpeechSynthesis()
+  const { voices, speak, refreshVoices } = useSpeechSynthesis()
   const { scripts, selectedScriptId, rehearsalSettings, updateVoiceMap, saveRehearsalSettings } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
 
-  if (!script) {
-    return (
-      <div className="text-center text-[var(--color-stage-muted)] py-12">
-        Select a script first.
-      </div>
-    )
-  }
-
-  if (voices.length === 0) {
-    return (
-      <div className="text-center text-[var(--color-stage-muted)] py-12">
-        Loading voices…
-      </div>
-    )
-  }
-
-  const { label: voiceLabel, isFallback, ...grouped } = groupVoices(voices)
+  const { female, male, unknown } = groupVoices(voices)
+  const grouped: GroupedVoices = { female, male, unknown }
 
   const voiceMap = rehearsalSettings?.voiceMap ?? {}
   const defaultVoiceURI = rehearsalSettings?.defaultVoiceURI ?? ''
@@ -86,10 +73,26 @@ export function VoiceAssignment() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-[var(--color-stage-text)] mb-1">Voice Assignment</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Voice Assignment</h2>
+          <button
+            onClick={refreshVoices}
+            className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors flex items-center gap-1"
+          >
+            ↻ Refresh
+            <span className="text-[var(--color-stage-muted)]">({voices.length})</span>
+          </button>
+        </div>
         <p className="text-sm text-[var(--color-stage-muted)]">
-          {voiceLabel} — grouped by gender, British voices first. Set a default, then override per character.
+          {voices.length === 0
+            ? 'No voices detected yet — tap Refresh, or wait a moment.'
+            : `${voices.length} voice${voices.length === 1 ? '' : 's'} found, grouped by gender, British voices first.`}
         </p>
+        {voices.length === 0 && (
+          <p className="text-xs text-amber-400 mt-1.5">
+            On iPhone: Settings → Accessibility → Spoken Content → Voices → English to download voices.
+          </p>
+        )}
       </div>
 
       {/* Default voice */}
@@ -100,7 +103,8 @@ export function VoiceAssignment() {
           </span>
           <button
             onClick={() => preview(defaultVoiceURI)}
-            className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
+            disabled={voices.length === 0}
+            className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors disabled:opacity-40"
           >
             ▶ Preview
           </button>
@@ -114,34 +118,41 @@ export function VoiceAssignment() {
       </div>
 
       {/* Per-character */}
-      <div className="space-y-3">
-        {script.characters.map((char) => (
-          <div
-            key={char}
-            className="rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <span className="font-semibold text-[var(--color-stage-text)] text-sm flex-1">{char}</span>
-              {char === myCharacter && (
-                <span className="text-xs bg-[var(--color-stage-accent)] text-white px-2 py-0.5 rounded-full">
-                  You
-                </span>
-              )}
-              <button
-                onClick={() => preview(voiceMap[char] ?? '')}
-                className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
-              >
-                ▶ Preview
-              </button>
+      {script ? (
+        <div className="space-y-3">
+          {script.characters.map((char) => (
+            <div
+              key={char}
+              className="rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-semibold text-[var(--color-stage-text)] text-sm flex-1">{char}</span>
+                {char === myCharacter && (
+                  <span className="text-xs bg-[var(--color-stage-accent)] text-white px-2 py-0.5 rounded-full">
+                    You
+                  </span>
+                )}
+                <button
+                  onClick={() => preview(voiceMap[char] ?? '')}
+                  disabled={voices.length === 0}
+                  className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors disabled:opacity-40"
+                >
+                  ▶ Preview
+                </button>
+              </div>
+              <VoiceSelect
+                value={voiceMap[char] ?? ''}
+                onChange={(v) => updateVoice(char, v)}
+                grouped={grouped}
+              />
             </div>
-            <VoiceSelect
-              value={voiceMap[char] ?? ''}
-              onChange={(v) => updateVoice(char, v)}
-              grouped={grouped}
-            />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--color-stage-muted)] text-center py-4">
+          Select a script on the Scripts tab to assign per-character voices.
+        </p>
+      )}
     </div>
   )
 }

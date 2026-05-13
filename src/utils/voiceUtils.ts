@@ -8,6 +8,7 @@ const FEMALE_NAMES = [
 const MALE_NAMES = [
   'daniel', 'george', 'arthur', 'oliver', 'harry', 'james', 'thomas',
   'peter', 'william', 'gordon', 'lee', 'freddie', 'rishi', 'callum',
+  'jamie', 'malcolm', 'liam', 'aaron', 'stefan', 'eddy', 'reed',
 ]
 
 export function guessVoiceGender(v: SpeechSynthesisVoice): VoiceGender {

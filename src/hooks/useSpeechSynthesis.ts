@@ -11,26 +11,26 @@ export function useSpeechSynthesis() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [speaking, setSpeaking] = useState(false)
   const resolveRef = useRef<(() => void) | null>(null)
-  // Keep a ref so speak() always sees latest voices without being recreated
   const voicesRef = useRef<SpeechSynthesisVoice[]>([])
 
+  const load = useCallback(() => {
+    const v = speechSynthesis.getVoices()
+    voicesRef.current = v
+    // spread so React sees a new array reference and always re-renders
+    setVoices([...v])
+  }, [])
+
   useEffect(() => {
-    const load = () => {
-      const v = speechSynthesis.getVoices()
-      voicesRef.current = v
-      setVoices(v)
-    }
     load()
     speechSynthesis.addEventListener('voiceschanged', load)
-    // iOS sometimes doesn't fire voiceschanged; poll a couple of times as fallback
-    const t1 = setTimeout(load, 200)
-    const t2 = setTimeout(load, 1000)
+    // iOS often doesn't fire voiceschanged; poll across several seconds
+    const delays = [100, 300, 600, 1200, 2500, 5000]
+    const timers = delays.map((ms) => setTimeout(load, ms))
     return () => {
       speechSynthesis.removeEventListener('voiceschanged', load)
-      clearTimeout(t1)
-      clearTimeout(t2)
+      timers.forEach(clearTimeout)
     }
-  }, [])
+  }, [load])
 
   const speak = useCallback(
     (text: string, options: SpeakOptions = {}): Promise<void> => {
@@ -45,18 +45,12 @@ export function useSpeechSynthesis() {
           if (v) utter.voice = v
         }
         utter.onstart = () => setSpeaking(true)
-        utter.onend = () => {
-          setSpeaking(false)
-          resolve()
-        }
-        utter.onerror = () => {
-          setSpeaking(false)
-          resolve()
-        }
+        utter.onend = () => { setSpeaking(false); resolve() }
+        utter.onerror = () => { setSpeaking(false); resolve() }
         speechSynthesis.speak(utter)
       })
     },
-    [],  // stable — reads voices via ref, never recreated
+    [],
   )
 
   const cancel = useCallback(() => {
@@ -69,5 +63,5 @@ export function useSpeechSynthesis() {
   const pause = useCallback(() => speechSynthesis.pause(), [])
   const resume = useCallback(() => speechSynthesis.resume(), [])
 
-  return { voices, speaking, speak, cancel, pause, resume }
+  return { voices, speaking, speak, cancel, pause, resume, refreshVoices: load }
 }
