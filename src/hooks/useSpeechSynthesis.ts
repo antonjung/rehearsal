@@ -16,15 +16,23 @@ export function useSpeechSynthesis() {
   const load = useCallback(() => {
     const v = speechSynthesis.getVoices()
     voicesRef.current = v
-    // spread so React sees a new array reference and always re-renders
     setVoices([...v])
   }, [])
+
+  // On iOS, cancel+getVoices sometimes surfaces enhanced voices not in the initial list
+  const forceLoad = useCallback(() => {
+    speechSynthesis.cancel()
+    load()
+    const t = setTimeout(load, 300)
+    return () => clearTimeout(t)
+  }, [load])
 
   useEffect(() => {
     load()
     speechSynthesis.addEventListener('voiceschanged', load)
-    // iOS often doesn't fire voiceschanged; poll across several seconds
-    const delays = [100, 300, 600, 1200, 2500, 5000]
+    // iOS often doesn't fire voiceschanged; poll across many seconds as enhanced
+    // voices can load very late
+    const delays = [100, 300, 600, 1200, 2500, 5000, 10000, 15000]
     const timers = delays.map((ms) => setTimeout(load, ms))
     return () => {
       speechSynthesis.removeEventListener('voiceschanged', load)
@@ -63,5 +71,5 @@ export function useSpeechSynthesis() {
   const pause = useCallback(() => speechSynthesis.pause(), [])
   const resume = useCallback(() => speechSynthesis.resume(), [])
 
-  return { voices, speaking, speak, cancel, pause, resume, refreshVoices: load }
+  return { voices, speaking, speak, cancel, pause, resume, refreshVoices: forceLoad }
 }
