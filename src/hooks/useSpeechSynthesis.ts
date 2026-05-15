@@ -12,6 +12,7 @@ export function useSpeechSynthesis() {
   const [speaking, setSpeaking] = useState(false)
   const resolveRef = useRef<(() => void) | null>(null)
   const voicesRef = useRef<SpeechSynthesisVoice[]>([])
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(() => {
     const v = speechSynthesis.getVoices()
@@ -29,8 +30,6 @@ export function useSpeechSynthesis() {
   useEffect(() => {
     load()
     speechSynthesis.addEventListener('voiceschanged', load)
-    // iOS often doesn't fire voiceschanged; poll across many seconds as enhanced
-    // voices can load very late
     const delays = [100, 300, 600, 1200, 2500, 5000, 10000, 15000]
     const timers = delays.map((ms) => setTimeout(load, ms))
     return () => {
@@ -39,10 +38,18 @@ export function useSpeechSynthesis() {
     }
   }, [load])
 
+  const clearWatchdog = () => {
+    if (watchdogRef.current !== null) {
+      clearTimeout(watchdogRef.current)
+      watchdogRef.current = null
+    }
+  }
+
   const speak = useCallback(
     (text: string, options: SpeakOptions = {}): Promise<void> => {
       return new Promise((resolve) => {
         resolveRef.current = resolve
+
         const utter = new SpeechSynthesisUtterance(text)
         utter.rate = options.rate ?? 1
         utter.pitch = options.pitch ?? 1
@@ -51,16 +58,43 @@ export function useSpeechSynthesis() {
           const v = voicesRef.current.find((vv) => vv.voiceURI === options.voiceURI)
           if (v) utter.voice = v
         }
+
+        // Watchdog: resolve if iOS never fires onend/onerror.
+        // Estimate based on text length and rate, with a generous buffer.
+        const rate = utter.rate || 1
+        const estimatedMs = Math.max(5000, (text.length * 90) / rate + 4000)
+        watchdogRef.current = setTimeout(() => {
+          watchdogRef.current = null
+          setSpeaking(false)
+          resolveRef.current?.()
+          resolveRef.current = null
+        }, estimatedMs)
+
+        const done = () => {
+          clearWatchdog()
+          setSpeaking(false)
+          resolveRef.current = null
+          resolve()
+        }
+
         utter.onstart = () => setSpeaking(true)
-        utter.onend = () => { setSpeaking(false); resolve() }
-        utter.onerror = () => { setSpeaking(false); resolve() }
-        speechSynthesis.speak(utter)
+        utter.onend = done
+        utter.onerror = done
+
+        try {
+          // resume() prevents iOS from being stuck in a paused state between utterances
+          speechSynthesis.resume()
+          speechSynthesis.speak(utter)
+        } catch {
+          done()
+        }
       })
     },
     [],
   )
 
   const cancel = useCallback(() => {
+    clearWatchdog()
     speechSynthesis.cancel()
     setSpeaking(false)
     resolveRef.current?.()
