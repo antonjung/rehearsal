@@ -236,6 +236,8 @@ export function RehearsalMode({ onExit }: Props) {
               setPhase('my-line-listening')
               resetTranscript()
               const heard = await listen({ expectedText: groupText, silenceMs: settings.endLineSilenceMs ?? 1000 })
+              // iOS needs a moment to hand the audio session back from mic to speaker
+              await delay(300)
               if (!stopRef.current && heard) {
                 const acc = wordAccuracy(groupText, heard)
                 const diff = buildWordDiff(groupText, heard)
