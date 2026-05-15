@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import { ScriptManager } from './components/ScriptManager'
 import { CharacterTable } from './components/CharacterTable'
-import { VoiceAssignment } from './components/VoiceAssignment'
+import { RecordingStudio } from './components/RecordingStudio'
 import { RehearsalSetup } from './components/RehearsalSetup'
 import { RehearsalMode } from './components/RehearsalMode'
 import { SplashScreen } from './components/SplashScreen'
 
-type Tab = 'scripts' | 'characters' | 'voices' | 'rehearse'
+type Tab = 'scripts' | 'characters' | 'record' | 'rehearse'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scripts', label: 'Scripts', icon: '📜' },
   { id: 'characters', label: 'Characters', icon: '🎭' },
-  { id: 'voices', label: 'Voices', icon: '🔊' },
+  { id: 'record', label: 'Record', icon: '🎙' },
   { id: 'rehearse', label: 'Rehearse', icon: '🎤' },
 ]
 
@@ -65,7 +65,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto px-4 py-5">
         {tab === 'scripts' && <ScriptManager />}
         {tab === 'characters' && <CharacterTable />}
-        {tab === 'voices' && <VoiceAssignment />}
+        {tab === 'record' && <RecordingStudio />}
         {tab === 'rehearse' && (
           <RehearsalSetup onStart={() => setRehearsing(true)} />
         )}

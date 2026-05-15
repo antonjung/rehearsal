@@ -36,8 +36,6 @@ export interface RehearsalSettings {
   myLineMode: MyLineMode
   speechRate: number
   accuracyWarningThreshold: number
-  voiceMap: Record<string, string>
-  defaultVoiceURI: string
   accuracyEnabled: boolean
   sceneId: string | null
   endLineSilenceMs: number

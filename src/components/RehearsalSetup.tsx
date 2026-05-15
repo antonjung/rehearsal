@@ -15,7 +15,7 @@ const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
 ]
 
 export function RehearsalSetup({ onStart }: Props) {
-  const { scripts, selectedScriptId, rehearsalSettings, voicePrefs, saveRehearsalSettings } = useAppStore()
+  const { scripts, selectedScriptId, rehearsalSettings, saveRehearsalSettings } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
 
   const sameScript = rehearsalSettings?.scriptId === selectedScriptId
@@ -26,8 +26,6 @@ export function RehearsalSetup({ onStart }: Props) {
     myLineMode: rehearsalSettings?.myLineMode ?? 'silence',
     speechRate: rehearsalSettings?.speechRate ?? 1,
     accuracyWarningThreshold: rehearsalSettings?.accuracyWarningThreshold ?? 70,
-    voiceMap: voicePrefs.voiceMap,
-    defaultVoiceURI: voicePrefs.defaultVoiceURI,
     accuracyEnabled: rehearsalSettings?.accuracyEnabled ?? true,
     endLineSilenceMs: rehearsalSettings?.endLineSilenceMs ?? 1000,
     errorPromptEnabled: rehearsalSettings?.errorPromptEnabled ?? false,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { useGoogleTTS } from '../hooks/useGoogleTTS'
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
+import { getRecording } from '../utils/recordingStore'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
@@ -32,7 +33,7 @@ interface LineGroup {
 
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings } = useAppStore()
-  const { speak, cancel } = useGoogleTTS()
+  const { speak, cancel } = useSpeechSynthesis()
   const { listening, supported, listen, stop: stopListening, abort, reset: resetTranscript } = useSpeechRecognition()
 
   const settings = rehearsalSettings!
@@ -119,11 +120,32 @@ export function RehearsalMode({ onExit }: Props) {
   const pauseRef = useRef(false)
   const pauseResolveRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const recAudioRef = useRef<HTMLAudioElement | null>(null)
+  const recResolveRef = useRef<(() => void) | null>(null)
 
-  const getVoiceURI = useCallback(
-    (character: string) => settings.voiceMap[character] ?? settings.defaultVoiceURI ?? '',
-    [settings.voiceMap, settings.defaultVoiceURI],
-  )
+  const playRecording = (blob: Blob): Promise<void> =>
+    new Promise((resolve) => {
+      recResolveRef.current = resolve
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      recAudioRef.current = audio
+      const cleanup = () => {
+        URL.revokeObjectURL(url)
+        recAudioRef.current = null
+        recResolveRef.current = null
+        resolve()
+      }
+      audio.onended = cleanup
+      audio.onerror = cleanup
+      audio.play().catch(cleanup)
+    })
+
+  const cancelRecording = () => {
+    recAudioRef.current?.pause()
+    recAudioRef.current = null
+    recResolveRef.current?.()
+    recResolveRef.current = null
+  }
 
   const delay = (ms: number): Promise<void> =>
     new Promise((resolve) => {
@@ -182,7 +204,7 @@ export function RehearsalMode({ onExit }: Props) {
         if (line.type === 'direction') {
           if (settings.readStageDirections) {
             setPhase('playing-other')
-            await speak(groupText, { voiceURI: getVoiceURI(''), rate })
+            await speak(groupText, { rate })
           } else {
             await delay(100)
           }
@@ -194,7 +216,12 @@ export function RehearsalMode({ onExit }: Props) {
 
         if (!isMyLine) {
           setPhase('playing-other')
-          await speak(groupText, { voiceURI: getVoiceURI(line.character!), rate })
+          const rec = await getRecording(script.id, lineIdx)
+          if (rec) {
+            await playRecording(rec)
+          } else {
+            await speak(groupText, { rate })
+          }
         } else {
           const gap = estimateDuration(groupText, rate)
           const { myLineMode } = settings
@@ -229,30 +256,30 @@ export function RehearsalMode({ onExit }: Props) {
               const phrase = settings.errorPromptPhrase ?? 'The correct line is'
               if (phrase) {
                 setPhase('playing-other')
-                await speak(phrase, { voiceURI: settings.defaultVoiceURI, rate })
+                await speak(phrase, { rate })
               }
               if (!stopRef.current) {
                 setPhase('my-line-reading')
-                await speak(groupText, { voiceURI: getVoiceURI(line.character!), rate })
+                await speak(groupText, { rate })
               }
             }
           } else if (myLineMode === 'read') {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            await speak(groupText, { voiceURI: getVoiceURI(line.character!), rate })
+            await speak(groupText, { rate })
           } else if (myLineMode === 'gap-before') {
             setPhase('my-line-silence')
             await delay(gap)
             if (!stopRef.current) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
-              await speak(groupText, { voiceURI: getVoiceURI(line.character!), rate })
+              await speak(groupText, { rate })
             }
           } else {
             // gap-after
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            await speak(groupText, { voiceURI: getVoiceURI(line.character!), rate })
+            await speak(groupText, { rate })
             if (!stopRef.current) {
               setPhase('my-line-silence')
               await delay(gap)
@@ -282,7 +309,7 @@ export function RehearsalMode({ onExit }: Props) {
       setPhase(stopRef.current ? 'idle' : 'done')
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lines, lastMyEnd, settings, speak, rate, getVoiceURI, accuracyEnabled,
+    [lines, lastMyEnd, settings, speak, rate, accuracyEnabled,
      supported, listen, resetTranscript, markedBlock, repeatMode],
   )
 
@@ -290,6 +317,7 @@ export function RehearsalMode({ onExit }: Props) {
     stopRef.current = true
     pauseRef.current = false
     cancel()
+    cancelRecording()
     abort()
     pauseResolveRef.current?.()
     if (cb) setTimeout(cb, 50)
@@ -313,7 +341,7 @@ export function RehearsalMode({ onExit }: Props) {
       runPlayback(markedBlock?.startIndex ?? (phase === 'idle' ? startLine : currentIdx))
     }
   }
-  const handlePause = () => { pauseRef.current = true; cancel(); stopListening(); setPhase('paused') }
+  const handlePause = () => { pauseRef.current = true; cancel(); cancelRecording(); stopListening(); setPhase('paused') }
   const handleStop = () => { interruptPlayback(); setPhase('idle') }
   const handleRestart = () =>
     interruptPlayback(() => {
