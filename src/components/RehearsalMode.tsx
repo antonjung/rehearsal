@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
-import { getRecording } from '../utils/recordingStore'
+import { getRecording } from '../utils/recordingStore'  // used in pre-load effect
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
@@ -122,6 +122,7 @@ export function RehearsalMode({ onExit }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recAudioRef = useRef<HTMLAudioElement | null>(null)
   const recResolveRef = useRef<(() => void) | null>(null)
+  const recMapRef = useRef<Map<number, Blob>>(new Map())
 
   const playRecording = (blob: Blob): Promise<void> =>
     new Promise((resolve) => {
@@ -216,7 +217,7 @@ export function RehearsalMode({ onExit }: Props) {
 
         if (!isMyLine) {
           setPhase('playing-other')
-          const rec = await getRecording(script.id, lineIdx)
+          const rec = recMapRef.current.get(lineIdx) ?? null
           if (rec) {
             await playRecording(rec)
           } else {
@@ -376,6 +377,24 @@ export function RehearsalMode({ onExit }: Props) {
       setMarkStart(null)
     }
   }
+
+  // Pre-load recordings into a sync map so the playback loop never awaits IDB mid-line.
+  // iOS kills the Web Speech audio session after any async gap before speak().
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const map = new Map<number, Blob>()
+      for (let i = firstLine; i <= sceneEnd; i++) {
+        if (lines[i]?.type === 'dialogue' && lines[i].character !== settings.myCharacter) {
+          const blob = await getRecording(script.id, i)
+          if (blob) map.set(i, blob)
+        }
+      }
+      if (!cancelled) recMapRef.current = map
+    }
+    load()
+    return () => { cancelled = true }
+  }, [script.id, firstLine, sceneEnd, settings.myCharacter, lines])
 
   useEffect(() => {
     return () => { stopRef.current = true; cancel(); abort() }
