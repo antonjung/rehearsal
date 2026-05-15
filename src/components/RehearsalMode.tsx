@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
-import { getRecording } from '../utils/recordingStore'  // used in pre-load effect
+import { getRecording, setRecording } from '../utils/recordingStore'
+import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
@@ -35,6 +36,7 @@ export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
   const { listening, supported, listen, stop: stopListening, abort, reset: resetTranscript } = useSpeechRecognition()
+  const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const settings = rehearsalSettings!
   const script = scripts.find((s) => s.id === settings.scriptId)!
@@ -114,6 +116,7 @@ export function RehearsalMode({ onExit }: Props) {
   const accuraciesRef = useRef<Record<number, number>>({})
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [rate, setRate] = useState(settings.speechRate)
+  const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
 
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const stopRef = useRef(false)
@@ -369,6 +372,28 @@ export function RehearsalMode({ onExit }: Props) {
     })
   const jumpTo = (idx: number) =>
     interruptPlayback(() => { stopRef.current = false; setCurrentIdx(idx); runPlayback(idx) })
+
+  const handleRecordLine = async (lineIdx: number) => {
+    if (recordingLineIdx !== null) {
+      // Stop and save
+      const blob = await stopMic()
+      await setRecording(script.id, recordingLineIdx, blob)
+      recMapRef.current.set(recordingLineIdx, blob)
+      setRecordingLineIdx(null)
+    } else {
+      // Auto-pause playback before recording
+      if (isPlaying) {
+        pauseRef.current = true
+        cancel()
+        cancelRecording()
+        stopListening()
+        setPhase('paused')
+      }
+      const ok = await startMic()
+      if (ok) setRecordingLineIdx(lineIdx)
+    }
+  }
+
   const toggleMarkStart = (idx: number) => {
     if (markStart === null) {
       setMarkStart(idx)
@@ -444,6 +469,11 @@ export function RehearsalMode({ onExit }: Props) {
             isMarkStart={group.startIdx === markStart}
             onJump={() => jumpTo(group.startIdx)}
             onToggleMark={() => toggleMarkStart(group.startIdx)}
+            onRecord={group.type === 'dialogue' && group.character !== settings.myCharacter
+              ? () => handleRecordLine(group.startIdx)
+              : undefined}
+            isRecordingThis={recordingLineIdx === group.startIdx}
+            anyRecording={micRecording || recordingLineIdx !== null}
             ref={(el) => { lineRefs.current[group.startIdx] = el }}
           />
         ))}
@@ -547,12 +577,15 @@ interface LineRowProps {
   isMarkStart: boolean
   onJump: () => void
   onToggleMark: () => void
+  onRecord?: () => void
+  isRecordingThis?: boolean
+  anyRecording?: boolean
 }
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, myLineMode, textRevealed,
   accuracy, transcript, wordDiff, threshold, inBlock, isMarkStart,
-  onJump, onToggleMark, ref,
+  onJump, onToggleMark, onRecord, isRecordingThis, anyRecording, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
@@ -586,12 +619,12 @@ const LineRow = ({
           : isCurrent ? 'bg-[var(--color-stage-surface)]' : ''
       }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2">
         <button onClick={onToggleMark} title="Set block marker"
-          className={`text-xs mt-0.5 shrink-0 w-4 transition-opacity ${isMarkStart ? 'text-[var(--color-stage-gold)]' : 'text-[var(--color-stage-muted)] opacity-0 group-hover:opacity-100'}`}>
+          className={`text-xs mt-1 shrink-0 w-4 transition-opacity ${isMarkStart ? 'text-[var(--color-stage-gold)]' : 'text-[var(--color-stage-muted)] opacity-0 group-hover:opacity-100'}`}>
           ✂
         </button>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={onJump}>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={!anyRecording ? onJump : undefined}>
           <span className={`text-[10px] font-bold uppercase tracking-wider mr-2 ${isMyLine ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'}`}>
             {group.character}
           </span>
@@ -609,6 +642,20 @@ const LineRow = ({
             </span>
           )}
         </div>
+        {onRecord && (
+          <button
+            onClick={onRecord}
+            disabled={!!anyRecording && !isRecordingThis}
+            title={isRecordingThis ? 'Stop recording' : 'Record this line'}
+            className={`shrink-0 mt-0.5 text-sm px-1.5 py-0.5 rounded transition-colors min-h-[32px] min-w-[28px] ${
+              isRecordingThis
+                ? 'text-red-400 animate-pulse'
+                : 'text-[var(--color-stage-muted)] opacity-40 hover:opacity-100 hover:text-red-400'
+            } disabled:opacity-10`}
+          >
+            {isRecordingThis ? '■' : '●'}
+          </button>
+        )}
       </div>
       {accuracy !== null && isMyLine && (
         <div className="mt-1 pl-9">
