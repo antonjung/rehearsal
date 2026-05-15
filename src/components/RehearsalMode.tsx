@@ -334,6 +334,9 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const handlePlay = () => {
+    // iOS requires Web Speech API to be touched synchronously from a user gesture
+    // before it will produce sound from async contexts
+    speechSynthesis.cancel()
     if (phase === 'paused') {
       pauseRef.current = false
       pauseResolveRef.current?.()
