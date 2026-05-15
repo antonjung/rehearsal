@@ -1,7 +1,14 @@
+export interface TtsVoice {
+  name: string
+  lang: string
+  voiceURI: string
+  label?: string
+}
+
 export interface VoiceLocaleGroup {
   lang: string
   label: string
-  voices: SpeechSynthesisVoice[]
+  voices: TtsVoice[]
 }
 
 function localeLabel(lang: string): string {
@@ -12,10 +19,9 @@ function localeLabel(lang: string): string {
   }
 }
 
-// Group voices by language/region, same structure as iOS Settings.
-// British English sorts first; within each group voices are alphabetical.
-export function groupVoicesByLocale(voices: SpeechSynthesisVoice[]): VoiceLocaleGroup[] {
-  const map = new Map<string, SpeechSynthesisVoice[]>()
+// Group voices by language/region, British English sorts first.
+export function groupVoicesByLocale(voices: TtsVoice[]): VoiceLocaleGroup[] {
+  const map = new Map<string, TtsVoice[]>()
   for (const v of voices) {
     const lang = v.lang.replace('_', '-') || 'unknown'
     if (!map.has(lang)) map.set(lang, [])

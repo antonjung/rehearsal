@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
+import { useGoogleTTS } from '../hooks/useGoogleTTS'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
@@ -32,7 +32,7 @@ interface LineGroup {
 
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings } = useAppStore()
-  const { speak, cancel } = useSpeechSynthesis()
+  const { speak, cancel } = useGoogleTTS()
   const { listening, supported, listen, stop: stopListening, abort, reset: resetTranscript } = useSpeechRecognition()
 
   const settings = rehearsalSettings!
