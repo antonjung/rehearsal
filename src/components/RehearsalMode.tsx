@@ -408,7 +408,7 @@ export function RehearsalMode({ onExit }: Props) {
 
       {/* Script area */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-        {allGroups.map((group) => (
+        {allGroups.filter((g) => g.startIdx >= firstLine && g.startIdx <= sceneEnd).map((group) => (
           <LineRow
             key={group.startIdx}
             group={group}
@@ -568,15 +568,11 @@ const LineRow = ({
       }`}
     >
       <div className="flex items-start gap-3">
-        <button onClick={onJump} title="Jump here"
-          className="text-[10px] text-[var(--color-stage-muted)] opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 w-6 shrink-0 text-right tabular-nums">
-          {group.startIdx + 1}
-        </button>
         <button onClick={onToggleMark} title="Set block marker"
           className={`text-xs mt-0.5 shrink-0 w-4 transition-opacity ${isMarkStart ? 'text-[var(--color-stage-gold)]' : 'text-[var(--color-stage-muted)] opacity-0 group-hover:opacity-100'}`}>
           ✂
         </button>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onJump}>
           <span className={`text-[10px] font-bold uppercase tracking-wider mr-2 ${isMyLine ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'}`}>
             {group.character}
           </span>
