@@ -6,11 +6,13 @@ interface AppState {
   scripts: Script[]
   selectedScriptId: string | null
   rehearsalSettings: RehearsalSettings | null
+  theme: string
 
   addScript: (script: Script) => void
   removeScript: (id: string) => void
   selectScript: (id: string | null) => void
   saveRehearsalSettings: (s: RehearsalSettings) => void
+  setTheme: (theme: string) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -19,6 +21,7 @@ export const useAppStore = create<AppState>()(
       scripts: [],
       selectedScriptId: null,
       rehearsalSettings: null,
+      theme: 'stage',
 
       addScript: (script) =>
         set((s) => ({ scripts: [...s.scripts, script] })),
@@ -32,8 +35,9 @@ export const useAppStore = create<AppState>()(
 
       selectScript: (id) => set({ selectedScriptId: id }),
 
-      saveRehearsalSettings: (settings) =>
-        set({ rehearsalSettings: settings }),
+      saveRehearsalSettings: (settings) => set({ rehearsalSettings: settings }),
+
+      setTheme: (theme) => set({ theme }),
     }),
     {
       name: 'rehearsal-store',
@@ -41,6 +45,7 @@ export const useAppStore = create<AppState>()(
         scripts: s.scripts,
         selectedScriptId: s.selectedScriptId,
         rehearsalSettings: s.rehearsalSettings,
+        theme: s.theme,
       }),
     },
   ),

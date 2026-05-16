@@ -8,8 +8,7 @@ import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
 import { AccuracySummary } from './AccuracySummary'
 import { unlockAudio, playPing, playCompletion } from '../utils/sounds'
-import { MicTest } from './MicTest'
-import type { WordDiff, MyLineMode } from '../types'
+import type { WordDiff } from '../types'
 
 interface Props {
   onExit: () => void
@@ -32,15 +31,8 @@ interface LineGroup {
   text: string
 }
 
-const LINE_MODES: { value: MyLineMode; label: string }[] = [
-  { value: 'silence', label: 'A — Silence' },
-  { value: 'read', label: 'B — Read' },
-  { value: 'gap-before', label: 'C — Gap then read' },
-  { value: 'gap-after', label: 'D — Read then gap' },
-]
-
 export function RehearsalMode({ onExit }: Props) {
-  const { scripts, rehearsalSettings, saveRehearsalSettings } = useAppStore()
+  const { scripts, rehearsalSettings } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
   const { listening, supported, listen, abort, reset: resetTranscript } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
@@ -128,8 +120,6 @@ export function RehearsalMode({ onExit }: Props) {
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
   const [rate, setRate] = useState(settings.speechRate)
-  const [showOptions, setShowOptions] = useState(false)
-  const [showMicTest, setShowMicTest] = useState(false)
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -476,137 +466,31 @@ export function RehearsalMode({ onExit }: Props) {
 
   const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence', 'my-line-listening'].includes(phase)
 
-  // Save settings changes from options panel
-  const updateSetting = <K extends keyof typeof settings>(k: K, v: (typeof settings)[K]) => {
-    saveRehearsalSettings({ ...settings, [k]: v })
-  }
-
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0 gap-2">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+      {/* Sub-header: just script name + rate */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm shrink-0">
             ← Back
           </button>
           <span className="text-sm font-semibold text-[var(--color-stage-text)] truncate">{script.name}</span>
-          {activeScene && (
-            <span className="text-xs text-[var(--color-stage-gold)] shrink-0">{activeScene.title}</span>
-          )}
-          <span className="text-xs bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)] px-2 py-0.5 rounded-full shrink-0">
-            {settings.myCharacter}
-          </span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-xs text-[var(--color-stage-muted)]">{rate.toFixed(1)}×</span>
           <input
             type="range" min={0.5} max={2} step={0.1} value={rate}
             onChange={(e) => setRate(Number(e.target.value))}
-            className="w-16 accent-[var(--color-stage-accent)]"
+            className="w-20 accent-[var(--color-stage-accent)]"
             disabled={isPlaying}
           />
-          <button
-            onClick={() => setShowOptions((v) => !v)}
-            className={`text-xl px-1 transition-colors ${showOptions ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
-            title="Settings"
-          >
-            ☰
-          </button>
         </div>
       </div>
 
-      {/* Options panel */}
-      {showOptions && (
-        <div className="border-b border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3 space-y-3 shrink-0">
-          <div className="flex flex-wrap gap-x-6 gap-y-2 items-center">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--color-stage-muted)] uppercase tracking-wider font-semibold">Mode</span>
-              <select
-                value={settings.myLineMode}
-                onChange={(e) => updateSetting('myLineMode', e.target.value as MyLineMode)}
-                disabled={isPlaying}
-                className="text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded px-2 py-1 text-[var(--color-stage-text)]"
-              >
-                {LINE_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.readStageDirections}
-                onChange={(e) => updateSetting('readStageDirections', e.target.checked)}
-                disabled={isPlaying}
-                className="rounded accent-[var(--color-stage-accent)]"
-              />
-              <span className="text-xs text-[var(--color-stage-text)]">Stage directions</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.accuracyEnabled}
-                onChange={(e) => updateSetting('accuracyEnabled', e.target.checked)}
-                disabled={isPlaying}
-                className="rounded accent-[var(--color-stage-accent)]"
-              />
-              <span className="text-xs text-[var(--color-stage-text)]">Accuracy</span>
-            </label>
-            {settings.accuracyEnabled && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[var(--color-stage-muted)]">Threshold</span>
-                <input
-                  type="range" min={0} max={100} step={5}
-                  value={settings.accuracyWarningThreshold}
-                  onChange={(e) => updateSetting('accuracyWarningThreshold', Number(e.target.value))}
-                  disabled={isPlaying}
-                  className="w-20 accent-[var(--color-stage-accent)]"
-                />
-                <span className="text-xs text-[var(--color-stage-text)] w-8">{settings.accuracyWarningThreshold}%</span>
-              </div>
-            )}
-            {settings.accuracyEnabled && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[var(--color-stage-muted)]">Silence</span>
-                <input
-                  type="range" min={200} max={3000} step={100}
-                  value={settings.endLineSilenceMs}
-                  onChange={(e) => updateSetting('endLineSilenceMs', Number(e.target.value))}
-                  disabled={isPlaying}
-                  className="w-20 accent-[var(--color-stage-accent)]"
-                />
-                <span className="text-xs text-[var(--color-stage-text)] w-8">{(settings.endLineSilenceMs / 1000).toFixed(1)}s</span>
-              </div>
-            )}
-          </div>
-          {settings.accuracyEnabled && (
-            <div>
-              <button
-                onClick={() => setShowMicTest((v) => !v)}
-                className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
-              >
-                {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
-              </button>
-              {showMicTest && <div className="mt-2"><MicTest /></div>}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Show/hide my lines toggle */}
       <div className="px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 flex items-center justify-between">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showAllMyLines}
-            onChange={(e) => setShowAllMyLines(e.target.checked)}
-            className="rounded accent-[var(--color-stage-accent)]"
-          />
-          <span className="text-xs text-[var(--color-stage-text)]">Show all my lines</span>
-        </label>
-        <span className="text-xs text-[var(--color-stage-muted)]">
-          {settings.myCharacter}
-        </span>
+        <span className="text-xs text-[var(--color-stage-text)]">Show all my lines</span>
+        <ToggleSwitch checked={showAllMyLines} onChange={setShowAllMyLines} />
       </div>
 
       {/* Script area */}
@@ -697,6 +581,17 @@ export function RehearsalMode({ onExit }: Props) {
         </div>
       </div>
     </div>
+  )
+}
+
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
+      <div className={`w-11 h-6 rounded-full transition-colors relative ${checked ? 'bg-[var(--color-stage-accent)]' : 'bg-[var(--color-stage-border)]'}`}>
+        <div className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+      </div>
+    </label>
   )
 }
 

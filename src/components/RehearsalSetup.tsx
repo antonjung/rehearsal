@@ -1,43 +1,36 @@
 import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { MicTest } from './MicTest'
-import type { RehearsalSettings, MyLineMode } from '../types'
+import type { RehearsalSettings } from '../types'
 
 interface Props {
   onStart: () => void
 }
-
-const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
-  { value: 'silence', label: 'A — Silence', desc: 'Your lines are silent — practice from memory' },
-  { value: 'read', label: 'B — Read', desc: 'Your lines are read aloud for you' },
-  { value: 'gap-before', label: 'C — Gap then read', desc: 'Wait for you to finish, then reads your line' },
-  { value: 'gap-after', label: 'D — Read then gap', desc: 'Reads your line, then waits for you to repeat' },
-]
 
 export function RehearsalSetup({ onStart }: Props) {
   const { scripts, selectedScriptId, rehearsalSettings, saveRehearsalSettings } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
 
   const sameScript = rehearsalSettings?.scriptId === selectedScriptId
-  const defaults: RehearsalSettings = {
-    scriptId: selectedScriptId ?? '',
-    myCharacter: sameScript ? (rehearsalSettings?.myCharacter ?? '') : '',
-    readStageDirections: rehearsalSettings?.readStageDirections ?? false,
-    myLineMode: rehearsalSettings?.myLineMode ?? 'silence',
-    speechRate: rehearsalSettings?.speechRate ?? 1,
-    accuracyWarningThreshold: rehearsalSettings?.accuracyWarningThreshold ?? 70,
-    accuracyEnabled: rehearsalSettings?.accuracyEnabled ?? true,
-    endLineSilenceMs: rehearsalSettings?.endLineSilenceMs ?? 1000,
-    errorPromptEnabled: rehearsalSettings?.errorPromptEnabled ?? false,
-    errorPromptPhrase: rehearsalSettings?.errorPromptPhrase ?? 'The correct line is',
-    sceneId: sameScript
-      ? (rehearsalSettings?.sceneId ?? script?.scenes[0]?.id ?? null)
-      : (script?.scenes[0]?.id ?? null),
+
+  // Inherit all prefs from rehearsalSettings (edited via global ☰), just override scene/char
+  const prefs = rehearsalSettings ?? {
+    myLineMode: 'silence' as const,
+    readStageDirections: false,
+    speechRate: 1,
+    accuracyEnabled: true,
+    accuracyWarningThreshold: 70,
+    endLineSilenceMs: 1000,
+    errorPromptEnabled: false,
+    errorPromptPhrase: 'The correct line is',
   }
 
-  const [form, setForm] = useState<RehearsalSettings>(defaults)
-  const [showOptions, setShowOptions] = useState(false)
-  const [showMicTest, setShowMicTest] = useState(false)
+  const [sceneId, setSceneId] = useState<string | null>(
+    sameScript ? (rehearsalSettings?.sceneId ?? script?.scenes[0]?.id ?? null)
+               : (script?.scenes[0]?.id ?? null)
+  )
+  const [myCharacter, setMyCharacter] = useState(
+    sameScript ? (rehearsalSettings?.myCharacter ?? '') : ''
+  )
 
   if (!script) {
     return (
@@ -47,51 +40,43 @@ export function RehearsalSetup({ onStart }: Props) {
     )
   }
 
-  const set = <K extends keyof RehearsalSettings>(k: K, v: RehearsalSettings[K]) =>
-    setForm((f) => ({ ...f, [k]: v }))
+  const sceneCharacters = sceneId
+    ? (script.scenes.find((s) => s.id === sceneId)?.characters ?? script.characters)
+    : script.characters
 
   const handleStart = () => {
-    saveRehearsalSettings({ ...form, scriptId: script.id })
+    const settings: RehearsalSettings = {
+      ...prefs,
+      scriptId: script.id,
+      sceneId,
+      myCharacter,
+    }
+    saveRehearsalSettings(settings)
     onStart()
   }
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-[var(--color-stage-text)]">
-          Set up rehearsal
-          <span className="text-[var(--color-stage-accent-light)] ml-2 font-normal text-base">
-            {script.name}
-          </span>
-        </h2>
-        <button
-          onClick={() => setShowOptions((v) => !v)}
-          title="Settings"
-          className={`text-xl px-2 py-1 rounded-lg transition-colors ${
-            showOptions
-              ? 'text-[var(--color-stage-accent-light)]'
-              : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
-          }`}
-        >
-          ☰
-        </button>
+      <div>
+        <h2 className="text-xl font-bold text-[var(--color-stage-text)]">Set up rehearsal</h2>
+        <p className="text-sm text-[var(--color-stage-accent-light)] mt-0.5">{script.name}</p>
+        <p className="text-xs text-[var(--color-stage-muted)] mt-1">
+          Adjust line mode and accuracy in ☰ Settings
+        </p>
       </div>
 
       {/* Scene selector */}
       {script.scenes.length > 0 && (
         <Field label="Scene">
           <select
-            value={form.sceneId ?? ''}
+            value={sceneId ?? ''}
             onChange={(e) => {
-              const newSceneId = e.target.value || null
-              const newChars = newSceneId
-                ? (script.scenes.find(s => s.id === newSceneId)?.characters ?? script.characters)
+              const id = e.target.value || null
+              const chars = id
+                ? (script.scenes.find((s) => s.id === id)?.characters ?? script.characters)
                 : script.characters
-              setForm(f => ({
-                ...f,
-                sceneId: newSceneId,
-                myCharacter: newChars.includes(f.myCharacter) ? f.myCharacter : '',
-              }))
+              setSceneId(id)
+              if (myCharacter && !chars.includes(myCharacter)) setMyCharacter('')
             }}
             className="w-full select-field"
           >
@@ -111,132 +96,20 @@ export function RehearsalSetup({ onStart }: Props) {
       {/* My character */}
       <Field label="Your character">
         <select
-          value={form.myCharacter}
-          onChange={(e) => set('myCharacter', e.target.value)}
+          value={myCharacter}
+          onChange={(e) => setMyCharacter(e.target.value)}
           className="w-full select-field"
         >
           <option value="">— choose —</option>
-          {(form.sceneId
-            ? (script.scenes.find(s => s.id === form.sceneId)?.characters ?? script.characters)
-            : script.characters
-          ).map((c) => (
+          {sceneCharacters.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
       </Field>
 
-      {/* Collapsible options */}
-      {showOptions && (
-        <div className="rounded-xl border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] p-4 space-y-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Options</p>
-
-          {/* My line mode */}
-          <Field label="How to handle your lines">
-            <div className="space-y-2">
-              {LINE_MODES.map((m) => (
-                <label
-                  key={m.value}
-                  className={`flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
-                    form.myLineMode === m.value
-                      ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
-                      : 'border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] hover:border-[var(--color-stage-muted)]'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="myLineMode"
-                    value={m.value}
-                    checked={form.myLineMode === m.value}
-                    onChange={() => set('myLineMode', m.value)}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="font-medium text-sm text-[var(--color-stage-text)]">{m.label}</div>
-                    <div className="text-xs text-[var(--color-stage-muted)]">{m.desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </Field>
-
-          {/* Stage directions */}
-          <Field label="Stage directions">
-            <Toggle
-              checked={form.readStageDirections}
-              onChange={(v) => set('readStageDirections', v)}
-              label="Read stage directions aloud"
-            />
-          </Field>
-
-          {/* Speech rate */}
-          <Field label={`Speech rate: ${form.speechRate.toFixed(1)}×`}>
-            <input
-              type="range" min={0.5} max={2} step={0.1}
-              value={form.speechRate}
-              onChange={(e) => set('speechRate', Number(e.target.value))}
-              className="w-full accent-[var(--color-stage-accent)]"
-            />
-          </Field>
-
-          {/* Accuracy */}
-          <Field label="Accuracy checking">
-            <div className="space-y-3">
-              <Toggle
-                checked={form.accuracyEnabled}
-                onChange={(v) => set('accuracyEnabled', v)}
-                label="Analyse my lines and show accuracy"
-              />
-              {form.accuracyEnabled && (
-                <div>
-                  <label className="block text-xs text-[var(--color-stage-muted)] mb-1">
-                    Warning threshold: {form.accuracyWarningThreshold}%
-                  </label>
-                  <input
-                    type="range" min={0} max={100} step={5}
-                    value={form.accuracyWarningThreshold}
-                    onChange={(e) => set('accuracyWarningThreshold', Number(e.target.value))}
-                    className="w-full accent-[var(--color-stage-accent)]"
-                  />
-                </div>
-              )}
-
-              {form.accuracyEnabled && (
-                <div>
-                  <label className="block text-xs text-[var(--color-stage-muted)] mb-1">
-                    Silence gap: {(form.endLineSilenceMs / 1000).toFixed(1)} s
-                  </label>
-                  <input
-                    type="range" min={200} max={3000} step={100}
-                    value={form.endLineSilenceMs}
-                    onChange={(e) => set('endLineSilenceMs', Number(e.target.value))}
-                    className="w-full accent-[var(--color-stage-accent)]"
-                  />
-                  <p className="text-xs text-[var(--color-stage-muted)] mt-1">
-                    Silence after your last word before moving on
-                  </p>
-                </div>
-              )}
-
-              {form.accuracyEnabled && (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowMicTest((v) => !v)}
-                    className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
-                  >
-                    {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
-                  </button>
-                  {showMicTest && <div className="mt-2"><MicTest /></div>}
-                </div>
-              )}
-            </div>
-          </Field>
-        </div>
-      )}
-
       <button
         onClick={handleStart}
-        disabled={!form.myCharacter}
+        disabled={!myCharacter}
         className="w-full py-3 rounded-xl font-semibold text-white bg-[var(--color-stage-accent)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
       >
         Start Rehearsal
@@ -253,19 +126,5 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </label>
       {children}
     </div>
-  )
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <label className="flex items-center gap-3 cursor-pointer">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="rounded accent-[var(--color-stage-accent)]"
-      />
-      <span className="text-sm text-[var(--color-stage-text)]">{label}</span>
-    </label>
   )
 }
