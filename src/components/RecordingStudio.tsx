@@ -128,11 +128,22 @@ export function RecordingStudio() {
       <div className="flex gap-3">
         <select
           value={character}
-          onChange={(e) => setCharacter(e.target.value)}
+          onChange={(e) => {
+            const c = e.target.value
+            setCharacter(c)
+            // clear scene if it doesn't include the new character
+            if (sceneId && c) {
+              const sc = script.scenes.find((s) => s.id === sceneId)
+              if (sc && !sc.characters.includes(c)) setSceneId(null)
+            }
+          }}
           className="flex-1 select-field"
         >
           <option value="">Select character…</option>
-          {script.characters.map((c) => (
+          {(sceneId
+            ? (script.scenes.find((s) => s.id === sceneId)?.characters ?? script.characters)
+            : script.characters
+          ).map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
@@ -140,11 +151,22 @@ export function RecordingStudio() {
         {script.scenes.length > 0 && (
           <select
             value={sceneId ?? ''}
-            onChange={(e) => setSceneId(e.target.value || null)}
+            onChange={(e) => {
+              const id = e.target.value || null
+              setSceneId(id)
+              // clear character if it's not in the new scene
+              if (id && character) {
+                const sc = script.scenes.find((s) => s.id === id)
+                if (sc && !sc.characters.includes(character)) setCharacter('')
+              }
+            }}
             className="flex-1 select-field"
           >
             <option value="">Whole script</option>
-            {script.scenes.map((s) => (
+            {(character
+              ? script.scenes.filter((s) => s.characters.includes(character))
+              : script.scenes
+            ).map((s) => (
               <option key={s.id} value={s.id}>{s.title}</option>
             ))}
           </select>

@@ -10,8 +10,8 @@ interface Props {
 const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
   { value: 'silence', label: 'A — Silence', desc: 'Your lines are silent — practice from memory' },
   { value: 'read', label: 'B — Read', desc: 'Your lines are read aloud for you' },
-  { value: 'gap-before', label: 'C — Gap then read', desc: 'Silence for your line length, then it is read' },
-  { value: 'gap-after', label: 'D — Read then gap', desc: 'Your line is read, then silence for its length' },
+  { value: 'gap-before', label: 'C — Gap then read', desc: 'Wait for you to finish, then reads your line' },
+  { value: 'gap-after', label: 'D — Read then gap', desc: 'Reads your line, then waits for you to repeat' },
 ]
 
 export function RehearsalSetup({ onStart }: Props) {
@@ -36,6 +36,7 @@ export function RehearsalSetup({ onStart }: Props) {
   }
 
   const [form, setForm] = useState<RehearsalSettings>(defaults)
+  const [showOptions, setShowOptions] = useState(false)
   const [showMicTest, setShowMicTest] = useState(false)
 
   if (!script) {
@@ -56,12 +57,25 @@ export function RehearsalSetup({ onStart }: Props) {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <h2 className="text-xl font-bold text-[var(--color-stage-text)]">
-        Set up rehearsal
-        <span className="text-[var(--color-stage-accent-light)] ml-2 font-normal text-base">
-          {script.name}
-        </span>
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-[var(--color-stage-text)]">
+          Set up rehearsal
+          <span className="text-[var(--color-stage-accent-light)] ml-2 font-normal text-base">
+            {script.name}
+          </span>
+        </h2>
+        <button
+          onClick={() => setShowOptions((v) => !v)}
+          title="Options"
+          className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+            showOptions
+              ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
+              : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+          }`}
+        >
+          ⚙ Options
+        </button>
+      </div>
 
       {/* Scene selector */}
       {script.scenes.length > 0 && (
@@ -111,134 +125,114 @@ export function RehearsalSetup({ onStart }: Props) {
         </select>
       </Field>
 
-      {/* My line mode */}
-      <Field label="How to handle your lines">
-        <div className="space-y-2">
-          {LINE_MODES.map((m) => (
-            <label
-              key={m.value}
-              className={`flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
-                form.myLineMode === m.value
-                  ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
-                  : 'border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] hover:border-[var(--color-stage-muted)]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="myLineMode"
-                value={m.value}
-                checked={form.myLineMode === m.value}
-                onChange={() => set('myLineMode', m.value)}
-                className="mt-0.5"
-              />
-              <div>
-                <div className="font-medium text-sm text-[var(--color-stage-text)]">{m.label}</div>
-                <div className="text-xs text-[var(--color-stage-muted)]">{m.desc}</div>
-              </div>
-            </label>
-          ))}
-        </div>
-      </Field>
+      {/* Collapsible options */}
+      {showOptions && (
+        <div className="rounded-xl border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] p-4 space-y-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Options</p>
 
-      {/* Stage directions */}
-      <Field label="Stage directions">
-        <Toggle
-          checked={form.readStageDirections}
-          onChange={(v) => set('readStageDirections', v)}
-          label="Read stage directions aloud"
-        />
-      </Field>
-
-      {/* Speech rate */}
-      <Field label={`Speech rate: ${form.speechRate.toFixed(1)}×`}>
-        <input
-          type="range" min={0.5} max={2} step={0.1}
-          value={form.speechRate}
-          onChange={(e) => set('speechRate', Number(e.target.value))}
-          className="w-full accent-[var(--color-stage-accent)]"
-        />
-      </Field>
-
-      {/* Accuracy */}
-      <Field label="Accuracy checking">
-        <div className="space-y-3">
-          <Toggle
-            checked={form.accuracyEnabled}
-            onChange={(v) => set('accuracyEnabled', v)}
-            label="Analyse my lines and show accuracy"
-          />
-          {form.accuracyEnabled && (
-            <div>
-              <label className="block text-xs text-[var(--color-stage-muted)] mb-1">
-                Warn in summary below: {form.accuracyWarningThreshold}%
-              </label>
-              <input
-                type="range" min={0} max={100} step={5}
-                value={form.accuracyWarningThreshold}
-                onChange={(e) => set('accuracyWarningThreshold', Number(e.target.value))}
-                className="w-full accent-[var(--color-stage-accent)]"
-              />
-            </div>
-          )}
-
-          {form.accuracyEnabled && (
-            <div>
-              <label className="block text-xs text-[var(--color-stage-muted)] mb-1">
-                Silence gap: {(form.endLineSilenceMs / 1000).toFixed(1)} s
-              </label>
-              <input
-                type="range" min={200} max={3000} step={100}
-                value={form.endLineSilenceMs}
-                onChange={(e) => set('endLineSilenceMs', Number(e.target.value))}
-                className="w-full accent-[var(--color-stage-accent)]"
-              />
-              <p className="text-xs text-[var(--color-stage-muted)] mt-1">
-                Time after your last word before moving on (if line not yet detected)
-              </p>
-            </div>
-          )}
-
-          {form.accuracyEnabled && (
+          {/* My line mode */}
+          <Field label="How to handle your lines">
             <div className="space-y-2">
+              {LINE_MODES.map((m) => (
+                <label
+                  key={m.value}
+                  className={`flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
+                    form.myLineMode === m.value
+                      ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
+                      : 'border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] hover:border-[var(--color-stage-muted)]'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="myLineMode"
+                    value={m.value}
+                    checked={form.myLineMode === m.value}
+                    onChange={() => set('myLineMode', m.value)}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <div className="font-medium text-sm text-[var(--color-stage-text)]">{m.label}</div>
+                    <div className="text-xs text-[var(--color-stage-muted)]">{m.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </Field>
+
+          {/* Stage directions */}
+          <Field label="Stage directions">
+            <Toggle
+              checked={form.readStageDirections}
+              onChange={(v) => set('readStageDirections', v)}
+              label="Read stage directions aloud"
+            />
+          </Field>
+
+          {/* Speech rate */}
+          <Field label={`Speech rate: ${form.speechRate.toFixed(1)}×`}>
+            <input
+              type="range" min={0.5} max={2} step={0.1}
+              value={form.speechRate}
+              onChange={(e) => set('speechRate', Number(e.target.value))}
+              className="w-full accent-[var(--color-stage-accent)]"
+            />
+          </Field>
+
+          {/* Accuracy */}
+          <Field label="Accuracy checking">
+            <div className="space-y-3">
               <Toggle
-                checked={form.errorPromptEnabled}
-                onChange={(v) => set('errorPromptEnabled', v)}
-                label="Read line aloud if accuracy is too low"
+                checked={form.accuracyEnabled}
+                onChange={(v) => set('accuracyEnabled', v)}
+                label="Analyse my lines and show accuracy"
               />
-              {form.errorPromptEnabled && (
+              {form.accuracyEnabled && (
                 <div>
                   <label className="block text-xs text-[var(--color-stage-muted)] mb-1">
-                    Prompt phrase
+                    Warning threshold: {form.accuracyWarningThreshold}%
                   </label>
                   <input
-                    type="text"
-                    value={form.errorPromptPhrase}
-                    onChange={(e) => set('errorPromptPhrase', e.target.value)}
-                    placeholder="The correct line is"
-                    className="w-full bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-3 py-2 text-sm text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
+                    type="range" min={0} max={100} step={5}
+                    value={form.accuracyWarningThreshold}
+                    onChange={(e) => set('accuracyWarningThreshold', Number(e.target.value))}
+                    className="w-full accent-[var(--color-stage-accent)]"
+                  />
+                </div>
+              )}
+
+              {form.accuracyEnabled && (
+                <div>
+                  <label className="block text-xs text-[var(--color-stage-muted)] mb-1">
+                    Silence gap: {(form.endLineSilenceMs / 1000).toFixed(1)} s
+                  </label>
+                  <input
+                    type="range" min={200} max={3000} step={100}
+                    value={form.endLineSilenceMs}
+                    onChange={(e) => set('endLineSilenceMs', Number(e.target.value))}
+                    className="w-full accent-[var(--color-stage-accent)]"
                   />
                   <p className="text-xs text-[var(--color-stage-muted)] mt-1">
-                    Spoken before reading back the correct line
+                    Silence after your last word before moving on
                   </p>
                 </div>
               )}
-            </div>
-          )}
 
-          {form.accuracyEnabled && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowMicTest((v) => !v)}
-                className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
-              >
-                {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
-              </button>
-              {showMicTest && <div className="mt-2"><MicTest /></div>}
+              {form.accuracyEnabled && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMicTest((v) => !v)}
+                    className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
+                  >
+                    {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
+                  </button>
+                  {showMicTest && <div className="mt-2"><MicTest /></div>}
+                </div>
+              )}
             </div>
-          )}
+          </Field>
         </div>
-      </Field>
+      )}
 
       <button
         onClick={handleStart}

@@ -6,9 +6,10 @@ import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
-import { AccuracyDisplay } from './AccuracyDisplay'
 import { AccuracySummary } from './AccuracySummary'
-import type { MarkedBlock, RepeatMode, WordDiff } from '../types'
+import { unlockAudio, playPing, playCompletion } from '../utils/sounds'
+import { MicTest } from './MicTest'
+import type { WordDiff, MyLineMode } from '../types'
 
 interface Props {
   onExit: () => void
@@ -23,19 +24,25 @@ type Phase =
   | 'paused'
   | 'done'
 
-// Consecutive dialogue lines from the same character merged into one beat
 interface LineGroup {
   startIdx: number
   endIdx: number
   type: 'dialogue' | 'direction' | 'heading'
   character?: string
-  text: string   // lines joined with \n for multi-line speeches
+  text: string
 }
 
+const LINE_MODES: { value: MyLineMode; label: string }[] = [
+  { value: 'silence', label: 'A — Silence' },
+  { value: 'read', label: 'B — Read' },
+  { value: 'gap-before', label: 'C — Gap then read' },
+  { value: 'gap-after', label: 'D — Read then gap' },
+]
+
 export function RehearsalMode({ onExit }: Props) {
-  const { scripts, rehearsalSettings } = useAppStore()
+  const { scripts, rehearsalSettings, saveRehearsalSettings } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { listening, supported, listen, stop: stopListening, abort, reset: resetTranscript } = useSpeechRecognition()
+  const { listening, supported, listen, abort, reset: resetTranscript } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const settings = rehearsalSettings!
@@ -48,7 +55,7 @@ export function RehearsalMode({ onExit }: Props) {
   const firstLine = activeScene?.startLineIndex ?? 0
   const sceneEnd = activeScene?.endLineIndex ?? lines.length - 1
 
-  // Group consecutive same-character dialogue lines into single beats
+  // Build line groups
   const allGroups = useMemo((): LineGroup[] => {
     const groups: LineGroup[] = []
     let i = 0
@@ -75,49 +82,56 @@ export function RehearsalMode({ onExit }: Props) {
     return groups
   }, [lines])
 
-  // Last group in scene belonging to myCharacter
-  const lastMyGroup = useMemo(() => {
-    for (let i = sceneEnd; i >= firstLine; i--) {
-      if (lines[i].type === 'dialogue' && lines[i].character === settings.myCharacter) {
-        return allGroups.find((g) => g.startIdx <= i && i <= g.endIdx) ?? null
-      }
-    }
-    return null
-  }, [allGroups, firstLine, sceneEnd, lines, settings.myCharacter])
+  // Visible groups (within scene boundaries)
+  const sceneGroups = useMemo(
+    () => allGroups.filter((g) => g.startIdx >= firstLine && g.startIdx <= sceneEnd),
+    [allGroups, firstLine, sceneEnd],
+  )
 
-  const lastMyLine = lastMyGroup?.startIdx ?? sceneEnd
-  const lastMyEnd = lastMyGroup?.endIdx ?? sceneEnd
-
-  // Start one group before myCharacter's first group (their cue)
-  const startLine = useMemo(() => {
-    for (let i = firstLine; i <= sceneEnd; i++) {
-      if (lines[i].type === 'dialogue' && lines[i].character === settings.myCharacter) {
-        if (i === firstLine) return firstLine
-        const firstUserGroup = allGroups.find((g) => g.startIdx <= i && i <= g.endIdx)
-        if (!firstUserGroup) return Math.max(firstLine, i - 1)
-        const gi = allGroups.indexOf(firstUserGroup)
-        if (gi > 0 && allGroups[gi - 1].startIdx >= firstLine) return allGroups[gi - 1].startIdx
-        return firstLine
-      }
-    }
+  // Default block start = group before user's first line
+  const defaultBlockStart = useMemo(() => {
+    const firstUserIdx = sceneGroups.findIndex(
+      (g) => g.type === 'dialogue' && g.character === settings.myCharacter,
+    )
+    if (firstUserIdx > 0) return sceneGroups[firstUserIdx - 1].startIdx
+    if (firstUserIdx === 0) return sceneGroups[0].startIdx
     return firstLine
-  }, [allGroups, firstLine, sceneEnd, lines, settings.myCharacter])
+  }, [sceneGroups, settings.myCharacter, firstLine])
+
+  // Default block end = group after user's last line
+  const defaultBlockEnd = useMemo(() => {
+    let lastUserIdx = -1
+    for (let i = 0; i < sceneGroups.length; i++) {
+      if (sceneGroups[i].type === 'dialogue' && sceneGroups[i].character === settings.myCharacter) {
+        lastUserIdx = i
+      }
+    }
+    if (lastUserIdx >= 0 && lastUserIdx + 1 < sceneGroups.length) {
+      return sceneGroups[lastUserIdx + 1].startIdx
+    }
+    if (lastUserIdx >= 0) return sceneGroups[lastUserIdx].startIdx
+    return sceneEnd
+  }, [sceneGroups, settings.myCharacter, sceneEnd])
 
   const accuracyEnabled = settings.accuracyEnabled !== false
 
-  const [currentIdx, setCurrentIdx] = useState(startLine)
+  // --- State ---
+  const [currentIdx, setCurrentIdx] = useState(defaultBlockStart)
+  const [blockStart, setBlockStart] = useState(defaultBlockStart)
+  const [blockEnd, setBlockEnd] = useState(defaultBlockEnd)
   const [phase, setPhase] = useState<Phase>('idle')
-  const [markedBlock, setMarkedBlock] = useState<MarkedBlock | null>(null)
-  const [markStart, setMarkStart] = useState<number | null>(null)
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>('off')
   const [accuracies, setAccuracies] = useState<Record<number, number>>({})
   const [transcripts, setTranscripts] = useState<Record<number, string>>({})
   const [wordDiffs, setWordDiffs] = useState<Record<number, WordDiff[]>>({})
   const accuraciesRef = useRef<Record<number, number>>({})
+  const [showAllMyLines, setShowAllMyLines] = useState(false)
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
-  const [rate, setRate] = useState(settings.speechRate)
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
+  const [rate, setRate] = useState(settings.speechRate)
+  const [showOptions, setShowOptions] = useState(false)
+  const [showMicTest, setShowMicTest] = useState(false)
 
+  // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const stopRef = useRef(false)
   const pauseRef = useRef(false)
@@ -127,6 +141,7 @@ export function RehearsalMode({ onExit }: Props) {
   const recResolveRef = useRef<(() => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
 
+  // --- Audio helpers ---
   const playRecording = (blob: Blob): Promise<void> =>
     new Promise((resolve) => {
       recResolveRef.current = resolve
@@ -166,22 +181,41 @@ export function RehearsalMode({ onExit }: Props) {
   const scrollToLine = (idx: number) =>
     lineRefs.current[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 
+  // --- Pre-load all recordings (sync lookup during playback avoids IDB async mid-loop) ---
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const map = new Map<number, Blob>()
+      for (let i = firstLine; i <= sceneEnd; i++) {
+        if (lines[i]?.type === 'dialogue') {
+          const blob = await getRecording(script.id, i)
+          if (blob) map.set(i, blob)
+        }
+      }
+      if (!cancelled) recMapRef.current = map
+    }
+    load()
+    return () => { cancelled = true }
+  }, [script.id, firstLine, sceneEnd, lines])
+
+  useEffect(() => {
+    return () => { stopRef.current = true; cancel(); abort() }
+  }, [cancel, abort])
+
+  // --- Playback loop ---
   const runPlayback = useCallback(
-    async (startIdx: number) => {
+    async (startIdx: number, endIdx: number) => {
       stopRef.current = false
       let i = startIdx
-
-      // Effective end: block end-group start (or last user group end)
-      const endIdx = markedBlock ? markedBlock.endIndex : lastMyEnd
 
       while (i <= endIdx && !stopRef.current) {
         await waitWhilePaused()
         if (stopRef.current) break
 
-        const lineIdx = i          // group start — const so closures capture the right value
+        const lineIdx = i
         const line = lines[lineIdx]
 
-        // Collect all consecutive same-character dialogue lines as one group
+        // Group consecutive same-character dialogue lines
         let groupEnd = lineIdx
         if (line.type === 'dialogue') {
           while (
@@ -192,9 +226,10 @@ export function RehearsalMode({ onExit }: Props) {
             groupEnd++
           }
         }
-        const groupText = line.type === 'dialogue'
-          ? lines.slice(lineIdx, groupEnd + 1).map((l) => l.text).join('\n')
-          : line.text
+        const groupText =
+          line.type === 'dialogue'
+            ? lines.slice(lineIdx, groupEnd + 1).map((l) => l.text).join('\n')
+            : line.text
 
         setCurrentIdx(lineIdx)
         scrollToLine(lineIdx)
@@ -217,106 +252,115 @@ export function RehearsalMode({ onExit }: Props) {
         }
 
         const isMyLine = line.character === settings.myCharacter
+        const gap = estimateDuration(groupText, rate)
+        const silenceMs = settings.endLineSilenceMs ?? 1000
 
         if (!isMyLine) {
           setPhase('playing-other')
-          const rec = recMapRef.current.get(lineIdx) ?? null
+          const rec = recMapRef.current.get(lineIdx)
           if (rec) {
             await playRecording(rec)
           } else {
             await speak(groupText, { rate })
           }
         } else {
-          const gap = estimateDuration(groupText, rate)
           const { myLineMode } = settings
 
           if (myLineMode === 'silence') {
-            let lineAcc: number | undefined
             if (accuracyEnabled && supported) {
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs: settings.endLineSilenceMs ?? 1000 })
+              const heard = await listen({ expectedText: groupText, silenceMs })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(300)
-              if (!stopRef.current && heard) {
-                const acc = wordAccuracy(groupText, heard)
-                const diff = buildWordDiff(groupText, heard)
-                const next = { ...accuraciesRef.current, [lineIdx]: acc }
-                accuraciesRef.current = next
-                setAccuracies(next)
-                setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
-                setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                lineAcc = acc
+              if (!stopRef.current) {
+                setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
+                if (heard) {
+                  const acc = wordAccuracy(groupText, heard)
+                  const diff = buildWordDiff(groupText, heard)
+                  const next = { ...accuraciesRef.current, [lineIdx]: acc }
+                  accuraciesRef.current = next
+                  setAccuracies(next)
+                  setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
+                  setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
+                  await playPing(acc, settings.accuracyWarningThreshold)
+                }
               }
             } else {
+              // No speech recognition: listen for voice activity or fall back to fixed gap
               setPhase('my-line-silence')
-              await delay(gap)
-            }
-            if (!stopRef.current) setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
-            if (
-              !stopRef.current &&
-              (settings.errorPromptEnabled ?? false) &&
-              lineAcc !== undefined &&
-              lineAcc < settings.accuracyWarningThreshold
-            ) {
-              const phrase = settings.errorPromptPhrase ?? 'The correct line is'
-              if (phrase) {
-                setPhase('playing-other')
-                await speak(phrase, { rate })
+              if (supported) {
+                await listen({ silenceMs })
+                await delay(300)
+              } else {
+                await delay(gap)
               }
-              if (!stopRef.current) {
-                setPhase('my-line-reading')
-                await speak(groupText, { rate })
-              }
+              if (!stopRef.current) setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             }
           } else if (myLineMode === 'read') {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            await speak(groupText, { rate })
+            const rec = recMapRef.current.get(lineIdx)
+            if (rec) await playRecording(rec)
+            else await speak(groupText, { rate })
           } else if (myLineMode === 'gap-before') {
+            // Wait for user to finish attempting the line, then read it
             setPhase('my-line-silence')
-            await delay(gap)
+            if (supported) {
+              await listen({ silenceMs })
+              await delay(300)
+            } else {
+              await delay(gap)
+            }
             if (!stopRef.current) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
-              await speak(groupText, { rate })
+              const rec = recMapRef.current.get(lineIdx)
+              if (rec) await playRecording(rec)
+              else await speak(groupText, { rate })
             }
           } else {
-            // gap-after
+            // gap-after: read the line, then wait for user to repeat
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            await speak(groupText, { rate })
+            const rec = recMapRef.current.get(lineIdx)
+            if (rec) await playRecording(rec)
+            else await speak(groupText, { rate })
             if (!stopRef.current) {
-              setPhase('my-line-silence')
-              await delay(gap)
+              setPhase('my-line-listening')
+              if (supported) {
+                const heard = await listen({ expectedText: groupText, silenceMs })
+                await delay(300)
+                if (!stopRef.current && heard && accuracyEnabled) {
+                  const acc = wordAccuracy(groupText, heard)
+                  const diff = buildWordDiff(groupText, heard)
+                  const next = { ...accuraciesRef.current, [lineIdx]: acc }
+                  accuraciesRef.current = next
+                  setAccuracies(next)
+                  setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
+                  setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
+                  await playPing(acc, settings.accuracyWarningThreshold)
+                }
+              } else {
+                await delay(gap)
+              }
             }
           }
         }
 
         if (stopRef.current) break
-
-        // Block repeat check — fires when we finish the group at the block's end marker
-        if (markedBlock && lineIdx === markedBlock.endIndex) {
-          const blockAccs = Object.entries(accuraciesRef.current)
-            .filter(([k]) => { const n = Number(k); return n >= markedBlock.startIndex && n <= markedBlock.endIndex })
-            .map(([, v]) => v)
-          const shouldRepeat =
-            repeatMode === 'always' ||
-            (repeatMode === 'below-threshold' && blockAccs.some((a) => a < settings.accuracyWarningThreshold))
-          if (shouldRepeat) {
-            i = markedBlock.startIndex
-            continue
-          }
-        }
-
         i = groupEnd + 1
       }
 
-      setPhase(stopRef.current ? 'idle' : 'done')
+      if (!stopRef.current) {
+        await playCompletion()
+        setPhase('done')
+      } else {
+        setPhase('idle')
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lines, lastMyEnd, settings, speak, rate, accuracyEnabled,
-     supported, listen, resetTranscript, markedBlock, repeatMode],
+    [lines, settings, speak, rate, accuracyEnabled, supported, listen, resetTranscript],
   )
 
   const interruptPlayback = (cb?: () => void) => {
@@ -329,66 +373,88 @@ export function RehearsalMode({ onExit }: Props) {
     if (cb) setTimeout(cb, 50)
   }
 
-  // Navigate to the start of the adjacent group
   const prevGroupStart = (idx: number) => {
-    const gi = allGroups.findIndex((g) => g.startIdx <= idx && idx <= g.endIdx)
-    return gi > 0 ? allGroups[gi - 1].startIdx : firstLine
+    const gi = sceneGroups.findIndex((g) => g.startIdx <= idx && idx <= g.endIdx)
+    return gi > 0 ? sceneGroups[gi - 1].startIdx : firstLine
   }
   const nextGroupStart = (idx: number) => {
-    const gi = allGroups.findIndex((g) => g.startIdx <= idx && idx <= g.endIdx)
-    return gi >= 0 && gi + 1 < allGroups.length ? allGroups[gi + 1].startIdx : lastMyLine
+    const gi = sceneGroups.findIndex((g) => g.startIdx <= idx && idx <= g.endIdx)
+    return gi >= 0 && gi + 1 < sceneGroups.length ? sceneGroups[gi + 1].startIdx : sceneEnd
   }
 
   const handlePlay = () => {
-    // iOS requires Web Speech API to be touched synchronously from a user gesture
-    // before it will produce sound from async contexts
     speechSynthesis.cancel()
+    unlockAudio()
     if (phase === 'paused') {
       pauseRef.current = false
       pauseResolveRef.current?.()
     } else {
-      runPlayback(markedBlock?.startIndex ?? (phase === 'idle' ? startLine : currentIdx))
+      runPlayback(currentIdx, blockEnd)
     }
   }
-  const handlePause = () => { pauseRef.current = true; cancel(); cancelRecording(); stopListening(); setPhase('paused') }
+
+  const handlePause = () => {
+    pauseRef.current = true
+    cancel()
+    cancelRecording()
+    abort()
+    setPhase('paused')
+  }
+
   const handleStop = () => { interruptPlayback(); setPhase('idle') }
+
   const handleRestart = () =>
     interruptPlayback(() => {
       stopRef.current = false
+      setCurrentIdx(blockStart)
       setRevealedLines({})
       setAccuracies({})
       setTranscripts({})
       setWordDiffs({})
       accuraciesRef.current = {}
-      runPlayback(markedBlock?.startIndex ?? startLine)
+      runPlayback(blockStart, blockEnd)
     })
+
   const handleSkip = () =>
     interruptPlayback(() => {
       stopRef.current = false
-      runPlayback(Math.min(nextGroupStart(currentIdx), lastMyLine))
+      runPlayback(Math.min(nextGroupStart(currentIdx), blockEnd), blockEnd)
     })
+
   const handleBack = () =>
     interruptPlayback(() => {
       stopRef.current = false
-      runPlayback(Math.max(prevGroupStart(currentIdx), firstLine))
+      runPlayback(Math.max(prevGroupStart(currentIdx), blockStart), blockEnd)
     })
-  const jumpTo = (idx: number) =>
-    interruptPlayback(() => { stopRef.current = false; setCurrentIdx(idx); runPlayback(idx) })
+
+  const handleLineSelect = (idx: number) => {
+    if (isPlaying || phase === 'paused') {
+      interruptPlayback(() => { stopRef.current = false; setCurrentIdx(idx); runPlayback(idx, blockEnd) })
+    } else {
+      setCurrentIdx(idx)
+    }
+  }
+
+  const handleSetBlockStart = () => {
+    if (currentIdx <= blockEnd) setBlockStart(currentIdx)
+  }
+
+  const handleSetBlockEnd = () => {
+    if (currentIdx >= blockStart) setBlockEnd(currentIdx)
+  }
 
   const handleRecordLine = async (lineIdx: number) => {
     if (recordingLineIdx !== null) {
-      // Stop and save
       const blob = await stopMic()
       await setRecording(script.id, recordingLineIdx, blob)
       recMapRef.current.set(recordingLineIdx, blob)
       setRecordingLineIdx(null)
     } else {
-      // Auto-pause playback before recording
       if (isPlaying) {
         pauseRef.current = true
         cancel()
         cancelRecording()
-        stopListening()
+        abort()
         setPhase('paused')
       }
       const ok = await startMic()
@@ -396,89 +462,188 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }
 
-  const toggleMarkStart = (idx: number) => {
-    if (markStart === null) {
-      setMarkStart(idx)
-    } else {
-      setMarkedBlock({ startIndex: Math.min(markStart, idx), endIndex: Math.max(markStart, idx) })
-      setMarkStart(null)
-    }
+  const toggleReveal = (lineIdx: number) => {
+    setRevealedLines((r) => {
+      const next = { ...r }
+      if (next[lineIdx]) {
+        delete next[lineIdx]
+      } else {
+        next[lineIdx] = true
+      }
+      return next
+    })
   }
 
-  // Pre-load recordings into a sync map so the playback loop never awaits IDB mid-line.
-  // iOS kills the Web Speech audio session after any async gap before speak().
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      const map = new Map<number, Blob>()
-      for (let i = firstLine; i <= sceneEnd; i++) {
-        if (lines[i]?.type === 'dialogue' && lines[i].character !== settings.myCharacter) {
-          const blob = await getRecording(script.id, i)
-          if (blob) map.set(i, blob)
-        }
-      }
-      if (!cancelled) recMapRef.current = map
-    }
-    load()
-    return () => { cancelled = true }
-  }, [script.id, firstLine, sceneEnd, settings.myCharacter, lines])
-
-  useEffect(() => {
-    return () => { stopRef.current = true; cancel(); abort() }
-  }, [cancel, abort])
-
   const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence', 'my-line-listening'].includes(phase)
+
+  // Save settings changes from options panel
+  const updateSetting = <K extends keyof typeof settings>(k: K, v: (typeof settings)[K]) => {
+    saveRehearsalSettings({ ...settings, [k]: v })
+  }
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0 gap-2">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm shrink-0">
             ← Back
           </button>
-          <span className="text-sm font-semibold text-[var(--color-stage-text)]">{script.name}</span>
-          {activeScene && <span className="text-xs text-[var(--color-stage-gold)]">{activeScene.title}</span>}
-          <span className="text-xs bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)] px-2 py-0.5 rounded-full">
+          <span className="text-sm font-semibold text-[var(--color-stage-text)] truncate">{script.name}</span>
+          {activeScene && (
+            <span className="text-xs text-[var(--color-stage-gold)] shrink-0">{activeScene.title}</span>
+          )}
+          <span className="text-xs bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)] px-2 py-0.5 rounded-full shrink-0">
             {settings.myCharacter}
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-[var(--color-stage-muted)]">Rate</span>
-          <input type="range" min={0.5} max={2} step={0.1} value={rate}
+          <span className="text-xs text-[var(--color-stage-muted)]">{rate.toFixed(1)}×</span>
+          <input
+            type="range" min={0.5} max={2} step={0.1} value={rate}
             onChange={(e) => setRate(Number(e.target.value))}
-            className="w-20 accent-[var(--color-stage-accent)]" disabled={isPlaying} />
-          <span className="text-xs text-[var(--color-stage-muted)] w-8">{rate.toFixed(1)}×</span>
+            className="w-16 accent-[var(--color-stage-accent)]"
+            disabled={isPlaying}
+          />
+          <button
+            onClick={() => setShowOptions((v) => !v)}
+            className={`text-lg px-1 transition-colors ${showOptions ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
+            title="Options"
+          >
+            ⚙
+          </button>
         </div>
       </div>
 
-      {/* Script area */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-        {allGroups.filter((g) => g.startIdx >= firstLine && g.startIdx <= sceneEnd).map((group) => (
-          <LineRow
-            key={group.startIdx}
-            group={group}
-            isCurrent={group.startIdx <= currentIdx && currentIdx <= group.endIdx}
-            phase={phase}
-            isMyLine={group.character === settings.myCharacter}
-            myLineMode={settings.myLineMode}
-            textRevealed={revealedLines[group.startIdx] === true}
-            accuracy={accuracyEnabled ? (accuracies[group.startIdx] ?? null) : null}
-            transcript={transcripts[group.startIdx] ?? ''}
-            wordDiff={wordDiffs[group.startIdx] ?? []}
-            threshold={settings.accuracyWarningThreshold}
-            inBlock={!!markedBlock && group.startIdx >= markedBlock.startIndex && group.startIdx <= markedBlock.endIndex}
-            isMarkStart={group.startIdx === markStart}
-            onJump={() => jumpTo(group.startIdx)}
-            onToggleMark={() => toggleMarkStart(group.startIdx)}
-            onRecord={group.type === 'dialogue' && group.character !== settings.myCharacter
-              ? () => handleRecordLine(group.startIdx)
-              : undefined}
-            isRecordingThis={recordingLineIdx === group.startIdx}
-            anyRecording={micRecording || recordingLineIdx !== null}
-            ref={(el) => { lineRefs.current[group.startIdx] = el }}
+      {/* Options panel */}
+      {showOptions && (
+        <div className="border-b border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3 space-y-3 shrink-0">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--color-stage-muted)] uppercase tracking-wider font-semibold">Mode</span>
+              <select
+                value={settings.myLineMode}
+                onChange={(e) => updateSetting('myLineMode', e.target.value as MyLineMode)}
+                disabled={isPlaying}
+                className="text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded px-2 py-1 text-[var(--color-stage-text)]"
+              >
+                {LINE_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.readStageDirections}
+                onChange={(e) => updateSetting('readStageDirections', e.target.checked)}
+                disabled={isPlaying}
+                className="rounded accent-[var(--color-stage-accent)]"
+              />
+              <span className="text-xs text-[var(--color-stage-text)]">Stage directions</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.accuracyEnabled}
+                onChange={(e) => updateSetting('accuracyEnabled', e.target.checked)}
+                disabled={isPlaying}
+                className="rounded accent-[var(--color-stage-accent)]"
+              />
+              <span className="text-xs text-[var(--color-stage-text)]">Accuracy</span>
+            </label>
+            {settings.accuracyEnabled && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[var(--color-stage-muted)]">Threshold</span>
+                <input
+                  type="range" min={0} max={100} step={5}
+                  value={settings.accuracyWarningThreshold}
+                  onChange={(e) => updateSetting('accuracyWarningThreshold', Number(e.target.value))}
+                  disabled={isPlaying}
+                  className="w-20 accent-[var(--color-stage-accent)]"
+                />
+                <span className="text-xs text-[var(--color-stage-text)] w-8">{settings.accuracyWarningThreshold}%</span>
+              </div>
+            )}
+            {settings.accuracyEnabled && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[var(--color-stage-muted)]">Silence</span>
+                <input
+                  type="range" min={200} max={3000} step={100}
+                  value={settings.endLineSilenceMs}
+                  onChange={(e) => updateSetting('endLineSilenceMs', Number(e.target.value))}
+                  disabled={isPlaying}
+                  className="w-20 accent-[var(--color-stage-accent)]"
+                />
+                <span className="text-xs text-[var(--color-stage-text)] w-8">{(settings.endLineSilenceMs / 1000).toFixed(1)}s</span>
+              </div>
+            )}
+          </div>
+          {settings.accuracyEnabled && (
+            <div>
+              <button
+                onClick={() => setShowMicTest((v) => !v)}
+                className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
+              >
+                {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
+              </button>
+              {showMicTest && <div className="mt-2"><MicTest /></div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Show/hide my lines toggle */}
+      <div className="px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 flex items-center justify-between">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showAllMyLines}
+            onChange={(e) => setShowAllMyLines(e.target.checked)}
+            className="rounded accent-[var(--color-stage-accent)]"
           />
-        ))}
+          <span className="text-xs text-[var(--color-stage-text)]">Show all my lines</span>
+        </label>
+        <span className="text-xs text-[var(--color-stage-muted)]">
+          {settings.myCharacter}
+        </span>
+      </div>
+
+      {/* Script area */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+        {sceneGroups.map((group) => {
+          const isCurrentGroup = group.startIdx <= currentIdx && currentIdx <= group.endIdx
+          const isMyLine = group.character === settings.myCharacter
+          const lineVisible = !isMyLine || showAllMyLines || revealedLines[group.startIdx] === true
+          const acc = accuracies[group.startIdx] ?? null
+
+          return (
+            <LineRow
+              key={group.startIdx}
+              group={group}
+              isCurrent={isCurrentGroup}
+              phase={phase}
+              isMyLine={isMyLine}
+              lineVisible={lineVisible}
+              accuracy={accuracyEnabled ? acc : null}
+              transcript={transcripts[group.startIdx] ?? ''}
+              wordDiff={wordDiffs[group.startIdx] ?? []}
+              threshold={settings.accuracyWarningThreshold}
+              isBlockStart={group.startIdx === blockStart}
+              isBlockEnd={group.startIdx === blockEnd}
+              onSelect={() => handleLineSelect(group.startIdx)}
+              onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
+              onRecord={
+                group.type === 'dialogue' && !isPlaying && phase !== 'paused'
+                  ? () => handleRecordLine(group.startIdx)
+                  : undefined
+              }
+              isRecordingThis={recordingLineIdx === group.startIdx}
+              anyRecording={micRecording || recordingLineIdx !== null}
+              ref={(el) => { lineRefs.current[group.startIdx] = el }}
+            />
+          )
+        })}
 
         {phase === 'done' && (
           <>
@@ -490,77 +655,80 @@ export function RehearsalMode({ onExit }: Props) {
         )}
       </div>
 
-      {/* Block controls */}
-      {(markedBlock || markStart !== null) && (
-        <div className="px-4 py-2 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] flex items-center gap-3 flex-wrap shrink-0">
-          <span className="text-xs text-[var(--color-stage-gold)]">
-            {markStart !== null
-              ? 'Click a second line to set block end…'
-              : `Block: lines ${markedBlock!.startIndex + 1}–${markedBlock!.endIndex + 1}`}
-          </span>
-          {markedBlock && (
-            <>
-              <select value={repeatMode} onChange={(e) => setRepeatMode(e.target.value as RepeatMode)}
-                className="text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded px-2 py-1 text-[var(--color-stage-text)]">
-                <option value="off">No repeat</option>
-                <option value="always">Always repeat</option>
-                <option value="below-threshold">Repeat if low accuracy</option>
-              </select>
-              <button onClick={() => jumpTo(markedBlock.startIndex)}
-                className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors">
-                ▶ Play block
-              </button>
-            </>
-          )}
-          <button onClick={() => { setMarkedBlock(null); setMarkStart(null); setRepeatMode('off') }}
-            className="text-xs text-red-400 hover:text-red-300 ml-auto">
-            Clear
-          </button>
-        </div>
-      )}
-
-      {/* Playback controls */}
-      <div className="px-4 py-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
-        <div className="flex items-center justify-center gap-4">
-          <CtrlBtn onClick={handleBack} disabled={!isPlaying} title="Previous beat">⏮</CtrlBtn>
-          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} large title={isPlaying ? 'Pause' : 'Play'}>
-            {phase === 'paused' ? '▶' : isPlaying ? '⏸' : '▶'}
-          </CtrlBtn>
-          <CtrlBtn onClick={handleStop} disabled={!isPlaying && phase !== 'paused'} title="Stop">⏹</CtrlBtn>
-          <CtrlBtn onClick={handleSkip} disabled={!isPlaying} title="Skip beat">⏭</CtrlBtn>
-          <div className="w-px h-6 bg-[var(--color-stage-border)] mx-1" />
-          <CtrlBtn onClick={handleRestart} title="Restart from beginning">↺</CtrlBtn>
-          <CtrlBtn onClick={() => setMarkStart(markStart === null ? currentIdx : null)}
-            active={markStart !== null} title="Set block marker">✂</CtrlBtn>
-        </div>
+      {/* Controls */}
+      <div className="px-4 py-3 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+        {isPlaying || phase === 'paused' ? (
+          <div className="flex items-center justify-center gap-4">
+            <CtrlBtn onClick={handleBack} title="Previous beat">⏮</CtrlBtn>
+            <CtrlBtn onClick={phase === 'paused' ? handlePlay : handlePause} large title={phase === 'paused' ? 'Resume' : 'Pause'}>
+              {phase === 'paused' ? '▶' : '⏸'}
+            </CtrlBtn>
+            <CtrlBtn onClick={handleStop} title="Stop">⏹</CtrlBtn>
+            <CtrlBtn onClick={handleSkip} title="Skip beat">⏭</CtrlBtn>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-3">
+            <CtrlBtn
+              onClick={handleSetBlockStart}
+              disabled={currentIdx > blockEnd}
+              title="Set block start to selected line"
+            >
+              ◀
+            </CtrlBtn>
+            <CtrlBtn onClick={handleRestart} title="Restart from block start">↺</CtrlBtn>
+            <CtrlBtn onClick={handlePlay} large title="Play from selected line">▶</CtrlBtn>
+            <CtrlBtn
+              onClick={handleSetBlockEnd}
+              disabled={currentIdx < blockStart}
+              title="Set block end to selected line"
+            >
+              ▶
+            </CtrlBtn>
+          </div>
+        )}
         <div className="text-center mt-2 text-xs text-[var(--color-stage-muted)] h-4">
           {phase === 'my-line-listening' && listening && '🎙 Listening…'}
           {phase === 'my-line-silence' && !listening && 'Your line…'}
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
-          {phase === 'paused' && 'Paused'}
-          {phase === 'done' && 'Finished — see summary above'}
+          {phase === 'paused' && 'Paused — tap a line to jump'}
+          {phase === 'done' && 'Scene complete'}
+          {phase === 'idle' && 'Tap a line to select, then play'}
         </div>
       </div>
     </div>
   )
 }
 
-function CtrlBtn({ onClick, disabled, title, large, active, children }: {
-  onClick: () => void; disabled?: boolean; title?: string
-  large?: boolean; active?: boolean; children: React.ReactNode
+function CtrlBtn({
+  onClick, disabled, title, large, children,
+}: {
+  onClick: () => void; disabled?: boolean; title?: string; large?: boolean; children: React.ReactNode
 }) {
   return (
-    <button onClick={onClick} disabled={disabled} title={title}
-      className={`rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-        large ? 'w-14 h-14 text-2xl' : 'w-10 h-10 text-lg'
-      } ${
-        active
-          ? 'bg-[var(--color-stage-gold)] text-black'
-          : 'bg-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)] hover:text-white'
-      }`}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed
+        bg-[var(--color-stage-border)] text-[var(--color-stage-text)]
+        hover:bg-[var(--color-stage-accent)] hover:text-white
+        ${large ? 'w-14 h-14 text-2xl' : 'w-10 h-10 text-lg'}`}
+    >
       {children}
     </button>
+  )
+}
+
+// Colored accuracy dot
+function AccuracyDot({ accuracy, threshold }: { accuracy: number; threshold: number }) {
+  const color =
+    accuracy >= 100 ? 'bg-green-400' : accuracy >= threshold ? 'bg-yellow-400' : 'bg-red-400'
+  return (
+    <span
+      title={`${accuracy}% accuracy`}
+      className={`inline-block w-2.5 h-2.5 rounded-full ml-2 shrink-0 ${color}`}
+    />
   )
 }
 
@@ -569,30 +737,33 @@ interface LineRowProps {
   isCurrent: boolean
   phase: Phase
   isMyLine: boolean
-  myLineMode: string
-  textRevealed: boolean
+  lineVisible: boolean
   accuracy: number | null
   transcript: string
   wordDiff: WordDiff[]
   threshold: number
-  inBlock: boolean
-  isMarkStart: boolean
-  onJump: () => void
-  onToggleMark: () => void
+  isBlockStart: boolean
+  isBlockEnd: boolean
+  onSelect: () => void
+  onReveal?: () => void
   onRecord?: () => void
   isRecordingThis?: boolean
   anyRecording?: boolean
 }
 
 const LineRow = ({
-  group, isCurrent, phase, isMyLine, myLineMode, textRevealed,
-  accuracy, transcript, wordDiff, threshold, inBlock, isMarkStart,
-  onJump, onToggleMark, onRecord, isRecordingThis, anyRecording, ref,
+  group, isCurrent, phase, isMyLine, lineVisible,
+  accuracy, threshold, isBlockStart, isBlockEnd,
+  onSelect, onReveal, onRecord, isRecordingThis, anyRecording, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
     return (
-      <div ref={ref} className="py-3 text-center text-[var(--color-stage-gold)] font-semibold text-sm uppercase tracking-widest">
+      <div
+        ref={ref}
+        className="py-3 text-center text-[var(--color-stage-gold)] font-semibold text-sm uppercase tracking-widest cursor-pointer"
+        onClick={onSelect}
+      >
         {group.text}
       </div>
     )
@@ -600,8 +771,14 @@ const LineRow = ({
 
   if (group.type === 'direction') {
     return (
-      <div ref={ref} className={`text-xs italic text-[var(--color-stage-muted)] px-2 py-1 rounded ${isCurrent ? 'bg-[var(--color-stage-accent)]/10' : ''}`}>
-        {group.text}
+      <div
+        ref={ref}
+        onClick={onSelect}
+        className={`text-xs italic text-[var(--color-stage-muted)] px-2 py-1.5 rounded cursor-pointer ${
+          isCurrent ? 'bg-[var(--color-stage-accent)]/10' : ''
+        }`}
+      >
+        <span className="ml-5">{group.text}</span>
       </div>
     )
   }
@@ -609,61 +786,94 @@ const LineRow = ({
   const isActiveMyLine = isCurrent && isMyLine &&
     ['my-line-silence', 'my-line-listening', 'my-line-reading'].includes(phase)
   const isActiveLine = isCurrent && !isMyLine && phase === 'playing-other'
-  const hideText = isMyLine && !textRevealed && myLineMode === 'silence'
-  const dimText = isMyLine && !textRevealed && myLineMode !== 'silence'
 
   return (
     <div
       ref={ref}
-      className={`rounded-lg px-3 py-2 transition-colors group ${inBlock ? 'ring-1 ring-[var(--color-stage-gold)]/30' : ''} ${
-        isActiveMyLine ? 'bg-[var(--color-stage-accent)]/20 ring-1 ring-[var(--color-stage-accent)]'
-          : isActiveLine ? 'bg-white/5 ring-1 ring-white/20'
-          : isCurrent ? 'bg-[var(--color-stage-surface)]' : ''
+      onClick={onSelect}
+      className={`rounded-lg px-2 py-2 transition-colors cursor-pointer ${
+        isActiveMyLine
+          ? 'bg-[var(--color-stage-accent)]/20 ring-1 ring-[var(--color-stage-accent)]'
+          : isActiveLine
+          ? 'bg-white/5 ring-1 ring-white/20'
+          : isCurrent
+          ? 'bg-[var(--color-stage-surface)]'
+          : ''
       }`}
     >
-      <div className="flex items-start gap-2">
-        <button onClick={onToggleMark} title="Set block marker"
-          className={`text-xs mt-1 shrink-0 w-4 transition-opacity ${isMarkStart ? 'text-[var(--color-stage-gold)]' : 'text-[var(--color-stage-muted)] opacity-0 group-hover:opacity-100'}`}>
-          ✂
-        </button>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={!anyRecording ? onJump : undefined}>
-          <span className={`text-[10px] font-bold uppercase tracking-wider mr-2 ${isMyLine ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'}`}>
-            {group.character}
-          </span>
-          {hideText ? (
-            <span className="text-sm text-[var(--color-stage-muted)] tracking-widest select-none">— — —</span>
-          ) : (
+      <div className="flex items-start gap-1.5">
+        {/* Block marker column */}
+        <div className="w-4 shrink-0 mt-0.5 flex items-center justify-center text-[10px] leading-none">
+          {isBlockStart ? (
+            <span className="text-[var(--color-stage-accent)] font-bold" title="Block start">▶</span>
+          ) : isBlockEnd ? (
+            <span className="text-[var(--color-stage-muted)]" title="Block end">■</span>
+          ) : null}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+              isMyLine ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
+            }`}>
+              {group.character}
+            </span>
+            {accuracy !== null && <AccuracyDot accuracy={accuracy} threshold={threshold} />}
+          </div>
+          {lineVisible ? (
             <span className={`text-sm ${
-              isActiveLine || isActiveMyLine ? 'text-white'
-                : dimText ? 'text-[var(--color-stage-muted)]'
-                : 'text-[var(--color-stage-text)]'
+              isActiveLine || isActiveMyLine ? 'text-white' : 'text-[var(--color-stage-text)]'
             }`}>
               {group.text.split('\n').map((t, idx) => (
                 <span key={idx} className="block">{t}</span>
               ))}
             </span>
+          ) : (
+            <span
+              className="text-sm text-[var(--color-stage-text)] select-none"
+              style={{ filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }}
+            >
+              {group.text.split('\n').map((t, idx) => (
+                <span key={idx} className="block">{t}</span>
+              ))}
+            </span>
+          )}
+          {accuracy !== null && lineVisible && (
+            <p className="text-[10px] text-[var(--color-stage-muted)] mt-0.5 italic">
+              {accuracy}%
+              {accuracy < threshold && ' — below threshold'}
+            </p>
           )}
         </div>
-        {onRecord && (
-          <button
-            onClick={onRecord}
-            disabled={!!anyRecording && !isRecordingThis}
-            title={isRecordingThis ? 'Stop recording' : 'Record this line'}
-            className={`shrink-0 mt-0.5 text-sm px-1.5 py-0.5 rounded transition-colors min-h-[32px] min-w-[28px] ${
-              isRecordingThis
-                ? 'text-red-400 animate-pulse'
-                : 'text-[var(--color-stage-muted)] opacity-40 hover:opacity-100 hover:text-red-400'
-            } disabled:opacity-10`}
-          >
-            {isRecordingThis ? '■' : '●'}
-          </button>
-        )}
-      </div>
-      {accuracy !== null && isMyLine && (
-        <div className="mt-1 pl-9">
-          <AccuracyDisplay accuracy={accuracy} transcript={transcript} wordDiff={wordDiff} threshold={threshold} />
+
+        {/* Actions column */}
+        <div className="flex flex-col gap-1 shrink-0 items-end">
+          {onReveal && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onReveal() }}
+              title={lineVisible ? 'Hide line' : 'Reveal line'}
+              className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] p-0.5 transition-colors leading-none"
+            >
+              {lineVisible ? '👁' : '◉'}
+            </button>
+          )}
+          {onRecord && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRecord() }}
+              disabled={!!anyRecording && !isRecordingThis}
+              title={isRecordingThis ? 'Stop recording' : 'Record this line'}
+              className={`text-xs p-0.5 transition-colors leading-none min-w-[20px] ${
+                isRecordingThis
+                  ? 'text-red-400 animate-pulse'
+                  : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
+              } disabled:opacity-10`}
+            >
+              {isRecordingThis ? '■' : '●'}
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
