@@ -262,7 +262,7 @@ export function RehearsalMode({ onExit }: Props) {
               resetTranscript()
               const heard = await listen({ expectedText: groupText, silenceMs })
               // iOS needs a moment to hand the audio session back from mic to speaker
-              await delay(300)
+              await delay(600)
               if (!stopRef.current) {
                 setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
                 if (heard) {
@@ -281,7 +281,7 @@ export function RehearsalMode({ onExit }: Props) {
               setPhase('my-line-silence')
               if (supported) {
                 await listen({ silenceMs })
-                await delay(300)
+                await delay(600)
               } else {
                 await delay(gap)
               }
@@ -298,7 +298,7 @@ export function RehearsalMode({ onExit }: Props) {
             setPhase('my-line-silence')
             if (supported) {
               await listen({ silenceMs })
-              await delay(300)
+              await delay(600)
             } else {
               await delay(gap)
             }
@@ -320,7 +320,7 @@ export function RehearsalMode({ onExit }: Props) {
               setPhase('my-line-listening')
               if (supported) {
                 const heard = await listen({ expectedText: groupText, silenceMs })
-                await delay(300)
+                await delay(600)
                 if (!stopRef.current && heard && accuracyEnabled) {
                   const acc = wordAccuracy(groupText, heard)
                   const diff = buildWordDiff(groupText, heard)

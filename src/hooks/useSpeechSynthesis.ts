@@ -50,44 +50,62 @@ export function useSpeechSynthesis() {
       return new Promise((resolve) => {
         resolveRef.current = resolve
 
-        const utter = new SpeechSynthesisUtterance(text)
-        utter.rate = options.rate ?? 1
-        utter.pitch = options.pitch ?? 1
-        utter.volume = options.volume ?? 1
-        if (options.voiceURI) {
-          const v = voicesRef.current.find((vv) => vv.voiceURI === options.voiceURI)
-          if (v) utter.voice = v
+        const attemptSpeak = (retriesLeft: number) => {
+          // Guard: if cancel() was called while we were in a retry timeout
+          if (resolveRef.current !== resolve) return
+
+          const utter = new SpeechSynthesisUtterance(text)
+          utter.rate = options.rate ?? 1
+          utter.pitch = options.pitch ?? 1
+          utter.volume = options.volume ?? 1
+          if (options.voiceURI) {
+            const v = voicesRef.current.find((vv) => vv.voiceURI === options.voiceURI)
+            if (v) utter.voice = v
+          }
+
+          // Watchdog: resolve if iOS never fires onend/onerror.
+          const rate = utter.rate || 1
+          const estimatedMs = Math.max(5000, (text.length * 90) / rate + 4000)
+          watchdogRef.current = setTimeout(() => {
+            watchdogRef.current = null
+            setSpeaking(false)
+            resolveRef.current?.()
+            resolveRef.current = null
+          }, estimatedMs)
+
+          const done = () => {
+            clearWatchdog()
+            setSpeaking(false)
+            resolveRef.current = null
+            resolve()
+          }
+
+          utter.onstart = () => setSpeaking(true)
+          utter.onend = done
+          utter.onerror = (e) => {
+            const err = (e as SpeechSynthesisErrorEvent)?.error ?? ''
+            // 'audio-busy' fires on iOS when mic session hasn't released yet.
+            // Retry a couple of times with increasing delays.
+            if (err === 'audio-busy' && retriesLeft > 0 && resolveRef.current === resolve) {
+              clearWatchdog()
+              setSpeaking(false)
+              const retryDelay = (3 - retriesLeft) * 400 + 400  // 400ms, 800ms
+              setTimeout(() => attemptSpeak(retriesLeft - 1), retryDelay)
+              return
+            }
+            done()
+          }
+
+          try {
+            // resume() prevents iOS from being stuck in a paused state between utterances
+            speechSynthesis.resume()
+            speechSynthesis.speak(utter)
+          } catch {
+            done()
+          }
         }
 
-        // Watchdog: resolve if iOS never fires onend/onerror.
-        // Estimate based on text length and rate, with a generous buffer.
-        const rate = utter.rate || 1
-        const estimatedMs = Math.max(5000, (text.length * 90) / rate + 4000)
-        watchdogRef.current = setTimeout(() => {
-          watchdogRef.current = null
-          setSpeaking(false)
-          resolveRef.current?.()
-          resolveRef.current = null
-        }, estimatedMs)
-
-        const done = () => {
-          clearWatchdog()
-          setSpeaking(false)
-          resolveRef.current = null
-          resolve()
-        }
-
-        utter.onstart = () => setSpeaking(true)
-        utter.onend = done
-        utter.onerror = done
-
-        try {
-          // resume() prevents iOS from being stuck in a paused state between utterances
-          speechSynthesis.resume()
-          speechSynthesis.speak(utter)
-        } catch {
-          done()
-        }
+        attemptSpeak(2)
       })
     },
     [],
