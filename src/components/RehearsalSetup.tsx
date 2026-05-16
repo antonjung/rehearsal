@@ -66,14 +66,14 @@ export function RehearsalSetup({ onStart }: Props) {
         </h2>
         <button
           onClick={() => setShowOptions((v) => !v)}
-          title="Options"
-          className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+          title="Settings"
+          className={`text-xl px-2 py-1 rounded-lg transition-colors ${
             showOptions
-              ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
-              : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+              ? 'text-[var(--color-stage-accent-light)]'
+              : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
           }`}
         >
-          ⚙ Options
+          ☰
         </button>
       </div>
 

@@ -507,10 +507,10 @@ export function RehearsalMode({ onExit }: Props) {
           />
           <button
             onClick={() => setShowOptions((v) => !v)}
-            className={`text-lg px-1 transition-colors ${showOptions ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
-            title="Options"
+            className={`text-xl px-1 transition-colors ${showOptions ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
+            title="Settings"
           >
-            ⚙
+            ☰
           </button>
         </div>
       </div>
@@ -802,13 +802,26 @@ const LineRow = ({
       }`}
     >
       <div className="flex items-start gap-1.5">
-        {/* Block marker column */}
-        <div className="w-4 shrink-0 mt-0.5 flex items-center justify-center text-[10px] leading-none">
-          {isBlockStart ? (
-            <span className="text-[var(--color-stage-accent)] font-bold" title="Block start">▶</span>
-          ) : isBlockEnd ? (
-            <span className="text-[var(--color-stage-muted)]" title="Block end">■</span>
-          ) : null}
+        {/* Left column: reveal button (user lines) + block marker */}
+        <div className="flex flex-col items-center gap-0.5 shrink-0 w-5 mt-0.5">
+          {onReveal ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onReveal() }}
+              title={lineVisible ? 'Hide line' : 'Reveal line'}
+              className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] leading-none transition-colors"
+            >
+              {lineVisible ? '👁' : '◉'}
+            </button>
+          ) : (
+            <div className="h-4" />
+          )}
+          <div className="text-[10px] leading-none flex items-center justify-center">
+            {isBlockStart ? (
+              <span className="text-[var(--color-stage-accent)] font-bold" title="Block start">▶</span>
+            ) : isBlockEnd ? (
+              <span className="text-[var(--color-stage-muted)]" title="Block end">■</span>
+            ) : null}
+          </div>
         </div>
 
         {/* Content */}
@@ -841,38 +854,28 @@ const LineRow = ({
           )}
           {accuracy !== null && lineVisible && (
             <p className="text-[10px] text-[var(--color-stage-muted)] mt-0.5 italic">
-              {accuracy}%
-              {accuracy < threshold && ' — below threshold'}
+              {accuracy}%{accuracy < threshold && ' — below threshold'}
             </p>
           )}
         </div>
 
-        {/* Actions column */}
-        <div className="flex flex-col gap-1 shrink-0 items-end">
-          {onReveal && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onReveal() }}
-              title={lineVisible ? 'Hide line' : 'Reveal line'}
-              className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] p-0.5 transition-colors leading-none"
-            >
-              {lineVisible ? '👁' : '◉'}
-            </button>
-          )}
-          {onRecord && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRecord() }}
-              disabled={!!anyRecording && !isRecordingThis}
-              title={isRecordingThis ? 'Stop recording' : 'Record this line'}
-              className={`text-xs p-0.5 transition-colors leading-none min-w-[20px] ${
-                isRecordingThis
-                  ? 'text-red-400 animate-pulse'
-                  : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
-              } disabled:opacity-10`}
-            >
-              {isRecordingThis ? '■' : '●'}
-            </button>
-          )}
-        </div>
+        {/* Right column: record button */}
+        {onRecord ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRecord() }}
+            disabled={!!anyRecording && !isRecordingThis}
+            title={isRecordingThis ? 'Stop recording' : 'Record this line'}
+            className={`shrink-0 text-sm mt-0.5 transition-colors leading-none min-w-[20px] p-0.5 ${
+              isRecordingThis
+                ? 'text-red-400 animate-pulse'
+                : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
+            } disabled:opacity-10`}
+          >
+            {isRecordingThis ? '■' : '●'}
+          </button>
+        ) : (
+          <div className="w-5 shrink-0" />
+        )}
       </div>
     </div>
   )
