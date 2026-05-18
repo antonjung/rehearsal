@@ -127,6 +127,7 @@ export function RehearsalMode({ onExit }: Props) {
   const runIdRef = useRef(0)
   const pauseRef = useRef(false)
   const draggingRef = useRef<'start' | 'end' | null>(null)
+  const dragLastGiRef = useRef(-1)
   const blockStartRef = useRef(defaultBlockStart)
   const blockEndRef = useRef(defaultBlockEnd)
   const pauseResolveRef = useRef<(() => void) | null>(null)
@@ -484,28 +485,39 @@ export function RehearsalMode({ onExit }: Props) {
 
   // Document-level touch drag for clip markers (non-passive so we can preventDefault)
   useEffect(() => {
-    const getGroupIdxAtY = (clientY: number) => {
-      let best = 0
-      let bestDist = Infinity
-      sceneGroups.forEach((group, gi) => {
-        const el = lineRefs.current[group.startIdx]
-        if (!el) return
-        const rect = el.getBoundingClientRect()
-        const dist = Math.abs(clientY - (rect.top + rect.bottom) / 2)
-        if (dist < bestDist) { bestDist = dist; best = gi }
-      })
-      return best
-    }
     const onMove = (e: TouchEvent) => {
       if (!draggingRef.current) return
       e.preventDefault()
-      const gi = getGroupIdxAtY(e.touches[0].clientY)
-      const startIdx = sceneGroups[gi]?.startIdx ?? -1
-      if (startIdx < 0) return
+      const touch = e.touches[0]
+
+      // Primary: find the [data-gi] wrapper under the touch point
+      let gi = -1
+      const el = document.elementFromPoint(touch.clientX, touch.clientY)
+      const row = el?.closest('[data-gi]') as HTMLElement | null
+      if (row) gi = parseInt(row.dataset.gi ?? '-1', 10)
+
+      // Fallback: closest visible line by Y distance (handles edges where touch is between rows)
+      if (gi < 0) {
+        let bestDist = Infinity
+        sceneGroups.forEach((group, i) => {
+          const domEl = lineRefs.current[group.startIdx]
+          if (!domEl) return
+          const rect = domEl.getBoundingClientRect()
+          const dist = Math.abs(touch.clientY - (rect.top + rect.bottom) / 2)
+          if (dist < bestDist) { bestDist = dist; gi = i }
+        })
+      }
+
+      // Last resort: keep last known position so drag never gets stuck
+      if (gi < 0) gi = dragLastGiRef.current
+      if (gi < 0 || gi >= sceneGroups.length) return
+      dragLastGiRef.current = gi
+
+      const startIdx = sceneGroups[gi].startIdx
       if (draggingRef.current === 'start' && startIdx <= blockEndRef.current) setBlockStart(startIdx)
       if (draggingRef.current === 'end'   && startIdx >= blockStartRef.current) setBlockEnd(startIdx)
     }
-    const onEnd = () => { draggingRef.current = null }
+    const onEnd = () => { draggingRef.current = null; dragLastGiRef.current = -1 }
     document.addEventListener('touchmove', onMove, { passive: false })
     document.addEventListener('touchend', onEnd)
     return () => {
@@ -548,16 +560,16 @@ export function RehearsalMode({ onExit }: Props) {
 
       {/* Script area */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {sceneGroups.map((group) => {
+        {sceneGroups.map((group, gi) => {
           const isCurrentGroup = group.startIdx <= currentIdx && currentIdx <= group.endIdx
           const isMyLine = group.character === settings.myCharacter
           const lineVisible = !isMyLine || showAllMyLines || revealedLines[group.startIdx] === true
           const acc = accuracies[group.startIdx] ?? null
 
           return (
-            <React.Fragment key={group.startIdx}>
+            <div key={group.startIdx} data-gi={gi}>
               {group.startIdx === blockStart && (
-                <ClipMarker type="start" onTouchStart={() => { draggingRef.current = 'start' }} />
+                <ClipMarker type="start" onTouchStart={() => { draggingRef.current = 'start'; dragLastGiRef.current = gi }} />
               )}
               <LineRow
                 group={group}
@@ -581,9 +593,9 @@ export function RehearsalMode({ onExit }: Props) {
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
               {group.startIdx === blockEnd && (
-                <ClipMarker type="end" onTouchStart={() => { draggingRef.current = 'end' }} />
+                <ClipMarker type="end" onTouchStart={() => { draggingRef.current = 'end'; dragLastGiRef.current = gi }} />
               )}
-            </React.Fragment>
+            </div>
           )
         })}
 
