@@ -80,12 +80,27 @@ export function useSpeechSynthesis() {
             resolve()
           }
 
-          utter.onstart = () => setSpeaking(true)
-          utter.onend = done
+          // Track whether the utterance actually started producing audio.
+          // On iOS, onend can fire immediately without onstart when the audio
+          // session is not ready — this is a silent (dropped) utterance.
+          let started = false
+          utter.onstart = () => { started = true; setSpeaking(true) }
+
+          utter.onend = () => {
+            if (!started && retriesLeft > 0 && resolveRef.current === resolve) {
+              // Silent utterance: retry with increasing delay
+              clearWatchdog()
+              setSpeaking(false)
+              const retryDelay = (3 - retriesLeft) * 300 + 300  // 300ms, 600ms
+              setTimeout(() => attemptSpeak(retriesLeft - 1), retryDelay)
+              return
+            }
+            done()
+          }
+
           utter.onerror = (e) => {
             const err = (e as SpeechSynthesisErrorEvent)?.error ?? ''
             // 'audio-busy' fires on iOS when mic session hasn't released yet.
-            // Retry a couple of times with increasing delays.
             if (err === 'audio-busy' && retriesLeft > 0 && resolveRef.current === resolve) {
               clearWatchdog()
               setSpeaking(false)
@@ -96,8 +111,9 @@ export function useSpeechSynthesis() {
             done()
           }
 
-          // 100ms pre-speak pause: iOS audio session sometimes fails to produce
-          // audio on a second consecutive utterance without a brief gap.
+          // 100ms pre-speak delay: helps iOS audio session settle between utterances.
+          // Combined with the silent-utterance retry above, this covers both the
+          // preventive and reactive cases.
           setTimeout(() => {
             if (resolveRef.current !== resolve) { clearWatchdog(); return }
             try {

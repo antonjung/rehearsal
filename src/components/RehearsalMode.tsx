@@ -7,7 +7,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
 import { AccuracySummary } from './AccuracySummary'
-import { unlockAudio, playPing, playCompletion } from '../utils/sounds'
+import { unlockAudio, playPing, playCompletion, getAudioContext } from '../utils/sounds'
 import type { WordDiff } from '../types'
 
 interface Props {
@@ -127,32 +127,44 @@ export function RehearsalMode({ onExit }: Props) {
   const pauseRef = useRef(false)
   const pauseResolveRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const recAudioRef = useRef<HTMLAudioElement | null>(null)
-  const recResolveRef = useRef<(() => void) | null>(null)
+  const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
+  const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
 
   // --- Audio helpers ---
-  const playRecording = (blob: Blob): Promise<void> =>
+  // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
+  // playback works on iOS without requiring a direct user gesture per-element.
+  const playRecording = (blob: Blob): Promise<boolean> =>
     new Promise((resolve) => {
-      recResolveRef.current = resolve
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      recAudioRef.current = audio
-      const cleanup = () => {
-        URL.revokeObjectURL(url)
-        recAudioRef.current = null
+      const audioCtx = getAudioContext()
+      if (!audioCtx || audioCtx.state === 'closed') { resolve(false); return }
+
+      const done = (ok: boolean) => {
+        recSourceRef.current = null
         recResolveRef.current = null
-        resolve()
+        resolve(ok)
       }
-      audio.onended = cleanup
-      audio.onerror = cleanup
-      audio.play().catch(cleanup)
+      recResolveRef.current = done
+
+      blob.arrayBuffer()
+        .then((buf) => audioCtx.decodeAudioData(buf))
+        .then((audioBuf) => {
+          if (recResolveRef.current !== done) { resolve(false); return }
+          const source = audioCtx.createBufferSource()
+          source.buffer = audioBuf
+          source.connect(audioCtx.destination)
+          recSourceRef.current = source
+          source.onended = () => done(true)
+          source.start(0)
+          if (audioCtx.state === 'suspended') void audioCtx.resume()
+        })
+        .catch(() => done(false))
     })
 
   const cancelRecording = () => {
-    recAudioRef.current?.pause()
-    recAudioRef.current = null
-    recResolveRef.current?.()
+    try { recSourceRef.current?.stop() } catch { /* source not started */ }
+    recSourceRef.current = null
+    recResolveRef.current?.(false)
     recResolveRef.current = null
   }
 
@@ -248,11 +260,7 @@ export function RehearsalMode({ onExit }: Props) {
         if (!isMyLine) {
           setPhase('playing-other')
           const rec = recMapRef.current.get(lineIdx)
-          if (rec) {
-            await playRecording(rec)
-          } else {
-            await speak(groupText, { rate })
-          }
+          if (!rec || !(await playRecording(rec))) await speak(groupText, { rate })
         } else {
           const { myLineMode } = settings
 
@@ -291,8 +299,7 @@ export function RehearsalMode({ onExit }: Props) {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
-            if (rec) await playRecording(rec)
-            else await speak(groupText, { rate })
+            if (!rec || !(await playRecording(rec))) await speak(groupText, { rate })
           } else if (myLineMode === 'gap-before') {
             // Wait for user to finish attempting the line, then read it
             setPhase('my-line-silence')
@@ -306,16 +313,14 @@ export function RehearsalMode({ onExit }: Props) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
               const rec = recMapRef.current.get(lineIdx)
-              if (rec) await playRecording(rec)
-              else await speak(groupText, { rate })
+              if (!rec || !(await playRecording(rec))) await speak(groupText, { rate })
             }
           } else {
             // gap-after: read the line, then wait for user to repeat
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
-            if (rec) await playRecording(rec)
-            else await speak(groupText, { rate })
+            if (!rec || !(await playRecording(rec))) await speak(groupText, { rate })
             if (!stopRef.current) {
               setPhase('my-line-listening')
               if (supported) {
