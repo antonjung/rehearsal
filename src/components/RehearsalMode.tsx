@@ -119,6 +119,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [showAllMyLines, setShowAllMyLines] = useState(false)
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
 
   // --- Refs ---
@@ -525,6 +526,7 @@ export function RehearsalMode({ onExit }: Props) {
       draggingRef.current = null
       dragLastGiRef.current = -1
       if (dragOverlayRef.current) dragOverlayRef.current.style.display = 'none'
+      setIsDragging(false)
     }
     document.addEventListener('touchmove', onMove, { passive: false })
     document.addEventListener('touchend', onEnd)
@@ -537,6 +539,7 @@ export function RehearsalMode({ onExit }: Props) {
   const startDrag = (type: 'start' | 'end', gi: number, clientY: number) => {
     draggingRef.current = type
     dragLastGiRef.current = gi
+    setIsDragging(true)
     if (dragOverlayRef.current) {
       dragOverlayRef.current.style.top = `${clientY}px`
       dragOverlayRef.current.style.display = 'flex'
@@ -599,7 +602,7 @@ export function RehearsalMode({ onExit }: Props) {
 
           return (
             <div key={group.startIdx} data-gi={gi}>
-              {group.startIdx === blockStart && (
+              {group.startIdx === blockStart && !isDragging && (
                 <ClipMarker type="start" onTouchStart={(e) => startDrag('start', gi, e.touches[0].clientY)} />
               )}
               <LineRow
@@ -623,7 +626,7 @@ export function RehearsalMode({ onExit }: Props) {
                 anyRecording={micRecording || recordingLineIdx !== null}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
-              {group.startIdx === blockEnd && (
+              {group.startIdx === blockEnd && !isDragging && (
                 <ClipMarker type="end" onTouchStart={(e) => startDrag('end', gi, e.touches[0].clientY)} />
               )}
             </div>
