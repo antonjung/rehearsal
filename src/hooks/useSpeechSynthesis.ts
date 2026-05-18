@@ -96,13 +96,17 @@ export function useSpeechSynthesis() {
             done()
           }
 
-          try {
-            // resume() prevents iOS from being stuck in a paused state between utterances
-            speechSynthesis.resume()
-            speechSynthesis.speak(utter)
-          } catch {
-            done()
-          }
+          // 100ms pre-speak pause: iOS audio session sometimes fails to produce
+          // audio on a second consecutive utterance without a brief gap.
+          setTimeout(() => {
+            if (resolveRef.current !== resolve) { clearWatchdog(); return }
+            try {
+              speechSynthesis.resume()
+              speechSynthesis.speak(utter)
+            } catch {
+              done()
+            }
+          }, 100)
         }
 
         attemptSpeak(2)
