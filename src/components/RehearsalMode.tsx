@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording } from '../utils/recordingStore'
@@ -126,6 +126,9 @@ export function RehearsalMode({ onExit }: Props) {
   const stopRef = useRef(false)
   const runIdRef = useRef(0)
   const pauseRef = useRef(false)
+  const draggingRef = useRef<'start' | 'end' | null>(null)
+  const blockStartRef = useRef(defaultBlockStart)
+  const blockEndRef = useRef(defaultBlockEnd)
   const pauseResolveRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
@@ -393,8 +396,7 @@ export function RehearsalMode({ onExit }: Props) {
     speechSynthesis.cancel()
     unlockAudio()
     if (phase === 'paused') {
-      pauseRef.current = false
-      pauseResolveRef.current?.()
+      interruptPlayback(() => { stopRef.current = false; runPlayback(currentIdx, blockEnd) })
     } else {
       runPlayback(currentIdx, blockEnd)
     }
@@ -435,19 +437,14 @@ export function RehearsalMode({ onExit }: Props) {
     })
 
   const handleLineSelect = (idx: number) => {
-    if (isPlaying || phase === 'paused') {
+    if (isPlaying) {
+      handlePause()
+      setCurrentIdx(idx)
+    } else if (phase === 'paused') {
       interruptPlayback(() => { stopRef.current = false; setCurrentIdx(idx); runPlayback(idx, blockEnd) })
     } else {
       setCurrentIdx(idx)
     }
-  }
-
-  const handleSetBlockStart = () => {
-    if (currentIdx <= blockEnd) setBlockStart(currentIdx)
-  }
-
-  const handleSetBlockEnd = () => {
-    if (currentIdx >= blockStart) setBlockEnd(currentIdx)
   }
 
   const handleRecordLine = async (lineIdx: number) => {
@@ -480,6 +477,42 @@ export function RehearsalMode({ onExit }: Props) {
       return next
     })
   }
+
+  // Keep refs in sync for use inside non-reactive event handlers
+  blockStartRef.current = blockStart
+  blockEndRef.current = blockEnd
+
+  // Document-level touch drag for clip markers (non-passive so we can preventDefault)
+  useEffect(() => {
+    const getGroupIdxAtY = (clientY: number) => {
+      let best = 0
+      let bestDist = Infinity
+      sceneGroups.forEach((group, gi) => {
+        const el = lineRefs.current[group.startIdx]
+        if (!el) return
+        const rect = el.getBoundingClientRect()
+        const dist = Math.abs(clientY - (rect.top + rect.bottom) / 2)
+        if (dist < bestDist) { bestDist = dist; best = gi }
+      })
+      return best
+    }
+    const onMove = (e: TouchEvent) => {
+      if (!draggingRef.current) return
+      e.preventDefault()
+      const gi = getGroupIdxAtY(e.touches[0].clientY)
+      const startIdx = sceneGroups[gi]?.startIdx ?? -1
+      if (startIdx < 0) return
+      if (draggingRef.current === 'start' && startIdx <= blockEndRef.current) setBlockStart(startIdx)
+      if (draggingRef.current === 'end'   && startIdx >= blockStartRef.current) setBlockEnd(startIdx)
+    }
+    const onEnd = () => { draggingRef.current = null }
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onEnd)
+    return () => {
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onEnd)
+    }
+  }, [sceneGroups])
 
   const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence', 'my-line-listening'].includes(phase)
 
@@ -522,30 +555,35 @@ export function RehearsalMode({ onExit }: Props) {
           const acc = accuracies[group.startIdx] ?? null
 
           return (
-            <LineRow
-              key={group.startIdx}
-              group={group}
-              isCurrent={isCurrentGroup}
-              phase={phase}
-              isMyLine={isMyLine}
-              lineVisible={lineVisible}
-              accuracy={accuracyEnabled ? acc : null}
-              transcript={transcripts[group.startIdx] ?? ''}
-              wordDiff={wordDiffs[group.startIdx] ?? []}
-              threshold={settings.accuracyWarningThreshold}
-              isBlockStart={group.startIdx === blockStart}
-              isBlockEnd={group.startIdx === blockEnd}
-              onSelect={() => handleLineSelect(group.startIdx)}
-              onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
-              onRecord={
-                group.type === 'dialogue' && !isPlaying && phase !== 'paused'
-                  ? () => handleRecordLine(group.startIdx)
-                  : undefined
-              }
-              isRecordingThis={recordingLineIdx === group.startIdx}
-              anyRecording={micRecording || recordingLineIdx !== null}
-              ref={(el) => { lineRefs.current[group.startIdx] = el }}
-            />
+            <React.Fragment key={group.startIdx}>
+              {group.startIdx === blockStart && (
+                <ClipMarker type="start" onTouchStart={() => { draggingRef.current = 'start' }} />
+              )}
+              <LineRow
+                group={group}
+                isCurrent={isCurrentGroup}
+                phase={phase}
+                isMyLine={isMyLine}
+                lineVisible={lineVisible}
+                accuracy={accuracyEnabled ? acc : null}
+                transcript={transcripts[group.startIdx] ?? ''}
+                wordDiff={wordDiffs[group.startIdx] ?? []}
+                threshold={settings.accuracyWarningThreshold}
+                onSelect={() => handleLineSelect(group.startIdx)}
+                onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
+                onRecord={
+                  group.type === 'dialogue' && !isPlaying && phase !== 'paused'
+                    ? () => handleRecordLine(group.startIdx)
+                    : undefined
+                }
+                isRecordingThis={recordingLineIdx === group.startIdx}
+                anyRecording={micRecording || recordingLineIdx !== null}
+                ref={(el) => { lineRefs.current[group.startIdx] = el }}
+              />
+              {group.startIdx === blockEnd && (
+                <ClipMarker type="end" onTouchStart={() => { draggingRef.current = 'end' }} />
+              )}
+            </React.Fragment>
           )
         })}
 
@@ -571,23 +609,9 @@ export function RehearsalMode({ onExit }: Props) {
             <CtrlBtn onClick={handleSkip} title="Skip beat">⏭</CtrlBtn>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-3">
-            <CtrlBtn
-              onClick={handleSetBlockStart}
-              disabled={currentIdx > blockEnd}
-              title="Set block start to selected line"
-            >
-              ◀
-            </CtrlBtn>
-            <CtrlBtn onClick={handleRestart} title="Restart from block start">↺</CtrlBtn>
+          <div className="flex items-center justify-center gap-4">
+            <CtrlBtn onClick={handleRestart} title="Restart from clip start">↺</CtrlBtn>
             <CtrlBtn onClick={handlePlay} large title="Play from selected line">▶</CtrlBtn>
-            <CtrlBtn
-              onClick={handleSetBlockEnd}
-              disabled={currentIdx < blockStart}
-              title="Set block end to selected line"
-            >
-              ▶
-            </CtrlBtn>
           </div>
         )}
         <div className="text-center mt-2 text-xs text-[var(--color-stage-muted)] h-4">
@@ -595,11 +619,27 @@ export function RehearsalMode({ onExit }: Props) {
           {phase === 'my-line-silence' && !listening && 'Your line…'}
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
-          {phase === 'paused' && 'Paused — tap a line to jump'}
+          {phase === 'paused' && 'Paused — tap a line to restart from it'}
           {phase === 'done' && 'Scene complete'}
-          {phase === 'idle' && 'Tap a line to select, then play'}
+          {phase === 'idle' && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ClipMarker({ type, onTouchStart }: { type: 'start' | 'end'; onTouchStart: () => void }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 py-0.5 select-none cursor-ns-resize"
+      style={{ touchAction: 'none' }}
+      onTouchStart={(e) => { e.preventDefault(); onTouchStart() }}
+    >
+      <div className="flex-1 h-px bg-red-500 opacity-70" />
+      <span className="text-[10px] text-red-400 font-semibold shrink-0 px-1">
+        {type === 'start' ? '▲ clip start' : 'clip end ▼'}
+      </span>
+      <div className="flex-1 h-px bg-red-500 opacity-70" />
     </div>
   )
 }
@@ -657,8 +697,6 @@ interface LineRowProps {
   transcript: string
   wordDiff: WordDiff[]
   threshold: number
-  isBlockStart: boolean
-  isBlockEnd: boolean
   onSelect: () => void
   onReveal?: () => void
   onRecord?: () => void
@@ -668,7 +706,7 @@ interface LineRowProps {
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible,
-  accuracy, threshold, isBlockStart, isBlockEnd,
+  accuracy, threshold,
   onSelect, onReveal, onRecord, isRecordingThis, anyRecording, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -717,8 +755,8 @@ const LineRow = ({
       }`}
     >
       <div className="flex items-start gap-1.5">
-        {/* Left column: reveal button (user lines) + block marker */}
-        <div className="flex flex-col items-center gap-0.5 shrink-0 w-5 mt-0.5">
+        {/* Left column: reveal button (user lines only) */}
+        <div className="flex flex-col items-center shrink-0 w-5 mt-0.5">
           {onReveal ? (
             <button
               onClick={(e) => { e.stopPropagation(); onReveal() }}
@@ -730,13 +768,6 @@ const LineRow = ({
           ) : (
             <div className="h-4" />
           )}
-          <div className="text-[10px] leading-none flex items-center justify-center">
-            {isBlockStart ? (
-              <span className="text-[var(--color-stage-accent)] font-bold" title="Block start">▶</span>
-            ) : isBlockEnd ? (
-              <span className="text-[var(--color-stage-muted)]" title="Block end">■</span>
-            ) : null}
-          </div>
         </div>
 
         {/* Content */}
