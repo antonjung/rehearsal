@@ -274,7 +274,7 @@ export function RehearsalMode({ onExit }: Props) {
         if (!isMyLine) {
           setPhase('playing-other')
           const rec = recMapRef.current.get(lineIdx)
-          if (!rec || !(await playRecording(rec))) { if (!stopRef.current) await speak(groupText, { rate }) }
+          if (!rec || !(await playRecording(rec))) { if (!stopRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
         } else {
           const { myLineMode } = settings
 
@@ -313,7 +313,7 @@ export function RehearsalMode({ onExit }: Props) {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current) await speak(groupText, { rate }) }
+            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
           } else if (myLineMode === 'gap-before') {
             // Wait for user to finish attempting the line, then read it
             setPhase('my-line-silence')
@@ -327,14 +327,14 @@ export function RehearsalMode({ onExit }: Props) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
               const rec = recMapRef.current.get(lineIdx)
-              if (!rec || !(await playRecording(rec))) { if (!stopRef.current) await speak(groupText, { rate }) }
+              if (!rec || !(await playRecording(rec))) { if (!stopRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
             }
           } else {
             // gap-after: read the line, then wait for user to repeat
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current) await speak(groupText, { rate }) }
+            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
             if (!stopRef.current) {
               setPhase('my-line-listening')
               if (supported) {
