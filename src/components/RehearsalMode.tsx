@@ -697,12 +697,12 @@ export function RehearsalMode({ onExit }: Props) {
         </div>
         {isPlaying || phase === 'paused' ? (
           <div className="flex items-center justify-center gap-4">
-            <CtrlBtn onClick={handleBack} title="Previous beat">⏮</CtrlBtn>
+            <CtrlBtn onClick={handleBack} large title="Previous beat">⏮</CtrlBtn>
             <CtrlBtn onClick={phase === 'paused' ? handlePlay : handlePause} large title={phase === 'paused' ? 'Resume' : 'Pause'}>
               {phase === 'paused' ? '▶' : '⏸'}
             </CtrlBtn>
-            <CtrlBtn onClick={handleStop} title="Stop">⏹</CtrlBtn>
-            <CtrlBtn onClick={handleSkip} title="Skip beat">⏭</CtrlBtn>
+            <CtrlBtn onClick={handleStop} large title="Stop">⏹</CtrlBtn>
+            <CtrlBtn onClick={handleSkip} large title="Skip beat">⏭</CtrlBtn>
           </div>
         ) : (
           <div className="flex items-center justify-center">
