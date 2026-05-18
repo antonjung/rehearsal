@@ -848,6 +848,8 @@ const LineRow = ({
           ? 'bg-[var(--color-stage-accent)]/20 ring-1 ring-[var(--color-stage-accent)]'
           : isActiveLine
           ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
+          : isMyLine
+          ? 'bg-[var(--color-stage-accent)]/10'
           : isCurrent
           ? 'bg-[var(--color-stage-surface)]'
           : ''
