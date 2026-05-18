@@ -635,8 +635,10 @@ export function RehearsalMode({ onExit }: Props) {
           const lineVisible = !isMyLine || showAllMyLines || revealedLines[group.startIdx] === true
           const acc = accuracies[group.startIdx] ?? null
 
+          const isInClip = group.startIdx >= blockStart && group.startIdx <= blockEnd
+
           return (
-            <div key={group.startIdx} data-gi={gi}>
+            <div key={group.startIdx} data-gi={gi} className={isInClip ? 'bg-amber-400/10 rounded' : ''}>
               {group.startIdx === blockStart && (
                 <ClipMarker type="start" hidden={isDragging} onTouchStart={(e) => startDrag('start', gi, e.touches[0].clientY)} />
               )}
@@ -680,6 +682,19 @@ export function RehearsalMode({ onExit }: Props) {
 
       {/* Controls */}
       <div className="px-4 py-3 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+        {/* Repeat toggle — always visible */}
+        <div className="flex justify-center mb-2.5">
+          <button
+            onClick={() => setLoopEnabled((v) => !v)}
+            className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
+              loopEnabled
+                ? 'bg-[var(--color-stage-accent)] text-white'
+                : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
+            }`}
+          >
+            ↺ Repeat
+          </button>
+        </div>
         {isPlaying || phase === 'paused' ? (
           <div className="flex items-center justify-center gap-4">
             <CtrlBtn onClick={handleBack} title="Previous beat">⏮</CtrlBtn>
@@ -690,8 +705,7 @@ export function RehearsalMode({ onExit }: Props) {
             <CtrlBtn onClick={handleSkip} title="Skip beat">⏭</CtrlBtn>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-4">
-            <CtrlBtn onClick={() => setLoopEnabled((v) => !v)} title={loopEnabled ? 'Loop on — tap to disable' : 'Loop off — tap to enable'} active={loopEnabled}>↺</CtrlBtn>
+          <div className="flex items-center justify-center">
             <CtrlBtn onClick={handlePlay} large title="Play clip">▶</CtrlBtn>
           </div>
         )}
