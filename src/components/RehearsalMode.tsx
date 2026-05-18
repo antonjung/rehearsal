@@ -128,6 +128,8 @@ export function RehearsalMode({ onExit }: Props) {
   const pauseRef = useRef(false)
   const draggingRef = useRef<'start' | 'end' | null>(null)
   const dragLastGiRef = useRef(-1)
+  const dragOverlayRef = useRef<HTMLDivElement>(null)
+  const dragLabelRef = useRef<HTMLSpanElement>(null)
   const blockStartRef = useRef(defaultBlockStart)
   const blockEndRef = useRef(defaultBlockEnd)
   const pauseResolveRef = useRef<(() => void) | null>(null)
@@ -513,11 +515,17 @@ export function RehearsalMode({ onExit }: Props) {
       if (gi < 0 || gi >= sceneGroups.length) return
       dragLastGiRef.current = gi
 
+      if (dragOverlayRef.current) dragOverlayRef.current.style.top = `${touch.clientY}px`
+
       const startIdx = sceneGroups[gi].startIdx
       if (draggingRef.current === 'start' && startIdx <= blockEndRef.current) setBlockStart(startIdx)
       if (draggingRef.current === 'end'   && startIdx >= blockStartRef.current) setBlockEnd(startIdx)
     }
-    const onEnd = () => { draggingRef.current = null; dragLastGiRef.current = -1 }
+    const onEnd = () => {
+      draggingRef.current = null
+      dragLastGiRef.current = -1
+      if (dragOverlayRef.current) dragOverlayRef.current.style.display = 'none'
+    }
     document.addEventListener('touchmove', onMove, { passive: false })
     document.addEventListener('touchend', onEnd)
     return () => {
@@ -525,6 +533,18 @@ export function RehearsalMode({ onExit }: Props) {
       document.removeEventListener('touchend', onEnd)
     }
   }, [sceneGroups])
+
+  const startDrag = (type: 'start' | 'end', gi: number, clientY: number) => {
+    draggingRef.current = type
+    dragLastGiRef.current = gi
+    if (dragOverlayRef.current) {
+      dragOverlayRef.current.style.top = `${clientY}px`
+      dragOverlayRef.current.style.display = 'flex'
+    }
+    if (dragLabelRef.current) {
+      dragLabelRef.current.textContent = type === 'start' ? '▲ clip start' : 'clip end ▼'
+    }
+  }
 
   const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence', 'my-line-listening'].includes(phase)
 
@@ -558,6 +578,17 @@ export function RehearsalMode({ onExit }: Props) {
         }} />
       </div>
 
+      {/* Drag overlay: fixed line that follows the finger during clip marker drag */}
+      <div
+        ref={dragOverlayRef}
+        className="fixed left-0 right-0 -translate-y-1/2 flex items-center gap-1.5 px-4 pointer-events-none z-50"
+        style={{ display: 'none', top: 0 }}
+      >
+        <div className="flex-1 h-0.5 bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]" />
+        <span ref={dragLabelRef} className="text-[10px] text-red-400 font-bold px-1 shrink-0" />
+        <div className="flex-1 h-0.5 bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]" />
+      </div>
+
       {/* Script area */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {sceneGroups.map((group, gi) => {
@@ -569,7 +600,7 @@ export function RehearsalMode({ onExit }: Props) {
           return (
             <div key={group.startIdx} data-gi={gi}>
               {group.startIdx === blockStart && (
-                <ClipMarker type="start" onTouchStart={() => { draggingRef.current = 'start'; dragLastGiRef.current = gi }} />
+                <ClipMarker type="start" onTouchStart={(e) => startDrag('start', gi, e.touches[0].clientY)} />
               )}
               <LineRow
                 group={group}
@@ -593,7 +624,7 @@ export function RehearsalMode({ onExit }: Props) {
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
               {group.startIdx === blockEnd && (
-                <ClipMarker type="end" onTouchStart={() => { draggingRef.current = 'end'; dragLastGiRef.current = gi }} />
+                <ClipMarker type="end" onTouchStart={(e) => startDrag('end', gi, e.touches[0].clientY)} />
               )}
             </div>
           )
@@ -640,12 +671,12 @@ export function RehearsalMode({ onExit }: Props) {
   )
 }
 
-function ClipMarker({ type, onTouchStart }: { type: 'start' | 'end'; onTouchStart: () => void }) {
+function ClipMarker({ type, onTouchStart }: { type: 'start' | 'end'; onTouchStart: (e: React.TouchEvent) => void }) {
   return (
     <div
       className="flex items-center gap-1.5 py-0.5 select-none cursor-ns-resize"
       style={{ touchAction: 'none' }}
-      onTouchStart={(e) => { e.preventDefault(); onTouchStart() }}
+      onTouchStart={(e) => { e.preventDefault(); onTouchStart(e) }}
     >
       <div className="flex-1 h-px bg-red-500 opacity-70" />
       <span className="text-[10px] text-red-400 font-semibold shrink-0 px-1">
