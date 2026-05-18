@@ -124,6 +124,7 @@ export function RehearsalMode({ onExit }: Props) {
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const stopRef = useRef(false)
+  const runIdRef = useRef(0)
   const pauseRef = useRef(false)
   const pauseResolveRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -207,6 +208,7 @@ export function RehearsalMode({ onExit }: Props) {
   // --- Playback loop ---
   const runPlayback = useCallback(
     async (startIdx: number, endIdx: number) => {
+      const runId = ++runIdRef.current
       stopRef.current = false
       let i = startIdx
 
@@ -347,6 +349,8 @@ export function RehearsalMode({ onExit }: Props) {
         i = groupEnd + 1
       }
 
+      // If a newer run has started (line tap mid-play), don't clobber its phase.
+      if (runIdRef.current !== runId) return
       if (!stopRef.current) {
         await playCompletion()
         setPhase('done')
@@ -359,6 +363,7 @@ export function RehearsalMode({ onExit }: Props) {
   )
 
   const interruptPlayback = (cb?: () => void) => {
+    runIdRef.current++
     stopRef.current = true
     pauseRef.current = false
     cancel()
