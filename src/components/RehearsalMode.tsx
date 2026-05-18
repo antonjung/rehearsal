@@ -373,6 +373,13 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const handlePlay = () => {
+    // iOS requires speechSynthesis.speak() to be called synchronously inside a
+    // user-gesture handler to activate the audio session. cancel() alone is not enough.
+    try {
+      const prime = new SpeechSynthesisUtterance(' ')
+      prime.volume = 0
+      speechSynthesis.speak(prime)
+    } catch { /* ignore */ }
     speechSynthesis.cancel()
     unlockAudio()
     if (phase === 'paused') {
@@ -693,7 +700,7 @@ const LineRow = ({
         isActiveMyLine
           ? 'bg-[var(--color-stage-accent)]/20 ring-1 ring-[var(--color-stage-accent)]'
           : isActiveLine
-          ? 'bg-white/5 ring-1 ring-white/20'
+          ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
           : isCurrent
           ? 'bg-[var(--color-stage-surface)]'
           : ''
@@ -733,9 +740,7 @@ const LineRow = ({
             {accuracy !== null && <AccuracyDot accuracy={accuracy} threshold={threshold} />}
           </div>
           {lineVisible ? (
-            <span className={`text-sm ${
-              isActiveLine || isActiveMyLine ? 'text-white' : 'text-[var(--color-stage-text)]'
-            }`}>
+            <span className="text-sm text-[var(--color-stage-text)]">
               {group.text.split('\n').map((t, idx) => (
                 <span key={idx} className="block">{t}</span>
               ))}
