@@ -120,7 +120,10 @@ export function RehearsalMode({ onExit }: Props) {
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [loopEnabled, setLoopEnabled] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
+  const loopRef = useRef(false)
+  loopRef.current = loopEnabled
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -362,7 +365,22 @@ export function RehearsalMode({ onExit }: Props) {
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
         await playCompletion()
-        setPhase('done')
+        if (loopRef.current && runIdRef.current === runId) {
+          const loopRunId = runId
+          setTimeout(() => {
+            if (runIdRef.current !== loopRunId) return
+            stopRef.current = false
+            setCurrentIdx(blockStartRef.current)
+            setRevealedLines({})
+            setAccuracies({})
+            setTranscripts({})
+            setWordDiffs({})
+            accuraciesRef.current = {}
+            runPlayback(blockStartRef.current, blockEndRef.current)
+          }, 600)
+        } else {
+          setPhase('done')
+        }
       } else {
         setPhase('idle')
       }
@@ -404,7 +422,7 @@ export function RehearsalMode({ onExit }: Props) {
     if (phase === 'paused') {
       interruptPlayback(() => { stopRef.current = false; runPlayback(currentIdx, blockEnd) })
     } else {
-      runPlayback(currentIdx, blockEnd)
+      runPlayback(blockStart, blockEnd)
     }
   }
 
@@ -417,18 +435,6 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const handleStop = () => { interruptPlayback(); setPhase('idle') }
-
-  const handleRestart = () =>
-    interruptPlayback(() => {
-      stopRef.current = false
-      setCurrentIdx(blockStart)
-      setRevealedLines({})
-      setAccuracies({})
-      setTranscripts({})
-      setWordDiffs({})
-      accuraciesRef.current = {}
-      runPlayback(blockStart, blockEnd)
-    })
 
   const handleSkip = () =>
     interruptPlayback(() => {
@@ -520,12 +526,15 @@ export function RehearsalMode({ onExit }: Props) {
       dragLastGiRef.current = gi
 
       if (dragOverlayRef.current) dragOverlayRef.current.style.top = `${touch.clientY}px`
-
-      const startIdx = sceneGroups[gi].startIdx
-      if (draggingRef.current === 'start' && startIdx <= blockEndRef.current) setBlockStart(startIdx)
-      if (draggingRef.current === 'end'   && startIdx >= blockStartRef.current) setBlockEnd(startIdx)
     }
     const onEnd = () => {
+      // Commit final position on drop (not during drag — keeps DOM stable so iOS touch chain is unbroken)
+      const gi = dragLastGiRef.current
+      if (draggingRef.current && gi >= 0 && gi < sceneGroups.length) {
+        const startIdx = sceneGroups[gi].startIdx
+        if (draggingRef.current === 'start' && startIdx <= blockEndRef.current) setBlockStart(startIdx)
+        if (draggingRef.current === 'end'   && startIdx >= blockStartRef.current) setBlockEnd(startIdx)
+      }
       draggingRef.current = null
       dragLastGiRef.current = -1
       if (dragScrollRafRef.current !== null) { cancelAnimationFrame(dragScrollRafRef.current); dragScrollRafRef.current = null }
@@ -628,8 +637,8 @@ export function RehearsalMode({ onExit }: Props) {
 
           return (
             <div key={group.startIdx} data-gi={gi}>
-              {group.startIdx === blockStart && !isDragging && (
-                <ClipMarker type="start" onTouchStart={(e) => startDrag('start', gi, e.touches[0].clientY)} />
+              {group.startIdx === blockStart && (
+                <ClipMarker type="start" hidden={isDragging} onTouchStart={(e) => startDrag('start', gi, e.touches[0].clientY)} />
               )}
               <LineRow
                 group={group}
@@ -652,8 +661,8 @@ export function RehearsalMode({ onExit }: Props) {
                 anyRecording={micRecording || recordingLineIdx !== null}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
-              {group.startIdx === blockEnd && !isDragging && (
-                <ClipMarker type="end" onTouchStart={(e) => startDrag('end', gi, e.touches[0].clientY)} />
+              {group.startIdx === blockEnd && (
+                <ClipMarker type="end" hidden={isDragging} onTouchStart={(e) => startDrag('end', gi, e.touches[0].clientY)} />
               )}
             </div>
           )
@@ -682,8 +691,8 @@ export function RehearsalMode({ onExit }: Props) {
           </div>
         ) : (
           <div className="flex items-center justify-center gap-4">
-            <CtrlBtn onClick={handleRestart} title="Restart from clip start">↺</CtrlBtn>
-            <CtrlBtn onClick={handlePlay} large title="Play from selected line">▶</CtrlBtn>
+            <CtrlBtn onClick={() => setLoopEnabled((v) => !v)} title={loopEnabled ? 'Loop on — tap to disable' : 'Loop off — tap to enable'} active={loopEnabled}>↺</CtrlBtn>
+            <CtrlBtn onClick={handlePlay} large title="Play clip">▶</CtrlBtn>
           </div>
         )}
         <div className="text-center mt-2 text-xs text-[var(--color-stage-muted)] h-4">
@@ -700,12 +709,16 @@ export function RehearsalMode({ onExit }: Props) {
   )
 }
 
-function ClipMarker({ type, onTouchStart }: { type: 'start' | 'end'; onTouchStart: (e: React.TouchEvent) => void }) {
+function ClipMarker({ type, hidden, onTouchStart }: {
+  type: 'start' | 'end'
+  hidden?: boolean
+  onTouchStart: (e: React.TouchEvent) => void
+}) {
   return (
     <div
-      className="flex items-center gap-1.5 py-0.5 select-none cursor-ns-resize"
-      style={{ touchAction: 'none' }}
-      onTouchStart={(e) => { e.preventDefault(); onTouchStart(e) }}
+      className={`flex items-center gap-1.5 py-0.5 select-none ${hidden ? '' : 'cursor-ns-resize'}`}
+      style={{ touchAction: 'none', opacity: hidden ? 0 : 1 }}
+      onTouchStart={hidden ? undefined : (e) => { e.preventDefault(); onTouchStart(e) }}
     >
       <div className="flex-1 h-px bg-red-500 opacity-70" />
       <span className="text-[10px] text-red-400 font-semibold shrink-0 px-1">
@@ -728,9 +741,9 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
 }
 
 function CtrlBtn({
-  onClick, disabled, title, large, children,
+  onClick, disabled, title, large, active, children,
 }: {
-  onClick: () => void; disabled?: boolean; title?: string; large?: boolean; children: React.ReactNode
+  onClick: () => void; disabled?: boolean; title?: string; large?: boolean; active?: boolean; children: React.ReactNode
 }) {
   return (
     <button
@@ -738,8 +751,8 @@ function CtrlBtn({
       disabled={disabled}
       title={title}
       className={`rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed
-        bg-[var(--color-stage-border)] text-[var(--color-stage-text)]
         hover:bg-[var(--color-stage-accent)] hover:text-white
+        ${active ? 'bg-[var(--color-stage-accent)] text-white' : 'bg-[var(--color-stage-border)] text-[var(--color-stage-text)]'}
         ${large ? 'w-14 h-14 text-2xl' : 'w-10 h-10 text-lg'}`}
     >
       {children}
