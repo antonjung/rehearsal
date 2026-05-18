@@ -129,6 +129,8 @@ export function RehearsalMode({ onExit }: Props) {
   const pauseRef = useRef(false)
   const draggingRef = useRef<'start' | 'end' | null>(null)
   const dragLastGiRef = useRef(-1)
+  const dragTouchYRef = useRef(0)
+  const dragScrollRafRef = useRef<number | null>(null)
   const dragOverlayRef = useRef<HTMLDivElement>(null)
   const dragLabelRef = useRef<HTMLSpanElement>(null)
   const blockStartRef = useRef(defaultBlockStart)
@@ -492,6 +494,7 @@ export function RehearsalMode({ onExit }: Props) {
       if (!draggingRef.current) return
       e.preventDefault()
       const touch = e.touches[0]
+      dragTouchYRef.current = touch.clientY
 
       // Primary: find the [data-gi] wrapper under the touch point
       let gi = -1
@@ -525,6 +528,7 @@ export function RehearsalMode({ onExit }: Props) {
     const onEnd = () => {
       draggingRef.current = null
       dragLastGiRef.current = -1
+      if (dragScrollRafRef.current !== null) { cancelAnimationFrame(dragScrollRafRef.current); dragScrollRafRef.current = null }
       if (dragOverlayRef.current) dragOverlayRef.current.style.display = 'none'
       setIsDragging(false)
     }
@@ -536,10 +540,32 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }, [sceneGroups])
 
+  const startScrollLoop = () => {
+    if (dragScrollRafRef.current !== null) cancelAnimationFrame(dragScrollRafRef.current)
+    const ZONE = 80
+    const SPEED = 10
+    const loop = () => {
+      if (!draggingRef.current || !scrollContainerRef.current) { dragScrollRafRef.current = null; return }
+      const rect = scrollContainerRef.current.getBoundingClientRect()
+      const y = dragTouchYRef.current
+      const distTop = y - rect.top
+      const distBot = rect.bottom - y
+      if (distTop < ZONE) {
+        scrollContainerRef.current.scrollTop -= Math.ceil(SPEED * Math.max(0, 1 - distTop / ZONE))
+      } else if (distBot < ZONE) {
+        scrollContainerRef.current.scrollTop += Math.ceil(SPEED * Math.max(0, 1 - distBot / ZONE))
+      }
+      dragScrollRafRef.current = requestAnimationFrame(loop)
+    }
+    dragScrollRafRef.current = requestAnimationFrame(loop)
+  }
+
   const startDrag = (type: 'start' | 'end', gi: number, clientY: number) => {
     draggingRef.current = type
     dragLastGiRef.current = gi
+    dragTouchYRef.current = clientY
     setIsDragging(true)
+    startScrollLoop()
     if (dragOverlayRef.current) {
       dragOverlayRef.current.style.top = `${clientY}px`
       dragOverlayRef.current.style.display = 'flex'
