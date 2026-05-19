@@ -196,6 +196,14 @@ export function RehearsalMode({ onExit }: Props) {
   const scrollToLine = (idx: number) =>
     lineRefs.current[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 
+  // Scroll to clip start on mount
+  useEffect(() => {
+    const t = setTimeout(() => {
+      lineRefs.current[blockStart]?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }, 100)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Pre-load all recordings (sync lookup during playback avoids IDB async mid-loop) ---
   useEffect(() => {
     let cancelled = false
@@ -609,7 +617,7 @@ export function RehearsalMode({ onExit }: Props) {
 
       {/* Show/hide my lines toggle */}
       <div className="px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 flex items-center justify-between">
-        <span className="text-xs text-[var(--color-stage-text)]">Show all my lines</span>
+        <span className="text-xs text-[var(--color-stage-text)]">Show all {settings.myCharacter}'s lines</span>
         <ToggleSwitch checked={showAllMyLines} onChange={(v) => {
           setShowAllMyLines(v)
           setRevealedLines({})
