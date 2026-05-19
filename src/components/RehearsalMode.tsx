@@ -14,6 +14,16 @@ interface Props {
   onExit: () => void
 }
 
+// Short utterance → command word detection (≤3 words so dialogue doesn't false-trigger)
+function matchHandsFreeCommand(text: string): 'stop' | 'back' | 'skip' | null {
+  const words = text.toLowerCase().trim().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean)
+  if (words.length === 0 || words.length > 3) return null
+  if (words.some(w => ['stop','cut','cancel','halt','abort','pause'].includes(w))) return 'stop'
+  if (words.some(w => ['back','again','repeat','previous','redo'].includes(w))) return 'back'
+  if (words.some(w => ['skip','next','forward'].includes(w))) return 'skip'
+  return null
+}
+
 type Phase =
   | 'idle'
   | 'playing-other'
@@ -122,8 +132,11 @@ export function RehearsalMode({ onExit }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
+  const [handsFreeEnabled, setHandsFreeEnabled] = useState(false)
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
+  const handsFreeRef = useRef(false)
+  handsFreeRef.current = handsFreeEnabled
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -143,6 +156,9 @@ export function RehearsalMode({ onExit }: Props) {
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
+  const sceneGroupsRef = useRef(sceneGroups)
+  const handlePlayRef = useRef<() => void>(() => {})
+  const runPlaybackRef = useRef<(start: number, end: number) => void>(() => {})
 
   // --- Audio helpers ---
   // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
@@ -225,6 +241,40 @@ export function RehearsalMode({ onExit }: Props) {
     return () => { stopRef.current = true; cancel(); abort() }
   }, [cancel, abort])
 
+  // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing
+  useEffect(() => {
+    if (!handsFreeEnabled || !supported) return
+    if (phase !== 'idle' && phase !== 'done') return
+    let active = true
+    ;(async () => {
+      while (active) {
+        const heard = await listen({ silenceMs: 2500 })
+        if (!active) break
+        if (/\b(start|play|go|begin)\b/i.test(heard)) {
+          active = false
+          handlePlayRef.current()
+          break
+        }
+      }
+    })()
+    return () => { active = false; abort() }
+  }, [handsFreeEnabled, phase, supported, listen, abort])
+
+  // Executes a hands-free command detected during a listen() window inside runPlayback.
+  // Uses only refs so it's safe to call from within the async loop without stale-closure issues.
+  const execHandsFreeCommand = (cmd: 'stop' | 'back' | 'skip', lineIdx: number) => {
+    if (cmd === 'stop') { interruptPlayback(); setPhase('idle'); return }
+    const gs = sceneGroupsRef.current
+    const gi = gs.findIndex(g => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
+    if (cmd === 'back') {
+      const prev = gi > 0 ? Math.max(gs[gi - 1].startIdx, blockStartRef.current) : blockStartRef.current
+      interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(prev, blockEndRef.current) })
+    } else {
+      const next = gi >= 0 && gi + 1 < gs.length ? Math.min(gs[gi + 1].startIdx, blockEndRef.current) : blockEndRef.current
+      interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(next, blockEndRef.current) })
+    }
+  }
+
   // --- Playback loop ---
   const runPlayback = useCallback(
     async (startIdx: number, endIdx: number) => {
@@ -293,6 +343,7 @@ export function RehearsalMode({ onExit }: Props) {
               const heard = await listen({ expectedText: groupText, silenceMs })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
+              if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               if (!stopRef.current) {
                 setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
                 if (heard) {
@@ -310,8 +361,9 @@ export function RehearsalMode({ onExit }: Props) {
               // No speech recognition: listen for voice activity or fall back to fixed gap
               setPhase('my-line-silence')
               if (supported) {
-                await listen({ silenceMs })
+                const _heard = await listen({ silenceMs })
                 await delay(600)
+                if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
                 await delay(gap)
               }
@@ -326,8 +378,9 @@ export function RehearsalMode({ onExit }: Props) {
             // Wait for user to finish attempting the line, then read it
             setPhase('my-line-silence')
             if (supported) {
-              await listen({ silenceMs })
+              const _heard = await listen({ silenceMs })
               await delay(600)
+              if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
               await delay(gap)
             }
@@ -348,6 +401,7 @@ export function RehearsalMode({ onExit }: Props) {
               if (supported) {
                 const heard = await listen({ expectedText: groupText, silenceMs })
                 await delay(600)
+                if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
                   const acc = wordAccuracy(groupText, heard)
                   const diff = buildWordDiff(groupText, heard)
@@ -434,6 +488,8 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }
 
+  handlePlayRef.current = handlePlay
+
   const handlePause = () => {
     pauseRef.current = true
     cancel()
@@ -501,6 +557,8 @@ export function RehearsalMode({ onExit }: Props) {
   // Keep refs in sync for use inside non-reactive event handlers
   blockStartRef.current = blockStart
   blockEndRef.current = blockEnd
+  sceneGroupsRef.current = sceneGroups
+  runPlaybackRef.current = runPlayback
 
   // Document-level touch drag for clip markers (non-passive so we can preventDefault)
   useEffect(() => {
@@ -716,8 +774,8 @@ export function RehearsalMode({ onExit }: Props) {
           >⏭</CtrlBtn>
         </div>
 
-        {/* Repeat pill */}
-        <div className="flex justify-center mb-1">
+        {/* Repeat + Hands-free pills */}
+        <div className="flex justify-center gap-2 mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
             className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
@@ -728,6 +786,18 @@ export function RehearsalMode({ onExit }: Props) {
           >
             ↺ Repeat
           </button>
+          {supported && (
+            <button
+              onClick={() => setHandsFreeEnabled((v) => !v)}
+              className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
+                handsFreeEnabled
+                  ? 'bg-[var(--color-stage-accent)] text-white'
+                  : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
+              }`}
+            >
+              🎙 Hands-free
+            </button>
+          )}
         </div>
 
         {/* Status line */}
@@ -738,7 +808,8 @@ export function RehearsalMode({ onExit }: Props) {
           {phase === 'playing-other' && 'Playing…'}
           {phase === 'paused' && 'Paused — tap a line to restart from it'}
           {phase === 'done' && 'Scene complete'}
-          {phase === 'idle' && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
+          {phase === 'idle' && !handsFreeEnabled && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
+          {phase === 'idle' && handsFreeEnabled && (listening ? '🎙 Listening for command…' : '🎙 Say "start" to begin')}
         </div>
       </div>
     </div>
