@@ -29,6 +29,22 @@ export interface Script {
 
 export type MyLineMode = 'silence' | 'read' | 'gap-before' | 'gap-after'
 
+export interface VoiceCommandWords {
+  play:   string[]
+  stop:   string[]
+  back:   string[]
+  skip:   string[]
+  repeat: string[]
+}
+
+export const DEFAULT_VOICE_COMMANDS: VoiceCommandWords = {
+  play:   ['start', 'play', 'go', 'begin'],
+  stop:   ['stop', 'cut', 'cancel', 'halt', 'abort', 'pause'],
+  back:   ['back', 'again', 'previous', 'redo'],
+  skip:   ['skip', 'next', 'forward'],
+  repeat: ['repeat', 'top', 'restart'],
+}
+
 export interface RehearsalSettings {
   scriptId: string
   myCharacter: string
@@ -41,6 +57,7 @@ export interface RehearsalSettings {
   endLineSilenceMs: number
   errorPromptEnabled: boolean
   errorPromptPhrase: string
+  voiceCommands?: VoiceCommandWords
 }
 
 export interface MarkedBlock {

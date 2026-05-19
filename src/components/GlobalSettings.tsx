@@ -2,7 +2,8 @@ import { useAppStore } from '../store/useAppStore'
 import { THEMES } from '../utils/themes'
 import { MicTest } from './MicTest'
 import { useState } from 'react'
-import type { MyLineMode } from '../types'
+import type { MyLineMode, VoiceCommandWords } from '../types'
+import { DEFAULT_VOICE_COMMANDS } from '../types'
 
 interface Props {
   onClose: () => void
@@ -32,6 +33,16 @@ export function GlobalSettings({ onClose }: Props) {
     endLineSilenceMs: 1000,
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
+    voiceCommands: DEFAULT_VOICE_COMMANDS,
+  }
+
+  const cmdWords: VoiceCommandWords = prefs.voiceCommands ?? DEFAULT_VOICE_COMMANDS
+
+  const parseWords = (s: string) => s.split(',').map(w => w.trim().toLowerCase()).filter(Boolean)
+  const fmtWords = (ws: string[]) => ws.join(', ')
+
+  const updateCmd = (key: keyof VoiceCommandWords, raw: string) => {
+    update('voiceCommands', { ...cmdWords, [key]: parseWords(raw) })
   }
 
   const update = <K extends keyof typeof prefs>(k: K, v: (typeof prefs)[K]) => {
@@ -207,6 +218,31 @@ export function GlobalSettings({ onClose }: Props) {
               </>
             )}
           </section>
+          {/* Voice commands */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Voice commands</h3>
+            <p className="text-xs text-[var(--color-stage-muted)]">Comma-separated trigger words for each hands-free command.</p>
+            {(
+              [
+                { key: 'play',   label: '▶ Start playback' },
+                { key: 'stop',   label: '⏹ Stop' },
+                { key: 'repeat', label: '↺ Repeat (clip top)' },
+                { key: 'back',   label: '◀ Back (add a number to go back N lines, e.g. "back 3")' },
+                { key: 'skip',   label: '▶▶ Skip' },
+              ] as { key: keyof VoiceCommandWords; label: string }[]
+            ).map(({ key, label }) => (
+              <div key={key} className="space-y-1">
+                <label className="text-xs text-[var(--color-stage-text)]">{label}</label>
+                <input
+                  type="text"
+                  defaultValue={fmtWords(cmdWords[key])}
+                  onBlur={(e) => updateCmd(key, e.target.value)}
+                  className="w-full rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-2 py-1.5 focus:outline-none focus:border-[var(--color-stage-accent)]"
+                />
+              </div>
+            ))}
+          </section>
+
         </div>
       </div>
     </>

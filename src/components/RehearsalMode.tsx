@@ -8,19 +8,40 @@ import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
 import { AccuracySummary } from './AccuracySummary'
 import { unlockAudio, playPing, playCompletion, getAudioContext } from '../utils/sounds'
-import type { WordDiff } from '../types'
+import type { WordDiff, VoiceCommandWords } from '../types'
+import { DEFAULT_VOICE_COMMANDS } from '../types'
 
 interface Props {
   onExit: () => void
 }
 
-// Short utterance → command word detection (≤3 words so dialogue doesn't false-trigger)
-function matchHandsFreeCommand(text: string): 'stop' | 'back' | 'skip' | null {
-  const words = text.toLowerCase().trim().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean)
-  if (words.length === 0 || words.length > 3) return null
-  if (words.some(w => ['stop','cut','cancel','halt','abort','pause'].includes(w))) return 'stop'
-  if (words.some(w => ['back','again','repeat','previous','redo'].includes(w))) return 'back'
-  if (words.some(w => ['skip','next','forward'].includes(w))) return 'skip'
+type HandsFreeCmd =
+  | { type: 'stop' }
+  | { type: 'back'; n: number }
+  | { type: 'skip' }
+  | { type: 'repeat' }
+
+// Short utterance → command detection (≤3 words so dialogue doesn't false-trigger).
+// "back N" (digit or word) goes back N line groups; bare "back" defaults to 1.
+// "repeat" / "top" / "restart" jumps to clip start.
+function matchHandsFreeCommand(text: string, words: VoiceCommandWords): HandsFreeCmd | null {
+  const parts = text.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean)
+  if (parts.length === 0 || parts.length > 3) return null
+  if (parts.some(w => words.stop.includes(w)))   return { type: 'stop' }
+  if (parts.some(w => words.repeat.includes(w))) return { type: 'repeat' }
+  if (parts.some(w => words.skip.includes(w)))   return { type: 'skip' }
+  const backIdx = parts.findIndex(w => words.back.includes(w))
+  if (backIdx >= 0) {
+    const rest = parts.filter((_, i) => i !== backIdx)
+    let n = 1
+    if (rest.length > 0) {
+      const WORD_NUMS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+      const digit = parseInt(rest[0], 10)
+      if (!isNaN(digit) && digit >= 1) n = Math.min(digit, 10)
+      else if (WORD_NUMS[rest[0]]) n = WORD_NUMS[rest[0]]
+    }
+    return { type: 'back', n }
+  }
   return null
 }
 
@@ -163,6 +184,8 @@ export function RehearsalMode({ onExit }: Props) {
   // handlePlay sets this false + calls abort() synchronously, stopping the loop
   // before runPlayback starts its own listen() — avoiding competing SR sessions.
   const idleListeningRef = useRef(false)
+  const voiceCmdWordsRef = useRef<VoiceCommandWords>(settings.voiceCommands ?? DEFAULT_VOICE_COMMANDS)
+  voiceCmdWordsRef.current = settings.voiceCommands ?? DEFAULT_VOICE_COMMANDS
 
   // --- Audio helpers ---
   // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
@@ -256,7 +279,8 @@ export function RehearsalMode({ onExit }: Props) {
       while (idleListeningRef.current) {
         const heard = await listen({ silenceMs: 2500 })
         if (!idleListeningRef.current) break
-        if (/\b(start|play|go|begin)\b/i.test(heard)) {
+        const heardParts = heard.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean)
+        if (heardParts.some(w => voiceCmdWordsRef.current.play.includes(w))) {
           idleListeningRef.current = false
           handlePlayRef.current()
           break
@@ -268,12 +292,19 @@ export function RehearsalMode({ onExit }: Props) {
 
   // Executes a hands-free command detected during a listen() window inside runPlayback.
   // Uses only refs so it's safe to call from within the async loop without stale-closure issues.
-  const execHandsFreeCommand = (cmd: 'stop' | 'back' | 'skip', lineIdx: number) => {
-    if (cmd === 'stop') { interruptPlayback(); setPhase('idle'); return }
+  const execHandsFreeCommand = (cmd: HandsFreeCmd, lineIdx: number) => {
+    if (cmd.type === 'stop') { interruptPlayback(); setPhase('idle'); return }
+    if (cmd.type === 'repeat') {
+      interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(blockStartRef.current, blockEndRef.current) })
+      return
+    }
     const gs = sceneGroupsRef.current
     const gi = gs.findIndex(g => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
-    if (cmd === 'back') {
-      const prev = gi > 0 ? Math.max(gs[gi - 1].startIdx, blockStartRef.current) : blockStartRef.current
+    if (cmd.type === 'back') {
+      const targetGi = gi - cmd.n
+      const prev = targetGi >= 0
+        ? Math.max(gs[targetGi].startIdx, blockStartRef.current)
+        : blockStartRef.current
       interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(prev, blockEndRef.current) })
     } else {
       const next = gi >= 0 && gi + 1 < gs.length ? Math.min(gs[gi + 1].startIdx, blockEndRef.current) : blockEndRef.current
@@ -349,7 +380,7 @@ export function RehearsalMode({ onExit }: Props) {
               const heard = await listen({ expectedText: groupText, silenceMs })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
-              if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
+              if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               if (!stopRef.current) {
                 setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
                 if (heard) {
@@ -369,7 +400,7 @@ export function RehearsalMode({ onExit }: Props) {
               if (supported) {
                 const _heard = await listen({ silenceMs })
                 await delay(600)
-                if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
+                if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
                 await delay(gap)
               }
@@ -386,7 +417,7 @@ export function RehearsalMode({ onExit }: Props) {
             if (supported) {
               const _heard = await listen({ silenceMs })
               await delay(600)
-              if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
+              if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
               await delay(gap)
             }
@@ -407,7 +438,7 @@ export function RehearsalMode({ onExit }: Props) {
               if (supported) {
                 const heard = await listen({ expectedText: groupText, silenceMs })
                 await delay(600)
-                if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
+                if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
                   const acc = wordAccuracy(groupText, heard)
                   const diff = buildWordDiff(groupText, heard)
