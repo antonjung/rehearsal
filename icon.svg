@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="cl"><rect width="256" height="512"/></clipPath>
+    <clipPath id="cr"><rect x="256" width="256" height="512"/></clipPath>
+    <radialGradient id="bg" cx="50%" cy="38%" r="62%">
+      <stop offset="0%" stop-color="#2a2660"/>
+      <stop offset="100%" stop-color="#0c0b16"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Comedy half (left, gold) -->
+  <ellipse cx="256" cy="272" rx="174" ry="190" fill="#f59e0b" clip-path="url(#cl)"/>
+  <!-- Tragedy half (right, violet) -->
+  <ellipse cx="256" cy="272" rx="174" ry="190" fill="#7c3aed" clip-path="url(#cr)"/>
+
+  <!-- Centre seam -->
+  <rect x="252" y="84" width="8" height="376" rx="4" fill="#0c0b16"/>
+
+  <!-- Left eye (dark on gold) -->
+  <ellipse cx="188" cy="224" rx="25" ry="28" fill="#1e1b4b" clip-path="url(#cl)"/>
+  <!-- Right eye (light on violet) -->
+  <ellipse cx="324" cy="224" rx="25" ry="28" fill="#ddd6fe" clip-path="url(#cr)"/>
+
+  <!-- Comedy smile -->
+  <path d="M176 312 Q218 368 255 312"
+        stroke="#1e1b4b" stroke-width="16" fill="none"
+        stroke-linecap="round" clip-path="url(#cl)"/>
+  <!-- Tragedy frown -->
+  <path d="M257 344 Q298 290 340 344"
+        stroke="#ddd6fe" stroke-width="16" fill="none"
+        stroke-linecap="round" clip-path="url(#cr)"/>
+</svg>
