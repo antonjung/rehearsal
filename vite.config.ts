@@ -30,7 +30,9 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,mjs,css,html,ico,png,svg}'],
+        clientsClaim: true,
+        skipWaiting: true,
       },
     }),
   ],
