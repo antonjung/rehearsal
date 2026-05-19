@@ -689,9 +689,35 @@ export function RehearsalMode({ onExit }: Props) {
       </div>
 
       {/* Controls */}
-      <div className="px-4 py-3 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
-        {/* Repeat toggle — always visible */}
-        <div className="flex justify-center mb-2.5">
+      <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+        {/* Transport row — always visible, all same large size */}
+        <div className="flex items-center justify-center gap-3 mb-2">
+          <CtrlBtn
+            onClick={handleBack}
+            disabled={phase === 'idle' || phase === 'done'}
+            large title="Previous beat"
+          >⏮</CtrlBtn>
+          <CtrlBtn
+            onClick={isPlaying ? handlePause : handlePlay}
+            large
+            title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </CtrlBtn>
+          <CtrlBtn
+            onClick={handleStop}
+            disabled={phase === 'idle' || phase === 'done'}
+            large title="Stop"
+          >⏹</CtrlBtn>
+          <CtrlBtn
+            onClick={handleSkip}
+            disabled={phase === 'idle' || phase === 'done'}
+            large title="Skip beat"
+          >⏭</CtrlBtn>
+        </div>
+
+        {/* Repeat pill */}
+        <div className="flex justify-center mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
             className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
@@ -703,21 +729,9 @@ export function RehearsalMode({ onExit }: Props) {
             ↺ Repeat
           </button>
         </div>
-        {isPlaying || phase === 'paused' ? (
-          <div className="flex items-center justify-center gap-4">
-            <CtrlBtn onClick={handleBack} large title="Previous beat">⏮</CtrlBtn>
-            <CtrlBtn onClick={phase === 'paused' ? handlePlay : handlePause} large title={phase === 'paused' ? 'Resume' : 'Pause'}>
-              {phase === 'paused' ? '▶' : '⏸'}
-            </CtrlBtn>
-            <CtrlBtn onClick={handleStop} large title="Stop">⏹</CtrlBtn>
-            <CtrlBtn onClick={handleSkip} large title="Skip beat">⏭</CtrlBtn>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center">
-            <CtrlBtn onClick={handlePlay} large title="Play clip">▶</CtrlBtn>
-          </div>
-        )}
-        <div className="text-center mt-2 text-xs text-[var(--color-stage-muted)] h-4">
+
+        {/* Status line */}
+        <div className="text-center text-xs text-[var(--color-stage-muted)] h-4">
           {phase === 'my-line-listening' && listening && '🎙 Listening…'}
           {phase === 'my-line-silence' && !listening && 'Your line…'}
           {phase === 'my-line-reading' && 'Reading your line…'}
