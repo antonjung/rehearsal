@@ -37,6 +37,20 @@ export function ScriptEditor({ script, onClose }: Props) {
   const [lines, setLines] = useState<EditableLine[]>(() => toEditable(script.lines))
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const matchesLine = (line: EditableLine) =>
+    !q ||
+    line.text.toLowerCase().includes(q) ||
+    line.character.toLowerCase().includes(q) ||
+    line.type.toLowerCase().includes(q)
+
+  const visibleLines: Array<{ line: EditableLine; idx: number }> = lines
+    .map((line, idx) => ({ line, idx }))
+    .filter(({ line }) => matchesLine(line))
+
+  const matchCount = q ? visibleLines.length : null
 
   const update = (idx: number, patch: Partial<EditableLine>) => {
     setLines((prev) => prev.map((l, i) => i === idx ? { ...l, ...patch } : l))
@@ -108,9 +122,36 @@ export function ScriptEditor({ script, onClose }: Props) {
           </button>
         </div>
 
+        {/* Search bar */}
+        <div className="px-3 py-2 border-b border-[var(--color-stage-border)] shrink-0">
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] focus-within:border-[var(--color-stage-accent)]">
+            <span className="text-[var(--color-stage-muted)] text-sm">🔍</span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search text, character, type…"
+              className="flex-1 bg-transparent text-sm text-[var(--color-stage-text)] placeholder:text-[var(--color-stage-muted)] focus:outline-none"
+            />
+            {q && (
+              <>
+                <span className="text-xs text-[var(--color-stage-muted)] shrink-0">
+                  {matchCount} match{matchCount !== 1 ? 'es' : ''}
+                </span>
+                <button
+                  onClick={() => setQuery('')}
+                  className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm leading-none"
+                >
+                  ×
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Lines list */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-          {lines.map((line, idx) => {
+          {visibleLines.map(({ line, idx }) => {
             const isEditing = editingIdx === idx
             return (
               <div
@@ -131,25 +172,40 @@ export function ScriptEditor({ script, onClose }: Props) {
                     onRemove={() => removeLine(idx)}
                   />
                 ) : (
-                  <ViewRow line={line} onEdit={() => setEditingIdx(idx)} />
+                  <ViewRow line={line} highlight={q} onEdit={() => setEditingIdx(idx)} />
                 )}
               </div>
             )
           })}
 
-          <button
-            onClick={() => addLineAfter(lines.length - 1)}
-            className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"
-          >
-            + Add line at end
-          </button>
+          {!q && (
+            <button
+              onClick={() => addLineAfter(lines.length - 1)}
+              className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"
+            >
+              + Add line at end
+            </button>
+          )}
         </div>
       </div>
     </>
   )
 }
 
-function ViewRow({ line, onEdit }: { line: EditableLine; onEdit: () => void }) {
+function hl(text: string, query: string) {
+  if (!query) return <>{text}</>
+  const idx = text.toLowerCase().indexOf(query)
+  if (idx === -1) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-amber-400/40 text-inherit rounded-sm">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  )
+}
+
+function ViewRow({ line, highlight = '', onEdit }: { line: EditableLine; highlight?: string; onEdit: () => void }) {
   return (
     <div
       onClick={onEdit}
@@ -159,7 +215,7 @@ function ViewRow({ line, onEdit }: { line: EditableLine; onEdit: () => void }) {
       <div className="flex-1 min-w-0">
         {line.type === 'dialogue' && line.character && (
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-stage-gold)] mr-1.5">
-            {line.character}
+            {hl(line.character, highlight)}
           </span>
         )}
         <span className={`text-sm ${
@@ -169,7 +225,7 @@ function ViewRow({ line, onEdit }: { line: EditableLine; onEdit: () => void }) {
             ? 'italic text-[var(--color-stage-muted)]'
             : 'text-[var(--color-stage-text)]'
         }`}>
-          {line.text || <span className="opacity-30">empty</span>}
+          {line.text ? hl(line.text, highlight) : <span className="opacity-30">empty</span>}
         </span>
       </div>
     </div>
