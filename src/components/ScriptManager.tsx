@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
+import { extractPdfText } from '../utils/pdfExtract'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
 
@@ -9,25 +10,32 @@ export function ScriptManager() {
     useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const [editingScript, setEditingScript] = useState<Script | null>(null)
+  const [importing, setImporting] = useState(false)
 
-  const handleFiles = (files: FileList | null) => {
-    if (!files) return
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const text = e.target?.result as string
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setImporting(true)
+    try {
+      for (const file of Array.from(files)) {
         const name = file.name.replace(/\.[^.]+$/, '')
+        let text: string
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+          text = await extractPdfText(file)
+        } else {
+          text = await file.text()
+        }
         const script = parseScript(text, name)
         addScript(script)
         selectScript(script.id)
       }
-      reader.readAsText(file)
-    })
+    } finally {
+      setImporting(false)
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    handleFiles(e.dataTransfer.files)
+    void handleFiles(e.dataTransfer.files)
   }
 
   return (
@@ -36,24 +44,27 @@ export function ScriptManager() {
       <div
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
-        onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-[var(--color-stage-border)] rounded-xl p-10 text-center cursor-pointer hover:border-[var(--color-stage-accent)] hover:bg-[var(--color-stage-accent)]/5 transition-colors"
+        onClick={() => !importing && inputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors ${
+          importing
+            ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/5 cursor-wait'
+            : 'border-[var(--color-stage-border)] cursor-pointer hover:border-[var(--color-stage-accent)] hover:bg-[var(--color-stage-accent)]/5'
+        }`}
       >
-        <div className="text-4xl mb-3">📜</div>
+        <div className="text-4xl mb-3">{importing ? '⏳' : '📜'}</div>
         <p className="text-[var(--color-stage-text)] font-medium">
-          Drop script files here or click to browse
+          {importing ? 'Importing…' : 'Drop script files here or click to browse'}
         </p>
         <p className="text-[var(--color-stage-muted)] text-sm mt-1">
-          Plain text files (.txt) — standard play format (CHARACTER NAME on its own line)
+          Plain text (.txt) or PDF (.pdf) — standard play format
         </p>
         <input
           ref={inputRef}
           type="file"
-          accept=".txt"
+          accept=".txt,.pdf"
           multiple
           className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
+          onChange={(e) => { void handleFiles(e.target.files) }}/>
       </div>
 
       {/* Script list */}
