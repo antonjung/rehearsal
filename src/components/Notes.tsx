@@ -2,14 +2,29 @@ import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 
 export function Notes() {
-  const { notes, addNote, toggleNote, clearDoneNotes } = useAppStore()
+  const { notes, addNote, toggleNote, updateNote, deleteNote, clearDoneNotes } = useAppStore()
   const [text, setText] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
 
   const handleAdd = () => {
     const trimmed = text.trim()
     if (!trimmed) return
     addNote(trimmed)
     setText('')
+  }
+
+  const startEdit = (id: string, current: string) => {
+    setEditingId(id)
+    setEditText(current)
+  }
+
+  const commitEdit = () => {
+    if (editingId) {
+      const trimmed = editText.trim()
+      if (trimmed) updateNote(editingId, trimmed)
+    }
+    setEditingId(null)
   }
 
   const hasDone = notes.some((n) => n.done)
@@ -69,9 +84,53 @@ export function Notes() {
                   </svg>
                 )}
               </button>
-              <span className={`text-sm leading-snug ${note.done ? 'line-through text-[var(--color-stage-muted)]' : 'text-[var(--color-stage-text)]'}`}>
-                {note.text}
-              </span>
+
+              <div className="flex-1 min-w-0">
+                {editingId === note.id ? (
+                  <div className="space-y-1.5">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitEdit()
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      className="w-full text-sm px-2 py-1 rounded bg-[var(--color-stage-bg)] border border-[var(--color-stage-accent)] text-[var(--color-stage-text)] focus:outline-none"
+                    />
+                    <div className="flex gap-3">
+                      <button onClick={commitEdit} className="text-xs text-[var(--color-stage-accent-light)]">Save</button>
+                      <button onClick={() => setEditingId(null)} className="text-xs text-[var(--color-stage-muted)]">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <span
+                    className={`text-sm leading-snug ${note.done ? 'line-through text-[var(--color-stage-muted)]' : 'text-[var(--color-stage-text)]'}`}
+                  >
+                    {note.text}
+                  </span>
+                )}
+              </div>
+
+              {editingId !== note.id && (
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => startEdit(note.id, note.text)}
+                    className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => deleteNote(note.id)}
+                    className="text-xs text-[var(--color-stage-muted)] hover:text-red-400 transition-colors"
+                    title="Delete"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

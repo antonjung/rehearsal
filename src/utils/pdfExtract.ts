@@ -23,7 +23,7 @@ export async function extractPdfText(file: File): Promise<string> {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const items = (content.items as any[]).filter(
-      (it) => typeof it.str === 'string' && it.str.trim() !== '',
+      (it) => typeof it.str === 'string' && it.str.length > 0,
     )
     if (items.length === 0) continue
 

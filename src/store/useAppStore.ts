@@ -19,6 +19,8 @@ interface AppState {
   setScriptFontSize: (size: number) => void
   addNote: (text: string) => void
   toggleNote: (id: string) => void
+  updateNote: (id: string, text: string) => void
+  deleteNote: (id: string) => void
   clearDoneNotes: () => void
 }
 
@@ -62,6 +64,14 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           notes: s.notes.map((n) => n.id === id ? { ...n, done: !n.done } : n),
         })),
+
+      updateNote: (id, text) =>
+        set((s) => ({
+          notes: s.notes.map((n) => n.id === id ? { ...n, text } : n),
+        })),
+
+      deleteNote: (id) =>
+        set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
 
       clearDoneNotes: () =>
         set((s) => ({ notes: s.notes.filter((n) => !n.done) })),

@@ -17,6 +17,7 @@
 
 html, body, #root {
   height: 100%;
+  overflow-x: hidden;
   background-color: var(--color-stage-bg);
   color: var(--color-stage-text);
 }
