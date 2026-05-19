@@ -159,6 +159,10 @@ export function RehearsalMode({ onExit }: Props) {
   const sceneGroupsRef = useRef(sceneGroups)
   const handlePlayRef = useRef<() => void>(() => {})
   const runPlaybackRef = useRef<(start: number, end: number) => void>(() => {})
+  // Tracks whether the idle hands-free command loop is active.
+  // handlePlay sets this false + calls abort() synchronously, stopping the loop
+  // before runPlayback starts its own listen() — avoiding competing SR sessions.
+  const idleListeningRef = useRef(false)
 
   // --- Audio helpers ---
   // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
@@ -241,24 +245,26 @@ export function RehearsalMode({ onExit }: Props) {
     return () => { stopRef.current = true; cancel(); abort() }
   }, [cancel, abort])
 
-  // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing
+  // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing.
+  // Uses idleListeningRef rather than a local `active` flag so handlePlay() can stop
+  // the loop synchronously (before runPlayback starts its own listen() session).
   useEffect(() => {
     if (!handsFreeEnabled || !supported) return
     if (phase !== 'idle' && phase !== 'done') return
-    let active = true
+    idleListeningRef.current = true
     ;(async () => {
-      while (active) {
+      while (idleListeningRef.current) {
         const heard = await listen({ silenceMs: 2500 })
-        if (!active) break
+        if (!idleListeningRef.current) break
         if (/\b(start|play|go|begin)\b/i.test(heard)) {
-          active = false
+          idleListeningRef.current = false
           handlePlayRef.current()
           break
         }
       }
     })()
-    return () => { active = false; abort() }
-  }, [handsFreeEnabled, phase, supported, listen, abort])
+    return () => { idleListeningRef.current = false }
+  }, [handsFreeEnabled, phase, supported, listen])
 
   // Executes a hands-free command detected during a listen() window inside runPlayback.
   // Uses only refs so it's safe to call from within the async loop without stale-closure issues.
@@ -472,6 +478,11 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const handlePlay = () => {
+    // Stop the idle command listener immediately so its pending listen() doesn't
+    // compete with runPlayback's own listen() calls (would block user-line detection).
+    idleListeningRef.current = false
+    abort()
+
     // iOS requires speechSynthesis.speak() to be called synchronously inside a
     // user-gesture handler to activate the audio session. cancel() alone is not enough.
     try {
