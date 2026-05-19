@@ -54,3 +54,10 @@ export interface WordDiff {
   word: string
   match: boolean
 }
+
+export interface Note {
+  id: string
+  text: string
+  done: boolean
+  createdAt: number
+}

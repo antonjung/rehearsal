@@ -6,16 +6,18 @@ import { RehearsalSetup } from './components/RehearsalSetup'
 import { RehearsalMode } from './components/RehearsalMode'
 import { SplashScreen } from './components/SplashScreen'
 import { GlobalSettings } from './components/GlobalSettings'
+import { Notes } from './components/Notes'
 import { useAppStore } from './store/useAppStore'
 import { applyTheme } from './utils/themes'
 
-type Tab = 'scripts' | 'characters' | 'record' | 'rehearse'
+type Tab = 'scripts' | 'characters' | 'record' | 'rehearse' | 'notes'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scripts', label: 'Scripts', icon: '📜' },
   { id: 'characters', label: 'Characters', icon: '🎭' },
   { id: 'record', label: 'Record', icon: '🎙' },
   { id: 'rehearse', label: 'Rehearse', icon: '🎤' },
+  { id: 'notes', label: 'Notes', icon: '📝' },
 ]
 
 export default function App() {
@@ -65,6 +67,7 @@ export default function App() {
             {tab === 'rehearse' && (
               <RehearsalSetup onStart={() => setRehearsing(true)} />
             )}
+            {tab === 'notes' && <Notes />}
           </main>
 
           {/* Footer nav */}

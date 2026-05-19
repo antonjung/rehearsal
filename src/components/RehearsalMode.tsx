@@ -32,7 +32,7 @@ interface LineGroup {
 }
 
 export function RehearsalMode({ onExit }: Props) {
-  const { scripts, rehearsalSettings } = useAppStore()
+  const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
   const { listening, supported, listen, abort, reset: resetTranscript } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
@@ -628,7 +628,7 @@ export function RehearsalMode({ onExit }: Props) {
       </div>
 
       {/* Script area */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5" style={{ '--script-font-size': `${scriptFontSize}px` } as React.CSSProperties}>
         {sceneGroups.map((group, gi) => {
           const isCurrentGroup = group.startIdx <= currentIdx && currentIdx <= group.endIdx
           const isMyLine = group.character === settings.myCharacter
@@ -882,15 +882,15 @@ const LineRow = ({
             {accuracy !== null && <AccuracyDot accuracy={accuracy} threshold={threshold} />}
           </div>
           {lineVisible ? (
-            <span className="text-sm text-[var(--color-stage-text)]">
+            <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
               {group.text.split('\n').map((t, idx) => (
                 <span key={idx} className="block">{t}</span>
               ))}
             </span>
           ) : (
             <span
-              className="text-sm text-[var(--color-stage-text)] select-none"
-              style={{ filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }}
+              className="text-[var(--color-stage-text)] select-none"
+              style={{ fontSize: 'var(--script-font-size, 14px)', filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }}
             >
               {group.text.split('\n').map((t, idx) => (
                 <span key={idx} className="block">{t}</span>

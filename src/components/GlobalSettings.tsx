@@ -16,7 +16,7 @@ const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
 ]
 
 export function GlobalSettings({ onClose }: Props) {
-  const { theme, setTheme, rehearsalSettings, saveRehearsalSettings } = useAppStore()
+  const { theme, setTheme, rehearsalSettings, saveRehearsalSettings, scriptFontSize, setScriptFontSize } = useAppStore()
   const [showMicTest, setShowMicTest] = useState(false)
 
   // Default prefs when no rehearsal has been configured yet
@@ -83,6 +83,23 @@ export function GlobalSettings({ onClose }: Props) {
                   {t.name}
                 </button>
               ))}
+            </div>
+          </section>
+
+          {/* Display */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Display</h3>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--color-stage-text)]">Script font size</span>
+                <span className="text-xs text-[var(--color-stage-muted)]">{scriptFontSize}px</span>
+              </div>
+              <input
+                type="range" min={11} max={22} step={1}
+                value={scriptFontSize}
+                onChange={(e) => setScriptFontSize(Number(e.target.value))}
+                className="w-full accent-[var(--color-stage-accent)]"
+              />
             </div>
           </section>
 

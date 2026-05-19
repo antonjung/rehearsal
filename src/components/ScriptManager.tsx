@@ -1,12 +1,14 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
+import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
 
 export function ScriptManager() {
   const { scripts, selectedScriptId, addScript, removeScript, selectScript } =
     useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [editingScript, setEditingScript] = useState<Script | null>(null)
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return
@@ -67,9 +69,13 @@ export function ScriptManager() {
               selected={script.id === selectedScriptId}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
+              onEdit={() => setEditingScript(script)}
             />
           ))}
         </div>
+      )}
+      {editingScript && (
+        <ScriptEditor script={editingScript} onClose={() => setEditingScript(null)} />
       )}
     </div>
   )
@@ -80,11 +86,13 @@ function ScriptCard({
   selected,
   onSelect,
   onRemove,
+  onEdit,
 }: {
   script: Script
   selected: boolean
   onSelect: () => void
   onRemove: () => void
+  onEdit: () => void
 }) {
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
 
@@ -103,16 +111,29 @@ function ScriptCard({
           {script.characters.length} characters · {dialogueCount} lines
         </p>
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove()
-        }}
-        className="text-[var(--color-stage-muted)] hover:text-red-400 transition-colors p-1 rounded"
-        aria-label="Remove script"
-      >
-        ✕
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit()
+          }}
+          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded text-sm"
+          aria-label="Edit script"
+          title="Edit script"
+        >
+          ✏️
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="text-[var(--color-stage-muted)] hover:text-red-400 transition-colors p-1 rounded"
+          aria-label="Remove script"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   )
 }
