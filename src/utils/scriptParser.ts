@@ -109,6 +109,12 @@ export function parseScript(text: string, name: string): Script {
       continue
     }
 
+    // Bracketed stage directions are always recognised, even before play starts
+    if (trimmed.startsWith('[')) {
+      lines.push(mkLine(idx++, 'direction', trimmed))
+      continue
+    }
+
     // Scripts without ACT/SCENE headings (e.g. radio play format): a valid
     // "CHARACTER: dialogue" line triggers parsing to start
     if (!playStarted) {

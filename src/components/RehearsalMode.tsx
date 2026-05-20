@@ -769,6 +769,7 @@ export function RehearsalMode({ onExit }: Props) {
               key={group.startIdx}
               data-gi={gi}
               className={isInClip ? 'bg-amber-400/10 rounded' : ''}
+              style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
               onTouchStart={(e) => {
                 longPressMenuFiredRef.current = false
                 longPressTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
@@ -830,25 +831,29 @@ export function RehearsalMode({ onExit }: Props) {
       </div>
 
       {/* Long-press clip menu */}
-      {clipMenu && (
+      {clipMenu && (clipMenu.startIdx < blockEnd || clipMenu.startIdx > blockStart) && (
         <>
           <div className="fixed inset-0 z-40" onTouchStart={() => setClipMenu(null)} onClick={() => setClipMenu(null)} />
           <div
             className="fixed z-50 bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl shadow-2xl overflow-hidden min-w-[180px]"
-            style={{ left: '50%', transform: 'translateX(-50%)', top: Math.max(60, Math.min(clipMenu.y - 20, (typeof window !== 'undefined' ? window.innerHeight : 600) - 130)) }}
+            style={{ left: '50%', transform: 'translateX(-50%)', top: Math.max(60, Math.min(clipMenu.y - 20, window.innerHeight - 130)) }}
           >
-            <button
-              className="w-full px-5 py-3.5 text-sm text-left text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/20 border-b border-[var(--color-stage-border)] flex items-center gap-2"
-              onClick={() => { setBlockStart(clipMenu.startIdx); blockStartRef.current = clipMenu.startIdx; setClipMenu(null) }}
-            >
-              <span className="text-red-400 text-xs">▲</span> Start clip here
-            </button>
-            <button
-              className="w-full px-5 py-3.5 text-sm text-left text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/20 flex items-center gap-2"
-              onClick={() => { setBlockEnd(clipMenu.startIdx); blockEndRef.current = clipMenu.startIdx; setClipMenu(null) }}
-            >
-              <span className="text-red-400 text-xs">▼</span> End clip here
-            </button>
+            {clipMenu.startIdx < blockEnd && (
+              <button
+                className={`w-full px-5 py-3.5 text-sm text-left text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/20 flex items-center gap-2 ${clipMenu.startIdx > blockStart ? 'border-b border-[var(--color-stage-border)]' : ''}`}
+                onClick={() => { setBlockStart(clipMenu.startIdx); blockStartRef.current = clipMenu.startIdx; setClipMenu(null) }}
+              >
+                <span className="text-red-400 text-xs">▲</span> Start clip here
+              </button>
+            )}
+            {clipMenu.startIdx > blockStart && (
+              <button
+                className="w-full px-5 py-3.5 text-sm text-left text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/20 flex items-center gap-2"
+                onClick={() => { setBlockEnd(clipMenu.startIdx); blockEndRef.current = clipMenu.startIdx; setClipMenu(null) }}
+              >
+                <span className="text-red-400 text-xs">▼</span> End clip here
+              </button>
+            )}
           </div>
         </>
       )}

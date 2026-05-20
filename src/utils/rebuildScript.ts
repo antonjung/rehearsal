@@ -16,6 +16,9 @@ const isSceneStart = (t: string) =>
 export function rebuildScript(script: Script, editedLines: ScriptLine[]): Script {
   const lines: ScriptLine[] = editedLines.map((l, i) => ({
     ...l,
+    // Reclassify bracketed lines as directions regardless of stored type
+    type: l.text.startsWith('[') ? 'direction' : l.type,
+    character: l.text.startsWith('[') ? undefined : l.character,
     lineIndex: i,
     id: `line-${i}`,
   }))
