@@ -18,6 +18,7 @@ export function SideMenu({ onClose }: Props) {
   const [urlError, setUrlError] = useState('')
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
+  const [examplesOpen, setExamplesOpen] = useState(false)
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}examples/index.json`)
@@ -108,8 +109,14 @@ export function SideMenu({ onClose }: Props) {
           {/* Example scripts */}
           {examples.length > 0 && (
             <section className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Example scripts</h3>
-              {examples.map((ex) => (
+              <button
+                onClick={() => setExamplesOpen((v) => !v)}
+                className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+              >
+                <span>Example scripts</span>
+                <span className="text-base leading-none">{examplesOpen ? '▲' : '▼'}</span>
+              </button>
+              {examplesOpen && examples.map((ex) => (
                 <div
                   key={ex.file}
                   className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5"
