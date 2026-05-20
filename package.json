@@ -1,7 +1,7 @@
 {
   "name": "rehearsal",
   "private": true,
-  "version": "2.117.2",
+  "version": "2.119.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fluentui/react-icons": "^2.0.326",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

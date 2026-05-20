@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { IconSearch, IconChevronUp, IconChevronDown, IconDismiss } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { rebuildScript } from '../utils/rebuildScript'
 import type { Script, ScriptLine, LineType } from '../types'
@@ -202,7 +203,7 @@ export function ScriptEditor({ script, onClose }: Props) {
         {/* Search bar */}
         <div className="px-3 py-2 border-b border-[var(--color-stage-border)] shrink-0">
           <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] focus-within:border-[var(--color-stage-accent)]">
-            <span className="text-[var(--color-stage-muted)] text-sm">🔍</span>
+            <IconSearch className="text-[var(--color-stage-muted)] text-sm shrink-0" />
             <input
               type="text"
               value={query}
@@ -225,17 +226,17 @@ export function ScriptEditor({ script, onClose }: Props) {
                   onClick={() => setMatchCursor((c) => (c - 1 + matchIndices.length) % matchIndices.length)}
                   className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 text-xs leading-none px-0.5"
                   title="Previous match"
-                >▲</button>
+                ><IconChevronUp /></button>
                 <button
                   disabled={matchIndices.length === 0}
                   onClick={() => setMatchCursor((c) => (c + 1) % matchIndices.length)}
                   className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 text-xs leading-none px-0.5"
                   title="Next match"
-                >▼</button>
+                ><IconChevronDown /></button>
                 <button
                   onClick={() => { setQuery(''); setDebouncedQuery('') }}
                   className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm leading-none"
-                >×</button>
+                ><IconDismiss /></button>
               </>
             )}
           </div>

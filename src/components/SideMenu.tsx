@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
@@ -79,7 +80,7 @@ export function SideMenu({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-stage-border)] shrink-0">
           <span className="offbook-title text-xl">OffBook</span>
-          <button onClick={onClose} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none px-1">✕</button>
+          <button onClick={onClose} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none px-1"><IconDismiss /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -105,7 +106,7 @@ export function SideMenu({ onClose }: Props) {
                 className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors mb-1"
               >
                 <span>Example scripts</span>
-                <span>{examplesOpen ? '▲' : '▼'}</span>
+                {examplesOpen ? <IconChevronUp /> : <IconChevronDown />}
               </button>
               {examplesOpen && (
                 <div className="mt-2 space-y-2">
@@ -114,7 +115,7 @@ export function SideMenu({ onClose }: Props) {
                     return (
                       <div key={ex.file} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
                         <div className="min-w-0 flex items-start gap-1.5">
-                          <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}>✓</span>
+                          <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}><IconCheckmark /></span>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
                             <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
@@ -145,7 +146,7 @@ export function SideMenu({ onClose }: Props) {
                   className="flex items-center gap-1 text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
                 >
                   <span>{notes.length}</span>
-                  <span>{notesOpen ? '▲' : '▼'}</span>
+                  {notesOpen ? <IconChevronUp /> : <IconChevronDown />}
                 </button>
               )}
             </div>
@@ -159,7 +160,7 @@ export function SideMenu({ onClose }: Props) {
               className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors mb-1"
             >
               <span>About</span>
-              <span>{aboutOpen ? '▲' : '▼'}</span>
+              {aboutOpen ? <IconChevronUp /> : <IconChevronDown />}
             </button>
             {aboutOpen && (
               <div className="mt-2 rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-3 space-y-3 text-xs text-[var(--color-stage-muted)]">

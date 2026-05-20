@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { IconEdit, IconDismiss } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
@@ -75,7 +76,7 @@ function ScriptCard({
           aria-label="Edit script"
           title="Edit script"
         >
-          ✏️
+          <IconEdit />
         </button>
         <button
           onClick={(e) => {
@@ -85,7 +86,7 @@ function ScriptCard({
           className="text-[var(--color-stage-muted)] hover:text-red-400 transition-colors p-1 rounded"
           aria-label="Remove script"
         >
-          ✕
+          <IconDismiss />
         </button>
       </div>
     </div>

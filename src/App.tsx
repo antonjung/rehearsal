@@ -9,14 +9,22 @@ import { GlobalSettings } from './components/GlobalSettings'
 import { SideMenu } from './components/SideMenu'
 import { useAppStore } from './store/useAppStore'
 import { applyTheme } from './utils/themes'
+import { IconMenu, IconSettings, IconHome, IconCharacters, IconMic, IconRunThrough } from './components/Icons'
 
 type Tab = 'scripts' | 'characters' | 'record' | 'rehearse'
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'scripts', label: 'Scripts', icon: '📜' },
-  { id: 'characters', label: 'Characters', icon: '🎭' },
-  { id: 'record', label: 'Record', icon: '🎙' },
-  { id: 'rehearse', label: 'Run through', icon: '📖' },
+const TAB_ICONS: Record<string, React.ReactNode> = {
+  scripts:    <IconHome className="text-[1.4rem]" />,
+  characters: <IconCharacters className="text-[1.4rem]" />,
+  record:     <IconMic className="text-[1.4rem]" />,
+  rehearse:   <IconRunThrough className="text-[1.4rem]" />,
+}
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'scripts',    label: 'Home' },
+  { id: 'characters', label: 'Characters' },
+  { id: 'record',     label: 'Record' },
+  { id: 'rehearse',   label: 'Run through' },
 ]
 
 function scriptTitleClass(name: string) {
@@ -48,10 +56,10 @@ export default function App() {
       <header className="relative flex items-center px-4 pt-4 pb-3 shrink-0">
         <button
           onClick={() => setShowMenu(true)}
-          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
+          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
           title="Menu"
         >
-          ☰
+          <IconMenu className="text-[1.6rem]" />
         </button>
 
         {/* Centred title */}
@@ -67,10 +75,10 @@ export default function App() {
 
         <button
           onClick={() => setShowSettings(true)}
-          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0 ml-auto"
+          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0 ml-auto"
           title="Settings"
         >
-          ⚙️
+          <IconSettings className="text-[1.6rem]" />
         </button>
       </header>
 
@@ -102,13 +110,13 @@ export default function App() {
                     : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
                 }`}
               >
-                <span className="text-xl leading-none">{t.icon}</span>
+                {TAB_ICONS[t.id]}
                 <span className="text-[10px] font-medium">{t.label}</span>
               </button>
             ))}
           </nav>
           <div className="text-center py-1 shrink-0">
-            <span className="text-[10px] text-[var(--color-stage-border)]">v{__APP_VERSION__}</span>
+            <span className="text-[10px] text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
           </div>
         </>
       )}

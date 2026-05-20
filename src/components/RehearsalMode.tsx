@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconSummary, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording } from '../utils/recordingStore'
@@ -718,8 +719,8 @@ export function RehearsalMode({ onExit }: Props) {
       {/* Sub-header: just script name + rate */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm shrink-0">
-            ← Back
+          <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] shrink-0 flex items-center gap-1 text-sm">
+            <IconArrowLeft className="text-base" /> Back
           </button>
           <span className="text-sm font-semibold text-[var(--color-stage-text)] truncate">{script.name}</span>
         </div>
@@ -865,7 +866,7 @@ export function RehearsalMode({ onExit }: Props) {
           <div className="fixed inset-x-4 top-16 bottom-16 z-50 flex flex-col rounded-2xl bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0">
               <span className="font-semibold text-[var(--color-stage-text)]">Summary</span>
-              <button onClick={() => setShowSummary(false)} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none">✕</button>
+              <button onClick={() => setShowSummary(false)} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none"><IconDismiss /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-4">
               <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />
@@ -878,66 +879,50 @@ export function RehearsalMode({ onExit }: Props) {
       <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
         {/* Transport row — always visible, all same large size */}
         <div className="flex items-center justify-center gap-3 mb-2">
-          <CtrlBtn
-            onClick={handleBack}
-            disabled={phase === 'idle' || phase === 'done'}
-            large title="Previous beat"
-          >⏮</CtrlBtn>
-          <CtrlBtn
-            onClick={isPlaying ? handlePause : handlePlay}
-            large
-            title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}
-          >
-            {isPlaying ? '⏸' : '▶'}
+          <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
+          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} large title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}>
+            {isPlaying ? <IconPause /> : <IconPlay />}
           </CtrlBtn>
-          <CtrlBtn
-            onClick={handleStop}
-            disabled={phase === 'idle' || phase === 'done'}
-            large title="Stop"
-          >⏹</CtrlBtn>
-          <CtrlBtn
-            onClick={handleSkip}
-            disabled={phase === 'idle' || phase === 'done'}
-            large title="Skip beat"
-          >⏭</CtrlBtn>
+          <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} large title="Stop"><IconStop /></CtrlBtn>
+          <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} large title="Skip beat"><IconSkipForward /></CtrlBtn>
         </div>
 
         {/* Repeat + Summary pills */}
         <div className="flex justify-center gap-2 mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
-            className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
+            className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
               loopEnabled
                 ? 'bg-[var(--color-stage-accent)] text-white'
                 : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
             }`}
           >
-            ↺ Repeat
+            <IconRepeat /> Repeat
           </button>
           {Object.keys(accuracies).length > 0 && (
             <button
               onClick={() => setShowSummary((v) => !v)}
-              className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
+              className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
                 showSummary
                   ? 'bg-[var(--color-stage-accent)] text-white'
                   : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
               }`}
             >
-              📊 Summary
+              <IconSummary /> Summary
             </button>
           )}
         </div>
 
         {/* Status line */}
         <div className="text-center text-xs text-[var(--color-stage-muted)] h-4">
-          {phase === 'my-line-listening' && listening && '🎙 Listening…'}
+          {phase === 'my-line-listening' && listening && <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Listening…</span>}
           {phase === 'my-line-silence' && !listening && 'Your line…'}
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
           {phase === 'paused' && 'Paused — tap a line to restart from it'}
           {phase === 'done' && 'Scene complete'}
           {phase === 'idle' && !handsFreeEnabled && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
-          {phase === 'idle' && handsFreeEnabled && (listening ? '🎙 Listening for command…' : '🎙 Say "start" to begin')}
+          {phase === 'idle' && handsFreeEnabled && (listening ? <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Listening for command…</span> : <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Say "start" to begin</span>)}
         </div>
       </div>
     </div>
@@ -1084,7 +1069,7 @@ const LineRow = ({
               title={lineVisible ? 'Hide line' : 'Reveal line'}
               className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] leading-none transition-colors"
             >
-              {lineVisible ? '👁' : '◉'}
+              {lineVisible ? <IconEye /> : <IconEyeOff />}
             </button>
           ) : (
             <div className="h-4" />
@@ -1136,7 +1121,7 @@ const LineRow = ({
                 : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
             } disabled:opacity-10`}
           >
-            {isRecordingThis ? '■' : '●'}
+            {isRecordingThis ? <IconRecordStop /> : <IconRecordDot />}
           </button>
         ) : (
           <div className="w-5 shrink-0" />

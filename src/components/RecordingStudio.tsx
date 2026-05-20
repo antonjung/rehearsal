@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { IconPlay, IconRecordStop, IconRecordDot, IconDismiss, IconCheckmark } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { getRecording, setRecording, deleteRecording } from '../utils/recordingStore'
@@ -206,7 +207,7 @@ export function RecordingStudio() {
                       onClick={() => handleStop(group)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium animate-pulse min-h-[36px]"
                     >
-                      ■ Stop
+                      <IconRecordStop /> Stop
                     </button>
                   ) : (
                     <button
@@ -214,7 +215,7 @@ export function RecordingStudio() {
                       disabled={recording}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] text-xs text-[var(--color-stage-text)] hover:border-red-400 hover:text-red-400 disabled:opacity-40 transition-colors min-h-[36px]"
                     >
-                      ● {recorded ? 'Re-record' : 'Record'}
+                      <IconRecordDot /> {recorded ? 'Re-record' : 'Record'}
                     </button>
                   )}
 
@@ -225,15 +226,15 @@ export function RecordingStudio() {
                         disabled={isPlayingThis}
                         className="px-3 py-1.5 rounded-lg border border-[var(--color-stage-border)] text-xs text-[var(--color-stage-accent-light)] hover:border-[var(--color-stage-accent)] disabled:opacity-40 transition-colors min-h-[36px]"
                       >
-                        {isPlayingThis ? '▶ Playing…' : '▶ Play'}
+                        <IconPlay /> {isPlayingThis ? 'Playing…' : 'Play'}
                       </button>
                       <button
                         onClick={() => handleDelete(group)}
                         className="px-3 py-1.5 rounded-lg text-xs text-[var(--color-stage-muted)] hover:text-red-400 transition-colors min-h-[36px]"
                       >
-                        ✕ Delete
+                        <IconDismiss /> Delete
                       </button>
-                      <span className="text-xs text-green-400 ml-auto">✓ Recorded</span>
+                      <span className="flex items-center gap-0.5 text-xs text-green-400 ml-auto"><IconCheckmark /> Recorded</span>
                     </>
                   )}
                 </div>
