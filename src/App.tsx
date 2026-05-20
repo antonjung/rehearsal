@@ -19,13 +19,21 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'rehearse', label: 'Run through', icon: '📖' },
 ]
 
+function scriptTitleClass(name: string) {
+  if (name.length <= 14) return 'text-2xl'
+  if (name.length <= 22) return 'text-xl'
+  if (name.length <= 30) return 'text-lg'
+  return 'text-base'
+}
+
 export default function App() {
   const [splashDone, setSplashDone] = useState(false)
   const [tab, setTab] = useState<Tab>('scripts')
   const [rehearsing, setRehearsing] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
-  const { theme } = useAppStore()
+  const { theme, scripts, selectedScriptId } = useAppStore()
+  const selectedScript = scripts.find((s) => s.id === selectedScriptId)
 
   // Apply theme whenever it changes
   useEffect(() => {
@@ -38,24 +46,32 @@ export default function App() {
     <div className="h-full flex flex-col max-w-2xl mx-auto">
       {/* App header — always visible */}
       <header className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setShowMenu(true)}
-            className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1"
+            className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
             title="Menu"
           >
             ☰
           </button>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
-              <span className="text-[var(--color-stage-accent-light)]">📖</span> Rehearsal
+          {tab === 'scripts' || !selectedScript ? (
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
+                <span className="text-[var(--color-stage-accent-light)]">📖</span> Rehearsal
+              </h1>
+              {tab === 'scripts' && (
+                <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
+              )}
+            </div>
+          ) : (
+            <h1 className={`font-bold text-[var(--color-stage-accent-light)] truncate ${scriptTitleClass(selectedScript.name)}`}>
+              {selectedScript.name}
             </h1>
-            <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
-          </div>
+          )}
         </div>
         <button
           onClick={() => setShowSettings(true)}
-          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1"
+          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
           title="Settings"
         >
           ⚙️

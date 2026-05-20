@@ -103,11 +103,8 @@ export function CharacterTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-[var(--color-stage-muted)]">{script.name}</p>
-          <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Characters</h2>
-        </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Characters</h2>
         {hasScenes && (
           <select
             value={sceneMode}
