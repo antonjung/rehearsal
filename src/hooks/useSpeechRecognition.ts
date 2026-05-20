@@ -12,6 +12,9 @@ export interface ListenOptions {
    *  timeouts are extended proportionally if the actor pauses before the line is
    *  likely complete — avoids cutting off mid-line pauses. */
   estimatedMs?: number
+  /** Absolute cap on any single pause duration in ms. Overrides smart extension — move on
+   *  regardless of how much of the line has been spoken. */
+  maxPauseMs?: number
 }
 
 // Fraction of expected words found in spoken text — used for early line-end detection
@@ -36,7 +39,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { expectedText, silenceMs = 1000, estimatedMs } = options
+    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -72,6 +75,8 @@ export function useSpeechRecognition() {
             wait = Math.max(silenceMs, (estimatedMs - elapsed) + silenceMs)
           }
         }
+        // Hard cap — move on regardless of how much has been spoken
+        if (maxPauseMs !== undefined) wait = Math.min(wait, maxPauseMs)
         silenceTimer = setTimeout(finish, wait)
       }
 

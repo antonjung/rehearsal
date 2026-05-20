@@ -225,6 +225,19 @@ export function GlobalSettings({ onClose }: Props) {
                 </div>
 
                 <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-xs text-[var(--color-stage-muted)]">Max pause</span>
+                    <span className="text-xs text-[var(--color-stage-muted)]">{((prefs.maxPauseMs ?? 8000) / 1000).toFixed(0)}s</span>
+                  </div>
+                  <input
+                    type="range" min={2000} max={20000} step={1000}
+                    value={prefs.maxPauseMs ?? 8000}
+                    onChange={(e) => update('maxPauseMs', Number(e.target.value))}
+                    className="w-full accent-[var(--color-stage-accent)]"
+                  />
+                </div>
+
+                <div>
                   <button
                     onClick={() => setShowMicTest((v) => !v)}
                     className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"

@@ -60,6 +60,7 @@ export interface RehearsalSettings {
   voiceCommands?: VoiceCommandWords
   highlighterColor?: 'yellow' | 'pink' | 'green' | 'blue'
   handsFreeEnabled?: boolean
+  maxPauseMs?: number
 }
 
 export interface MarkedBlock {
