@@ -19,6 +19,7 @@ export function SideMenu({ onClose }: Props) {
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}examples/index.json`)
@@ -174,6 +175,40 @@ export function SideMenu({ onClose }: Props) {
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Notes</h3>
             <Notes />
+          </section>
+
+          {/* About */}
+          <section className="space-y-2">
+            <button
+              onClick={() => setAboutOpen((v) => !v)}
+              className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+            >
+              <span>About</span>
+              <span className="text-base leading-none">{aboutOpen ? '▲' : '▼'}</span>
+            </button>
+            {aboutOpen && (
+              <div className="rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-3 space-y-3 text-xs text-[var(--color-stage-muted)]">
+                <p className="text-sm font-semibold text-[var(--color-stage-accent-light)]">OffBook</p>
+                <p>Learn your lines for a play by rehearsing with a full read-through of your script.</p>
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">Getting started</p>
+                  <p>1. Tap <span className="text-[var(--color-stage-text)]">☰</span> and load your script as a .txt or .pdf file.</p>
+                  <p>2. Go to <span className="text-[var(--color-stage-text)]">Characters</span> to see who's in your script and view their lines by scene.</p>
+                  <p>3. Go to <span className="text-[var(--color-stage-text)]">Record</span> to pre-record lines for other characters so they play back in their own voice.</p>
+                  <p>4. Go to <span className="text-[var(--color-stage-text)]">Run through</span>, choose your character, and tap Start.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">In rehearsal</p>
+                  <p>Other characters are read aloud (or played from your recordings). Your lines are shown highlighted — speak them yourself, or choose to have them read with a gap before or after.</p>
+                  <p>Drag the red markers to set a clip region and use <span className="text-[var(--color-stage-text)]">↺</span> to loop it until you have the lines.</p>
+                  <p>Your accuracy is measured as you speak — a warning sounds if it drops below your set threshold.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">Settings <span className="font-normal text-[var(--color-stage-muted)]">(⚙️)</span></p>
+                  <p>Choose your line mode, set speech rate, pick voices per character, adjust accuracy warning threshold, and select a highlighter colour.</p>
+                </div>
+              </div>
+            )}
           </section>
 
         </div>

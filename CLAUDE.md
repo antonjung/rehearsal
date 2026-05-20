@@ -1,9 +1,9 @@
-# rehearsal
+# OffBook
 
 **Live app:** https://antonjung.github.io/rehearsal/
 
 ## overview
-An app to aid learning lines for a play
+OffBook is an app to aid learning lines for a play
 
 ## Functions
 
