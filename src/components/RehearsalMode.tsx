@@ -17,9 +17,9 @@ interface Props {
 
 const HIGHLIGHTER_COLORS: Record<string, React.CSSProperties> = {
   yellow: { background: 'rgba(255, 255, 0, 0.65)',  color: '#111' },
-  pink:   { background: 'rgba(255, 0, 200, 0.48)',  color: '#111' },
-  green:  { background: 'rgba(0, 255, 60, 0.5)',    color: '#111' },
-  blue:   { background: 'rgba(0, 240, 255, 0.52)',  color: '#111' },
+  pink:   { background: 'rgba(255, 0, 200, 0.48)',  color: '#fff' },
+  green:  { background: 'rgba(0, 255, 60, 0.5)',    color: '#fff' },
+  blue:   { background: 'rgba(0, 240, 255, 0.52)',  color: '#fff' },
 }
 
 type HandsFreeCmd =
