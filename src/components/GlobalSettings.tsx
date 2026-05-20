@@ -42,6 +42,7 @@ export function GlobalSettings({ onClose }: Props) {
     errorPromptPhrase: 'The correct line is',
     voiceCommands: DEFAULT_VOICE_COMMANDS,
     highlighterColor: 'yellow' as const,
+    handsFreeEnabled: false,
   }
 
   const cmdWords: VoiceCommandWords = prefs.voiceCommands ?? DEFAULT_VOICE_COMMANDS
@@ -160,6 +161,15 @@ export function GlobalSettings({ onClose }: Props) {
               <ToggleSwitch
                 checked={prefs.readStageDirections}
                 onChange={(v) => update('readStageDirections', v)}
+              />
+            </label>
+
+            {/* Hands-free */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm text-[var(--color-stage-text)]">🎙 Hands-free mode</span>
+              <ToggleSwitch
+                checked={prefs.handsFreeEnabled ?? false}
+                onChange={(v) => update('handsFreeEnabled', v)}
               />
             </label>
 

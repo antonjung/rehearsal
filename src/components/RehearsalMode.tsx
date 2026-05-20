@@ -159,8 +159,9 @@ export function RehearsalMode({ onExit }: Props) {
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [loopEnabled, setLoopEnabled] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
-  const [handsFreeEnabled, setHandsFreeEnabled] = useState(false)
+  const handsFreeEnabled = settings.handsFreeEnabled ?? false
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
   const handsFreeRef = useRef(false)
@@ -516,6 +517,7 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const handlePlay = () => {
+    setShowSummary(false)
     // Stop the idle command listener immediately so its pending listen() doesn't
     // compete with runPlayback's own listen() calls (would block user-line detection).
     idleListeningRef.current = false
@@ -788,10 +790,16 @@ export function RehearsalMode({ onExit }: Props) {
 
         {phase === 'done' && (
           <>
-            <div className="text-center py-6 text-[var(--color-stage-gold)] text-lg font-semibold">
-              🎭 End of scene
+            <div className="text-center py-6 space-y-3">
+              <div className="text-[var(--color-stage-gold)] text-lg font-semibold">🎭 End of scene</div>
+              <button
+                onClick={() => setShowSummary((v) => !v)}
+                className="text-xs px-4 py-1.5 rounded-full border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-muted)] transition-colors"
+              >
+                {showSummary ? 'Hide summary ▲' : 'Summary ▼'}
+              </button>
             </div>
-            <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />
+            {showSummary && <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />}
           </>
         )}
       </div>
@@ -824,7 +832,7 @@ export function RehearsalMode({ onExit }: Props) {
           >⏭</CtrlBtn>
         </div>
 
-        {/* Repeat + Hands-free pills */}
+        {/* Repeat pill */}
         <div className="flex justify-center gap-2 mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
@@ -836,18 +844,6 @@ export function RehearsalMode({ onExit }: Props) {
           >
             ↺ Repeat
           </button>
-          {supported && (
-            <button
-              onClick={() => setHandsFreeEnabled((v) => !v)}
-              className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
-                handsFreeEnabled
-                  ? 'bg-[var(--color-stage-accent)] text-white'
-                  : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
-              }`}
-            >
-              🎙 Hands-free
-            </button>
-          )}
         </div>
 
         {/* Status line */}
