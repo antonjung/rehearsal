@@ -32,6 +32,12 @@ const TYPE_ICONS: Record<LineType, string> = {
   heading: '🎬',
 }
 
+const TYPE_LABELS: Record<LineType, string> = {
+  dialogue: 'Character',
+  direction: 'Direction',
+  heading: 'Heading',
+}
+
 export function ScriptEditor({ script, onClose }: Props) {
   const { updateScript } = useAppStore()
   const [lines, setLines] = useState<EditableLine[]>(() => toEditable(script.lines))
@@ -40,6 +46,8 @@ export function ScriptEditor({ script, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [matchCursor, setMatchCursor] = useState(0)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 300)
@@ -108,6 +116,31 @@ export function ScriptEditor({ script, onClose }: Props) {
     onClose()
   }
 
+  const toggleSelect = (idx: number) => {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  const applyBulkType = (type: LineType) => {
+    setLines((prev) => prev.map((l, i) =>
+      selectedIndices.has(i)
+        ? { ...l, type, character: type === 'dialogue' ? l.character : '' }
+        : l
+    ))
+    setDirty(true)
+    setSelectedIndices(new Set())
+    setSelectMode(false)
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIndices(new Set())
+  }
+
   const allCharacters = [...new Set(
     lines.filter((l) => l.type === 'dialogue' && l.character).map((l) => l.character)
   )].sort()
@@ -122,19 +155,34 @@ export function ScriptEditor({ script, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0">
           <button
-            onClick={onClose}
-            className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+            onClick={selectMode ? exitSelectMode : onClose}
+            className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors shrink-0"
           >
-            ← Cancel
+            ← {selectMode ? 'Cancel' : 'Cancel'}
           </button>
           <h2 className="flex-1 font-semibold text-[var(--color-stage-text)] truncate">{script.name}</h2>
-          <button
-            onClick={handleSave}
-            disabled={!dirty}
-            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-[var(--color-stage-accent)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-          >
-            Save
-          </button>
+          {!selectMode && (
+            <button
+              onClick={() => { setSelectMode(true); setEditingIdx(null) }}
+              className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-2 py-1 rounded border border-[var(--color-stage-border)] shrink-0"
+            >
+              Select
+            </button>
+          )}
+          {!selectMode && (
+            <button
+              onClick={handleSave}
+              disabled={!dirty}
+              className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-[var(--color-stage-accent)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            >
+              Save
+            </button>
+          )}
+          {selectMode && (
+            <span className="text-xs text-[var(--color-stage-muted)]">
+              {selectedIndices.size} selected
+            </span>
+          )}
         </div>
 
         {/* Search bar */}
@@ -173,9 +221,7 @@ export function ScriptEditor({ script, onClose }: Props) {
                 <button
                   onClick={() => { setQuery(''); setDebouncedQuery('') }}
                   className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm leading-none"
-                >
-                  ×
-                </button>
+                >×</button>
               </>
             )}
           </div>
@@ -184,7 +230,8 @@ export function ScriptEditor({ script, onClose }: Props) {
         {/* Lines list */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           {allLines.map(({ line, idx }) => {
-            const isEditing = editingIdx === idx
+            const isEditing = !selectMode && editingIdx === idx
+            const isSelected = selectedIndices.has(idx)
             const isActiveMatch = idx === activeLineIdx
             const isAnyMatch = q && matchIndices.includes(idx)
             return (
@@ -192,7 +239,9 @@ export function ScriptEditor({ script, onClose }: Props) {
                 key={line.id + idx}
                 id={`editor-line-${idx}`}
                 className={`rounded-lg border transition-colors ${
-                  isEditing
+                  isSelected
+                    ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/15'
+                    : isEditing
                     ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/5'
                     : isActiveMatch
                     ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
@@ -211,19 +260,53 @@ export function ScriptEditor({ script, onClose }: Props) {
                     onRemove={() => removeLine(idx)}
                   />
                 ) : (
-                  <ViewRow line={line} highlight={q} onEdit={() => setEditingIdx(idx)} />
+                  <ViewRow
+                    line={line}
+                    highlight={q}
+                    selectMode={selectMode}
+                    isSelected={isSelected}
+                    onEdit={() => selectMode ? toggleSelect(idx) : setEditingIdx(idx)}
+                  />
                 )}
               </div>
             )
           })}
 
-          <button
-            onClick={() => addLineAfter(lines.length - 1)}
-            className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"
-          >
-            + Add line at end
-          </button>
+          {!selectMode && (
+            <button
+              onClick={() => addLineAfter(lines.length - 1)}
+              className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"
+            >
+              + Add line at end
+            </button>
+          )}
         </div>
+
+        {/* Bulk action bar */}
+        {selectMode && (
+          <div className="shrink-0 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3 space-y-2">
+            <p className="text-xs text-[var(--color-stage-muted)]">
+              {selectedIndices.size === 0
+                ? 'Tap lines to select them'
+                : `Set ${selectedIndices.size} line${selectedIndices.size !== 1 ? 's' : ''} to:`}
+            </p>
+            <div className="flex gap-2">
+              {(['dialogue', 'direction', 'heading'] as LineType[]).map((t) => (
+                <button
+                  key={t}
+                  disabled={selectedIndices.size === 0}
+                  onClick={() => applyBulkType(t)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium border transition-colors
+                    disabled:opacity-30
+                    border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)] hover:text-[var(--color-stage-accent-light)]"
+                >
+                  <span>{TYPE_ICONS[t]}</span>
+                  <span>{TYPE_LABELS[t]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
@@ -242,12 +325,33 @@ function hl(text: string, query: string) {
   )
 }
 
-function ViewRow({ line, highlight = '', onEdit }: { line: EditableLine; highlight?: string; onEdit: () => void }) {
+function ViewRow({
+  line,
+  highlight = '',
+  selectMode,
+  isSelected,
+  onEdit,
+}: {
+  line: EditableLine
+  highlight?: string
+  selectMode: boolean
+  isSelected: boolean
+  onEdit: () => void
+}) {
   return (
     <div
       onClick={onEdit}
       className="flex items-start gap-2 px-2 py-1.5 cursor-pointer"
     >
+      {selectMode && (
+        <span className={`shrink-0 mt-0.5 w-4 h-4 rounded border flex items-center justify-center text-[10px] transition-colors ${
+          isSelected
+            ? 'bg-[var(--color-stage-accent)] border-[var(--color-stage-accent)] text-white'
+            : 'border-[var(--color-stage-muted)]'
+        }`}>
+          {isSelected ? '✓' : ''}
+        </span>
+      )}
       <span className="text-xs shrink-0 mt-0.5 opacity-50">{TYPE_ICONS[line.type]}</span>
       <div className="flex-1 min-w-0">
         {line.type === 'dialogue' && line.character && (
