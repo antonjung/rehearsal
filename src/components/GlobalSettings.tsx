@@ -82,48 +82,7 @@ export function GlobalSettings({ onClose }: Props) {
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
 
-          {/* Theme */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Theme</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition-colors ${
-                    theme === t.id
-                      ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]'
-                      : 'border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-muted)]'
-                  }`}
-                >
-                  <span
-                    className="w-4 h-4 rounded-full shrink-0 border border-white/20"
-                    style={{ background: t.swatch }}
-                  />
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Display */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Display</h3>
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-sm text-[var(--color-stage-text)]">Script font size</span>
-                <span className="text-xs text-[var(--color-stage-muted)]">{scriptFontSize}px</span>
-              </div>
-              <input
-                type="range" min={11} max={22} step={1}
-                value={scriptFontSize}
-                onChange={(e) => setScriptFontSize(Number(e.target.value))}
-                className="w-full accent-[var(--color-stage-accent)]"
-              />
-            </div>
-          </section>
-
-          {/* Rehearsal */}
+          {/* Run through */}
           <section className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Run through</h3>
 
@@ -236,19 +195,27 @@ export function GlobalSettings({ onClose }: Props) {
                     className="w-full accent-[var(--color-stage-accent)]"
                   />
                 </div>
-
-                <div>
-                  <button
-                    onClick={() => setShowMicTest((v) => !v)}
-                    className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
-                  >
-                    {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
-                  </button>
-                  {showMicTest && <div className="mt-2"><MicTest /></div>}
-                </div>
               </>
             )}
           </section>
+
+          {/* Script font size */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Script font size</h3>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--color-stage-text)]">Size</span>
+                <span className="text-xs text-[var(--color-stage-muted)]">{scriptFontSize}px</span>
+              </div>
+              <input
+                type="range" min={11} max={22} step={1}
+                value={scriptFontSize}
+                onChange={(e) => setScriptFontSize(Number(e.target.value))}
+                className="w-full accent-[var(--color-stage-accent)]"
+              />
+            </div>
+          </section>
+
           {/* Highlighter colour */}
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Highlighter colour</h3>
@@ -295,6 +262,42 @@ export function GlobalSettings({ onClose }: Props) {
                 />
               </div>
             ))}
+          </section>
+
+          {/* Test microphone */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Microphone</h3>
+            <button
+              onClick={() => setShowMicTest((v) => !v)}
+              className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
+            >
+              {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
+            </button>
+            {showMicTest && <div className="mt-2"><MicTest /></div>}
+          </section>
+
+          {/* Theme */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Theme</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition-colors ${
+                    theme === t.id
+                      ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]'
+                      : 'border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-muted)]'
+                  }`}
+                >
+                  <span
+                    className="w-4 h-4 rounded-full shrink-0 border border-white/20"
+                    style={{ background: t.swatch }}
+                  />
+                  {t.name}
+                </button>
+              ))}
+            </div>
           </section>
 
         </div>
