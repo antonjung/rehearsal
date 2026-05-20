@@ -47,6 +47,7 @@ export function ScriptEditor({ script, onClose }: Props) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [matchCursor, setMatchCursor] = useState(0)
+  const [sceneFilter, setSceneFilter] = useState<string>('')
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
   const [bulkCharMode, setBulkCharMode] = useState(false)
@@ -84,8 +85,11 @@ export function ScriptEditor({ script, onClose }: Props) {
     line.character.toLowerCase().includes(q) ||
     line.type.toLowerCase().includes(q)
 
-  const allLines: Array<{ line: EditableLine; idx: number }> = lines.map((line, idx) => ({ line, idx }))
-  const matchIndices: number[] = q ? lines.flatMap((line, idx) => (matchesLine(line) ? [idx] : [])) : []
+  const activeScene = sceneFilter ? script.scenes.find((s) => s.id === sceneFilter) : null
+  const allLines: Array<{ line: EditableLine; idx: number }> = lines
+    .map((line, idx) => ({ line, idx }))
+    .filter(({ idx }) => !activeScene || (idx >= activeScene.startLineIndex && idx <= activeScene.endLineIndex))
+  const matchIndices: number[] = q ? allLines.flatMap(({ line, idx }) => (matchesLine(line) ? [idx] : [])) : []
 
   const safeMatchCursor = matchIndices.length > 0 ? Math.min(matchCursor, matchIndices.length - 1) : 0
   const activeLineIdx = q && matchIndices.length > 0 ? matchIndices[safeMatchCursor] : null
@@ -237,6 +241,22 @@ export function ScriptEditor({ script, onClose }: Props) {
           </div>
         </div>
 
+        {/* Scene filter */}
+        {script.scenes.length > 0 && (
+          <div className="px-3 py-1.5 border-b border-[var(--color-stage-border)] shrink-0">
+            <select
+              value={sceneFilter}
+              onChange={(e) => { setSceneFilter(e.target.value); setSelectedIndices(new Set()); setEditingIdx(null) }}
+              className="w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
+            >
+              <option value="">Whole script</option>
+              {script.scenes.map((s) => (
+                <option key={s.id} value={s.id}>{s.title}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Lines list */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           {allLines.map(({ line, idx }) => {
@@ -282,7 +302,7 @@ export function ScriptEditor({ script, onClose }: Props) {
             )
           })}
 
-          {!selectMode && (
+          {!selectMode && !sceneFilter && (
             <button
               onClick={() => addLineAfter(lines.length - 1)}
               className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"

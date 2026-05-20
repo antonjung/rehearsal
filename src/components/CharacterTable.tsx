@@ -88,7 +88,9 @@ export function CharacterTable() {
   }
 
   const panelScene = charHighlight
-    ? script.scenes.find((s) => s.id === charHighlight.sceneId) ?? null
+    ? charHighlight.sceneId === '__all__'
+      ? { startLineIndex: 0, endLineIndex: script.lines.length - 1, title: 'All lines' }
+      : script.scenes.find((s) => s.id === charHighlight.sceneId) ?? null
     : null
   const panelGroups = panelScene
     ? groupSceneLines(script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1))
@@ -140,6 +142,18 @@ export function CharacterTable() {
                 >
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-[var(--color-stage-text)]">{char}</span>
+                    {chips.length === 0 && (
+                      <button
+                        onClick={() => toggleChip(char, '__all__')}
+                        className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                          charHighlight?.char === char && charHighlight?.sceneId === '__all__'
+                            ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)]'
+                            : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)]/50'
+                        }`}
+                      >
+                        View
+                      </button>
+                    )}
                     {chips.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {chips.map((s) => {
