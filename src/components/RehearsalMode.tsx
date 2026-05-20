@@ -794,10 +794,23 @@ export function RehearsalMode({ onExit }: Props) {
           </div>
         )}
 
-        {showSummary && (
-          <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />
-        )}
       </div>
+
+      {/* Summary modal */}
+      {showSummary && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setShowSummary(false)} />
+          <div className="fixed inset-x-4 top-16 bottom-16 z-50 flex flex-col rounded-2xl bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0">
+              <span className="font-semibold text-[var(--color-stage-text)]">Summary</span>
+              <button onClick={() => setShowSummary(false)} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Controls */}
       <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
