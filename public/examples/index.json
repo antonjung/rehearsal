@@ -1,7 +1,32 @@
 [
   {
+    "name": "Gas Light",
+    "file": "gas-light.txt",
+    "description": "Patrick Hamilton · thriller"
+  },
+  {
+    "name": "Macbeth",
+    "file": "macbeth.txt",
+    "description": "Shakespeare"
+  },
+  {
+    "name": "Romeo & Juliet",
+    "file": "romeo-and-juliet.txt",
+    "description": "Shakespeare"
+  },
+  {
+    "name": "The Crucible",
+    "file": "the-crucible.pdf",
+    "description": "Arthur Miller"
+  },
+  {
+    "name": "The Thane of Cawdor",
+    "file": "the-thane-of-cawdor.pdf",
+    "description": "New play"
+  },
+  {
     "name": "A Midsummer Night's Dream — Act III Scene 1",
     "file": "midsummer-act3-scene1.txt",
-    "description": "Shakespeare · Bottom, Quince, Snout, Starveling and Titania"
+    "description": "Shakespeare · excerpt"
   }
 ]

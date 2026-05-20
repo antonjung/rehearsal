@@ -6,18 +6,17 @@ import { RehearsalSetup } from './components/RehearsalSetup'
 import { RehearsalMode } from './components/RehearsalMode'
 import { SplashScreen } from './components/SplashScreen'
 import { GlobalSettings } from './components/GlobalSettings'
-import { Notes } from './components/Notes'
+import { SideMenu } from './components/SideMenu'
 import { useAppStore } from './store/useAppStore'
 import { applyTheme } from './utils/themes'
 
-type Tab = 'scripts' | 'characters' | 'record' | 'rehearse' | 'notes'
+type Tab = 'scripts' | 'characters' | 'record' | 'rehearse'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scripts', label: 'Scripts', icon: '📜' },
   { id: 'characters', label: 'Characters', icon: '🎭' },
   { id: 'record', label: 'Record', icon: '🎙' },
   { id: 'rehearse', label: 'Run through', icon: '📖' },
-  { id: 'notes', label: 'Notes', icon: '📝' },
 ]
 
 export default function App() {
@@ -25,6 +24,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('scripts')
   const [rehearsing, setRehearsing] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const { theme } = useAppStore()
 
   // Apply theme whenever it changes
@@ -38,18 +38,27 @@ export default function App() {
     <div className="h-full flex flex-col max-w-2xl mx-auto">
       {/* App header — always visible */}
       <header className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
-            <span className="text-[var(--color-stage-accent-light)]">📖</span> Rehearsal
-          </h1>
-          <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowMenu(true)}
+            className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1"
+            title="Menu"
+          >
+            ☰
+          </button>
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
+              <span className="text-[var(--color-stage-accent-light)]">📖</span> Rehearsal
+            </h1>
+            <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
+          </div>
         </div>
         <button
           onClick={() => setShowSettings(true)}
           className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1"
           title="Settings"
         >
-          ☰
+          ⚙️
         </button>
       </header>
 
@@ -67,7 +76,6 @@ export default function App() {
             {tab === 'rehearse' && (
               <RehearsalSetup onStart={() => setRehearsing(true)} />
             )}
-            {tab === 'notes' && <Notes />}
           </main>
 
           {/* Footer nav */}
@@ -92,6 +100,9 @@ export default function App() {
 
       {/* Global settings panel */}
       {showSettings && <GlobalSettings onClose={() => setShowSettings(false)} />}
+
+      {/* Side menu */}
+      {showMenu && <SideMenu onClose={() => setShowMenu(false)} />}
     </div>
   )
 }
