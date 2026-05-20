@@ -38,9 +38,15 @@ export function ScriptEditor({ script, onClose }: Props) {
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [dirty, setDirty] = useState(false)
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [matchCursor, setMatchCursor] = useState(0)
 
-  const q = query.trim().toLowerCase()
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 300)
+    return () => clearTimeout(t)
+  }, [query])
+
+  const q = debouncedQuery
   const matchesLine = (line: EditableLine) =>
     line.text.toLowerCase().includes(q) ||
     line.character.toLowerCase().includes(q) ||
@@ -165,7 +171,7 @@ export function ScriptEditor({ script, onClose }: Props) {
                   title="Next match"
                 >▼</button>
                 <button
-                  onClick={() => setQuery('')}
+                  onClick={() => { setQuery(''); setDebouncedQuery('') }}
                   className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm leading-none"
                 >
                   ×
