@@ -16,17 +16,16 @@ export default defineConfig(({ command }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+      includeAssets: ['offbook.png'],
       manifest: {
-        name: 'Rehearsal',
-        short_name: 'Rehearsal',
+        name: 'OffBook',
+        short_name: 'OffBook',
         description: 'Learn your lines for a play',
         theme_color: '#1e1b4b',
         background_color: '#0f0e17',
         display: 'standalone',
         icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: 'offbook.png', sizes: '412x382', type: 'image/png' },
         ],
       },
       workbox: {

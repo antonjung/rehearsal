@@ -58,8 +58,8 @@ export default function App() {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-14">
           {tab === 'scripts' || !selectedScript ? (
             <div className="flex items-baseline gap-2">
-              <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
-                <span className="text-[var(--color-stage-accent-light)]">📖</span> Rehearsal
+              <h1 className="text-2xl font-bold text-[var(--color-stage-accent-light)]">
+                OffBook
               </h1>
               {tab === 'scripts' && (
                 <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
