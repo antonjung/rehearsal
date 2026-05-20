@@ -125,7 +125,7 @@ export function GlobalSettings({ onClose }: Props) {
 
           {/* Rehearsal */}
           <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Rehearsal</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Run through</h3>
 
             {/* Line mode */}
             <div className="space-y-1.5">

@@ -16,7 +16,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scripts', label: 'Scripts', icon: '📜' },
   { id: 'characters', label: 'Characters', icon: '🎭' },
   { id: 'record', label: 'Record', icon: '🎙' },
-  { id: 'rehearse', label: 'Rehearse', icon: '🎤' },
+  { id: 'rehearse', label: 'Run through', icon: '📖' },
   { id: 'notes', label: 'Notes', icon: '📝' },
 ]
 
@@ -40,7 +40,7 @@ export default function App() {
       <header className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
         <div className="flex items-baseline gap-2">
           <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
-            <span className="text-[var(--color-stage-accent-light)]">🎭</span> Rehearsal
+            <span className="text-[var(--color-stage-accent-light)]">📖</span> Rehearsal
           </h1>
           <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
         </div>

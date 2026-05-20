@@ -19,7 +19,7 @@ export function AccuracySummary({ script, settings, accuracies, transcripts }: P
   if (!accuracyEnabled || attempted.length === 0) {
     return (
       <div className="rounded-xl border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] p-5 mt-2">
-        <h3 className="font-semibold text-[var(--color-stage-text)] mb-1">Rehearsal complete</h3>
+        <h3 className="font-semibold text-[var(--color-stage-text)] mb-1">Run through complete</h3>
         <p className="text-sm text-[var(--color-stage-muted)]">
           {!accuracyEnabled ? 'Accuracy checking was off.' : 'No lines were analysed — check mic permissions.'}
         </p>
@@ -36,7 +36,7 @@ export function AccuracySummary({ script, settings, accuracies, transcripts }: P
   return (
     <div className="rounded-xl border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] p-5 mt-6 space-y-4">
       <div className="flex items-baseline gap-3">
-        <h3 className="font-semibold text-[var(--color-stage-text)]">Rehearsal summary</h3>
+        <h3 className="font-semibold text-[var(--color-stage-text)]">Run through summary</h3>
         <span className={`text-2xl font-bold tabular-nums ${avgColour}`}>{avg}%</span>
         <span className="text-xs text-[var(--color-stage-muted)]">
           avg · {attempted.length} line{attempted.length !== 1 ? 's' : ''} checked

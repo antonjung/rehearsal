@@ -789,18 +789,13 @@ export function RehearsalMode({ onExit }: Props) {
         })}
 
         {phase === 'done' && (
-          <>
-            <div className="text-center py-6 space-y-3">
-              <div className="text-[var(--color-stage-gold)] text-lg font-semibold">🎭 End of scene</div>
-              <button
-                onClick={() => setShowSummary((v) => !v)}
-                className="text-xs px-4 py-1.5 rounded-full border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-muted)] transition-colors"
-              >
-                {showSummary ? 'Hide summary ▲' : 'Summary ▼'}
-              </button>
-            </div>
-            {showSummary && <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />}
-          </>
+          <div className="text-center py-6 text-[var(--color-stage-gold)] text-lg font-semibold">
+            🎭 End of scene
+          </div>
+        )}
+
+        {showSummary && (
+          <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />
         )}
       </div>
 
@@ -832,7 +827,7 @@ export function RehearsalMode({ onExit }: Props) {
           >⏭</CtrlBtn>
         </div>
 
-        {/* Repeat pill */}
+        {/* Repeat + Summary pills */}
         <div className="flex justify-center gap-2 mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
@@ -844,6 +839,18 @@ export function RehearsalMode({ onExit }: Props) {
           >
             ↺ Repeat
           </button>
+          {Object.keys(accuracies).length > 0 && (
+            <button
+              onClick={() => setShowSummary((v) => !v)}
+              className={`text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
+                showSummary
+                  ? 'bg-[var(--color-stage-accent)] text-white'
+                  : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
+              }`}
+            >
+              📊 Summary
+            </button>
+          )}
         </div>
 
         {/* Status line */}
