@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { rebuildScript } from '../utils/rebuildScript'
 import type { Script, ScriptLine, LineType } from '../types'
@@ -38,19 +38,28 @@ export function ScriptEditor({ script, onClose }: Props) {
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [dirty, setDirty] = useState(false)
   const [query, setQuery] = useState('')
+  const [matchCursor, setMatchCursor] = useState(0)
 
   const q = query.trim().toLowerCase()
   const matchesLine = (line: EditableLine) =>
-    !q ||
     line.text.toLowerCase().includes(q) ||
     line.character.toLowerCase().includes(q) ||
     line.type.toLowerCase().includes(q)
 
-  const visibleLines: Array<{ line: EditableLine; idx: number }> = lines
-    .map((line, idx) => ({ line, idx }))
-    .filter(({ line }) => matchesLine(line))
+  const allLines: Array<{ line: EditableLine; idx: number }> = lines.map((line, idx) => ({ line, idx }))
+  const matchIndices: number[] = q ? lines.flatMap((line, idx) => (matchesLine(line) ? [idx] : [])) : []
 
-  const matchCount = q ? visibleLines.length : null
+  const safeMatchCursor = matchIndices.length > 0 ? Math.min(matchCursor, matchIndices.length - 1) : 0
+  const activeLineIdx = q && matchIndices.length > 0 ? matchIndices[safeMatchCursor] : null
+
+  useEffect(() => { setMatchCursor(0) }, [q])
+
+  useEffect(() => {
+    if (activeLineIdx === null) return
+    setTimeout(() => {
+      document.getElementById(`editor-line-${activeLineIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 10)
+  }, [activeLineIdx])
 
   const update = (idx: number, patch: Partial<EditableLine>) => {
     setLines((prev) => prev.map((l, i) => i === idx ? { ...l, ...patch } : l))
@@ -130,14 +139,31 @@ export function ScriptEditor({ script, onClose }: Props) {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (!q || matchIndices.length === 0) return
+                if (e.key === 'Enter') { e.preventDefault(); setMatchCursor((c) => (c + 1) % matchIndices.length) }
+                if (e.key === 'F3') { e.preventDefault(); setMatchCursor((c) => (c + 1) % matchIndices.length) }
+              }}
               placeholder="Search text, character, type…"
               className="flex-1 bg-transparent text-sm text-[var(--color-stage-text)] placeholder:text-[var(--color-stage-muted)] focus:outline-none"
             />
             {q && (
               <>
                 <span className="text-xs text-[var(--color-stage-muted)] shrink-0">
-                  {matchCount} match{matchCount !== 1 ? 'es' : ''}
+                  {matchIndices.length === 0 ? 'No matches' : `${safeMatchCursor + 1} of ${matchIndices.length}`}
                 </span>
+                <button
+                  disabled={matchIndices.length === 0}
+                  onClick={() => setMatchCursor((c) => (c - 1 + matchIndices.length) % matchIndices.length)}
+                  className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 text-xs leading-none px-0.5"
+                  title="Previous match"
+                >▲</button>
+                <button
+                  disabled={matchIndices.length === 0}
+                  onClick={() => setMatchCursor((c) => (c + 1) % matchIndices.length)}
+                  className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 text-xs leading-none px-0.5"
+                  title="Next match"
+                >▼</button>
                 <button
                   onClick={() => setQuery('')}
                   className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm leading-none"
@@ -151,14 +177,21 @@ export function ScriptEditor({ script, onClose }: Props) {
 
         {/* Lines list */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-          {visibleLines.map(({ line, idx }) => {
+          {allLines.map(({ line, idx }) => {
             const isEditing = editingIdx === idx
+            const isActiveMatch = idx === activeLineIdx
+            const isAnyMatch = q && matchIndices.includes(idx)
             return (
               <div
                 key={line.id + idx}
+                id={`editor-line-${idx}`}
                 className={`rounded-lg border transition-colors ${
                   isEditing
                     ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/5'
+                    : isActiveMatch
+                    ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
+                    : isAnyMatch
+                    ? 'border-[var(--color-stage-border)] bg-amber-400/5'
                     : 'border-transparent hover:border-[var(--color-stage-border)]'
                 }`}
               >
@@ -178,14 +211,12 @@ export function ScriptEditor({ script, onClose }: Props) {
             )
           })}
 
-          {!q && (
-            <button
-              onClick={() => addLineAfter(lines.length - 1)}
-              className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"
-            >
-              + Add line at end
-            </button>
-          )}
+          <button
+            onClick={() => addLineAfter(lines.length - 1)}
+            className="w-full py-2 text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] border border-dashed border-[var(--color-stage-border)] rounded-lg transition-colors"
+          >
+            + Add line at end
+          </button>
         </div>
       </div>
     </>
