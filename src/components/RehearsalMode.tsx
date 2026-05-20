@@ -15,11 +15,11 @@ interface Props {
   onExit: () => void
 }
 
-const HIGHLIGHTER_COLORS: Record<string, string> = {
-  yellow: 'rgba(255, 255, 0, 0.65)',
-  pink:   'rgba(255, 0, 200, 0.48)',
-  green:  'rgba(0, 255, 60, 0.5)',
-  blue:   'rgba(0, 240, 255, 0.52)',
+const HIGHLIGHTER_COLORS: Record<string, React.CSSProperties> = {
+  yellow: { background: 'rgba(255, 255, 0, 0.65)',  color: '#111' },
+  pink:   { background: 'rgba(255, 0, 200, 0.48)',  color: '#111' },
+  green:  { background: 'rgba(0, 255, 60, 0.5)',    color: '#111' },
+  blue:   { background: 'rgba(0, 240, 255, 0.52)',  color: '#111' },
 }
 
 type HandsFreeCmd =
@@ -767,7 +767,7 @@ export function RehearsalMode({ onExit }: Props) {
                 transcript={transcripts[group.startIdx] ?? ''}
                 wordDiff={wordDiffs[group.startIdx] ?? []}
                 threshold={settings.accuracyWarningThreshold}
-                highlightBg={isMyLine ? HIGHLIGHTER_COLORS[settings.highlighterColor ?? 'yellow'] : undefined}
+                highlightStyle={isMyLine ? HIGHLIGHTER_COLORS[settings.highlighterColor ?? 'yellow'] : undefined}
                 onSelect={() => handleLineSelect(group.startIdx)}
                 onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
                 onRecord={
@@ -939,7 +939,7 @@ interface LineRowProps {
   transcript: string
   wordDiff: WordDiff[]
   threshold: number
-  highlightBg?: string
+  highlightStyle?: React.CSSProperties
   onSelect: () => void
   onReveal?: () => void
   onRecord?: () => void
@@ -949,7 +949,7 @@ interface LineRowProps {
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible,
-  accuracy, threshold, highlightBg,
+  accuracy, threshold, highlightStyle,
   onSelect, onReveal, onRecord, isRecordingThis, anyRecording, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -1026,7 +1026,7 @@ const LineRow = ({
           {lineVisible ? (
             <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
               {group.text.split('\n').map((t, idx) => (
-                <span key={idx} className="block" style={highlightBg ? { background: highlightBg, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
+                <span key={idx} className="block" style={highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
               ))}
             </span>
           ) : (
@@ -1035,7 +1035,7 @@ const LineRow = ({
               style={{ fontSize: 'var(--script-font-size, 14px)', filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }}
             >
               {group.text.split('\n').map((t, idx) => (
-                <span key={idx} className="block" style={highlightBg ? { background: highlightBg, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
+                <span key={idx} className="block" style={highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
               ))}
             </span>
           )}
