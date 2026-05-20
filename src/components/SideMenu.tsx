@@ -78,7 +78,7 @@ export function SideMenu({ onClose }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-stage-border)] shrink-0">
-          <span className="font-semibold text-[var(--color-stage-accent-light)]">OffBook</span>
+          <img src="offbook.png" alt="OffBook" style={{ height: 36, width: 'auto' }} />
           <button onClick={onClose} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none px-1">✕</button>
         </div>
 
@@ -163,6 +163,7 @@ export function SideMenu({ onClose }: Props) {
             </button>
             {aboutOpen && (
               <div className="mt-2 rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-3 space-y-3 text-xs text-[var(--color-stage-muted)]">
+                <img src="offbook.png" alt="OffBook" style={{ height: 40, width: 'auto' }} />
                 <p>Learn your lines for a play by rehearsing with a full read-through of your script.</p>
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Getting started</p>
