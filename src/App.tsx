@@ -65,7 +65,7 @@ export default function App() {
         {/* Centred title */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-14">
           {tab === 'scripts' || !selectedScript ? (
-            <h1 className="offbook-title text-3xl">OffBook</h1>
+            <h1 className="cueline-title text-3xl">CueLine</h1>
           ) : (
             <h1 className={`font-bold text-[var(--color-stage-accent-light)] truncate text-center ${scriptTitleClass(selectedScript.name)}`}>
               {selectedScript.name}

@@ -16,16 +16,16 @@ export default defineConfig(({ command }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['offbook.png'],
+      includeAssets: ['cueline.png'],
       manifest: {
-        name: 'OffBook',
-        short_name: 'OffBook',
+        name: 'CueLine',
+        short_name: 'CueLine',
         description: 'Learn your lines for a play',
         theme_color: '#1e1b4b',
         background_color: '#0f0e17',
         display: 'standalone',
         icons: [
-          { src: 'offbook.png', sizes: '412x382', type: 'image/png' },
+          { src: 'cueline.png', sizes: '412x382', type: 'image/png' },
         ],
       },
       workbox: {

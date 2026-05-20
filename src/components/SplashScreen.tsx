@@ -21,7 +21,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         transform: ready ? 'scale(1)' : 'scale(0.35)',
         opacity: ready ? 1 : 0,
       }}>
-        <img src="offbook.png" alt="OffBook" style={{ width: 280, height: 'auto', display: 'block' }} />
+        <img src="cueline.png" alt="CueLine" style={{ width: 280, height: 'auto', display: 'block' }} />
       </div>
     </div>
   )

@@ -22,10 +22,6 @@ const isSceneOnly = (s: string) =>
   /^Scene\s+\d+/i.test(s) ||
   /^(PROLOGUE|EPILOGUE|INDUCTION)$/i.test(s)
 
-// Parenthetical or bracketed direction
-const isParenDirection = (s: string) =>
-  (s.startsWith('(') && s.endsWith(')')) || s.startsWith('[')
-
 // "Enter the Sisters", "Exeunt", "Exit Ross", "Exeunt all"
 const isEnterExit = (s: string) => /^(Enter|Exit|Exeunt)\b/i.test(s)
 
@@ -46,6 +42,9 @@ export function parseScript(text: string, name: string): Script {
   let idx = 0
   let currentCharacter: string | null = null
   let playStarted = false
+  // State for multi-line direction that opens on one line and closes on another
+  let pendingDirOpener: '(' | '[' | null = null
+  let pendingDirText = ''
 
   let currentAct = ''
   let currentSceneTitle = ''
@@ -70,20 +69,60 @@ export function parseScript(text: string, name: string): Script {
     sceneStartLineIdx = -1
   }
 
+  // Emit dialogue text for `char`, extracting any inline (…) or […] as direction lines.
+  // Direction segments are emitted in-place; surrounding text becomes dialogue lines.
+  // If a bracket opens but doesn't close within `text`, sets pendingDirOpener/Text for
+  // the next raw line to continue.
+  const emitDialogue = (dialogueText: string, char: string) => {
+    let remaining = dialogueText.trim()
+    while (remaining.length > 0) {
+      const pIdx = remaining.indexOf('(')
+      const bIdx = remaining.indexOf('[')
+      const openIdx = pIdx < 0 ? bIdx : bIdx < 0 ? pIdx : Math.min(pIdx, bIdx)
+
+      if (openIdx < 0) {
+        lines.push(mkLine(idx++, 'dialogue', remaining, char))
+        break
+      }
+
+      const openCh = remaining[openIdx] as '(' | '['
+      const closer = openCh === '(' ? ')' : ']'
+      const before = remaining.slice(0, openIdx).trim()
+      const fromOpen = remaining.slice(openIdx)
+      const closeIdx = fromOpen.indexOf(closer)
+
+      if (before) lines.push(mkLine(idx++, 'dialogue', before, char))
+
+      if (closeIdx >= 0) {
+        lines.push(mkLine(idx++, 'direction', fromOpen.slice(0, closeIdx + 1)))
+        remaining = fromOpen.slice(closeIdx + 1).trim()
+      } else {
+        // Bracket opens here but closes on a later line
+        pendingDirOpener = openCh
+        pendingDirText = fromOpen
+        remaining = ''
+      }
+    }
+  }
+
   for (const raw of rawLines) {
     const trimmed = raw.trim()
 
     if (!trimmed || isSeparator(trimmed) || isPageNumber(trimmed)) continue
 
-    // ── Headings ──────────────────────────────────────────────────────────────
+    // ── Headings always break any pending multi-line direction ────────────────
+    if (isActScene(trimmed) || isActOnly(trimmed) || isSceneOnly(trimmed)) {
+      pendingDirOpener = null
+      pendingDirText = ''
+    }
+
     if (isActScene(trimmed)) {
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
-      // Preserve full title but split act/scene for tracking
       const actMatch = trimmed.match(/^(ACT\s+[\dIVXivx]+)/i)
       currentAct = actMatch ? actMatch[1].trim() : ''
-      currentSceneTitle = trimmed  // use full line as the scene title
+      currentSceneTitle = trimmed
       sceneStartLineIdx = lines.length
       lines.push(mkLine(idx++, 'heading', trimmed))
       continue
@@ -109,14 +148,30 @@ export function parseScript(text: string, name: string): Script {
       continue
     }
 
-    // Stage directions in [] or () are always recognised, even before play starts
+    // ── Continue accumulating a multi-line direction ───────────────────────────
+    if (pendingDirOpener !== null) {
+      const closer = pendingDirOpener === '(' ? ')' : ']'
+      const closeIdx = trimmed.indexOf(closer)
+      if (closeIdx >= 0) {
+        const dirFull = (pendingDirText + ' ' + trimmed.slice(0, closeIdx + 1)).trim()
+        lines.push(mkLine(idx++, 'direction', dirFull))
+        pendingDirOpener = null
+        pendingDirText = ''
+        const rest = trimmed.slice(closeIdx + 1).trim()
+        if (rest && currentCharacter) emitDialogue(rest, currentCharacter)
+      } else {
+        pendingDirText += ' ' + trimmed
+      }
+      continue
+    }
+
+    // Stage directions in [] or () that occupy the whole line — recognised even before play starts
     if (trimmed.startsWith('[') || (trimmed.startsWith('(') && trimmed.endsWith(')'))) {
       lines.push(mkLine(idx++, 'direction', trimmed))
       continue
     }
 
-    // Scripts without ACT/SCENE headings (e.g. radio play format): a valid
-    // "CHARACTER: dialogue" line triggers parsing to start
+    // Scripts without ACT/SCENE headings: a valid "CHARACTER: dialogue" triggers parsing
     if (!playStarted) {
       const peek = trimmed.match(/^([A-Z][A-Z0-9\s\-'.]*[A-Z0-9])\s*:\s+.+$/)
       if (peek) {
@@ -129,18 +184,13 @@ export function parseScript(text: string, name: string): Script {
     if (!playStarted) continue
 
     // ── Directions ────────────────────────────────────────────────────────────
-    if (isParenDirection(trimmed)) {
-      lines.push(mkLine(idx++, 'direction', trimmed))
-      continue
-    }
-
     if (isEnterExit(trimmed)) {
       currentCharacter = null
       lines.push(mkLine(idx++, 'direction', trimmed))
       continue
     }
 
-    // ── Inline "CHARACTER: dialogue" (e.g. The Crucible) ────────────────────
+    // ── Inline "CHARACTER: dialogue" ────────────────────────────────────────
     const colonMatch = trimmed.match(/^([A-Z][A-Z0-9\s\-'.]*[A-Z0-9])(?:,)?\s*:\s+(.+)$/)
     if (colonMatch) {
       const charName = colonMatch[1].trim()
@@ -149,10 +199,9 @@ export function parseScript(text: string, name: string): Script {
         characterSet.add(charName)
         sceneCharacters.add(charName)
         currentCharacter = charName
-        lines.push(mkLine(idx++, 'dialogue', dialogue, charName))
+        emitDialogue(dialogue, charName)
         continue
       }
-      // LABEL_KEYWORDS match → treat as direction
       if (LABEL_KEYWORDS.has(charName)) {
         lines.push(mkLine(idx++, 'direction', trimmed))
         continue
@@ -168,7 +217,7 @@ export function parseScript(text: string, name: string): Script {
         characterSet.add(charName)
         sceneCharacters.add(charName)
         currentCharacter = charName
-        lines.push(mkLine(idx++, 'dialogue', dialogue, charName))
+        emitDialogue(dialogue, charName)
         continue
       }
     }
@@ -184,7 +233,7 @@ export function parseScript(text: string, name: string): Script {
 
     // ── Dialogue continuation or bare direction ───────────────────────────────
     if (currentCharacter) {
-      lines.push(mkLine(idx++, 'dialogue', trimmed, currentCharacter))
+      emitDialogue(trimmed, currentCharacter)
     } else {
       lines.push(mkLine(idx++, 'direction', trimmed))
     }

@@ -1,9 +1,9 @@
-# OffBook
+# CueLine
 
 **Live app:** https://antonjung.github.io/rehearsal/
 
 ## overview
-OffBook is an app to aid learning lines for a play
+CueLine is an app to aid learning lines for a play
 
 ## Functions
 
