@@ -10,12 +10,13 @@ interface ExampleMeta { name: string; file: string; description: string }
 interface Props { onClose: () => void }
 
 export function SideMenu({ onClose }: Props) {
-  const { scripts, addScript, removeScript, selectScript } = useAppStore()
+  const { scripts, notes, addScript, removeScript, selectScript } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
@@ -85,14 +86,12 @@ export function SideMenu({ onClose }: Props) {
 
           {/* Load script */}
           <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] mb-3">Load script</p>
             <button
               disabled={importing}
               onClick={() => inputRef.current?.click()}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:border-[var(--color-stage-accent)] hover:text-[var(--color-stage-text)] transition-colors disabled:opacity-40"
+              className="w-full py-2.5 rounded-xl bg-[var(--color-stage-accent)] text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
             >
-              <span className="text-xl">{importing && !loadingExample ? '⏳' : '📂'}</span>
-              <span className="text-sm">{importing && !loadingExample ? 'Importing…' : 'Browse for .txt or .pdf'}</span>
+              {importing && !loadingExample ? 'Importing…' : 'Load script'}
             </button>
             <input ref={inputRef} type="file" accept=".txt,.pdf" multiple className="hidden"
               onChange={(e) => { void handleFiles(e.target.files) }} />
@@ -138,8 +137,19 @@ export function SideMenu({ onClose }: Props) {
 
           {/* Notes */}
           <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] mb-3">Notes</p>
-            <Notes />
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Notes</span>
+              {notes.length > 0 && (
+                <button
+                  onClick={() => setNotesOpen((v) => !v)}
+                  className="flex items-center gap-1 text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+                >
+                  <span>{notes.length}</span>
+                  <span>{notesOpen ? '▲' : '▼'}</span>
+                </button>
+              )}
+            </div>
+            <Notes listOpen={notesOpen} />
           </div>
 
           {/* About */}
