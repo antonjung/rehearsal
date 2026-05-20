@@ -1,1 +1,1 @@
-{"name":"OffBook","short_name":"OffBook","description":"Learn your lines for a play","start_url":"/rehearsal/","display":"standalone","background_color":"#0f0e17","theme_color":"#1e1b4b","lang":"en","scope":"/rehearsal/","icons":[{"src":"offbook.png","sizes":"412x382","type":"image/png"}]}
+{"name":"CueLine","short_name":"CueLine","description":"Learn your lines for a play","start_url":"/rehearsal/","display":"standalone","background_color":"#0f0e17","theme_color":"#1e1b4b","lang":"en","scope":"/rehearsal/","icons":[{"src":"cueline.png","sizes":"412x382","type":"image/png"}]}
