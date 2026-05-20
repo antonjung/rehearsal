@@ -15,6 +15,13 @@ interface Props {
   onExit: () => void
 }
 
+const HIGHLIGHTER_COLORS: Record<string, string> = {
+  yellow: 'rgba(255, 235, 0, 0.5)',
+  pink:   'rgba(255, 80, 165, 0.42)',
+  green:  'rgba(0, 240, 100, 0.42)',
+  blue:   'rgba(0, 200, 255, 0.45)',
+}
+
 type HandsFreeCmd =
   | { type: 'stop' }
   | { type: 'back'; n: number }
@@ -760,6 +767,7 @@ export function RehearsalMode({ onExit }: Props) {
                 transcript={transcripts[group.startIdx] ?? ''}
                 wordDiff={wordDiffs[group.startIdx] ?? []}
                 threshold={settings.accuracyWarningThreshold}
+                highlightBg={isMyLine ? HIGHLIGHTER_COLORS[settings.highlighterColor ?? 'yellow'] : undefined}
                 onSelect={() => handleLineSelect(group.startIdx)}
                 onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
                 onRecord={
@@ -931,6 +939,7 @@ interface LineRowProps {
   transcript: string
   wordDiff: WordDiff[]
   threshold: number
+  highlightBg?: string
   onSelect: () => void
   onReveal?: () => void
   onRecord?: () => void
@@ -940,7 +949,7 @@ interface LineRowProps {
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible,
-  accuracy, threshold,
+  accuracy, threshold, highlightBg,
   onSelect, onReveal, onRecord, isRecordingThis, anyRecording, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -980,11 +989,9 @@ const LineRow = ({
       onClick={onSelect}
       className={`rounded-lg px-2 py-2 transition-colors cursor-pointer ${
         isActiveMyLine
-          ? 'bg-[var(--color-stage-accent)]/20 ring-1 ring-[var(--color-stage-accent)]'
+          ? 'ring-1 ring-[var(--color-stage-accent)]'
           : isActiveLine
           ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
-          : isMyLine
-          ? 'bg-[var(--color-stage-accent)]/10'
           : isCurrent
           ? 'bg-[var(--color-stage-surface)]'
           : ''
@@ -1019,7 +1026,7 @@ const LineRow = ({
           {lineVisible ? (
             <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
               {group.text.split('\n').map((t, idx) => (
-                <span key={idx} className="block">{t}</span>
+                <span key={idx} className="block" style={highlightBg ? { background: highlightBg, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
               ))}
             </span>
           ) : (
@@ -1028,7 +1035,7 @@ const LineRow = ({
               style={{ fontSize: 'var(--script-font-size, 14px)', filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }}
             >
               {group.text.split('\n').map((t, idx) => (
-                <span key={idx} className="block">{t}</span>
+                <span key={idx} className="block" style={highlightBg ? { background: highlightBg, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
               ))}
             </span>
           )}

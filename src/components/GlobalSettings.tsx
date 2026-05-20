@@ -5,6 +5,13 @@ import { useState } from 'react'
 import type { MyLineMode, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
+const HIGHLIGHTER_OPTIONS: { value: 'yellow' | 'pink' | 'green' | 'blue'; label: string; color: string }[] = [
+  { value: 'yellow', label: 'Yellow', color: 'rgba(255, 235, 0, 0.7)' },
+  { value: 'pink',   label: 'Pink',   color: 'rgba(255, 80, 165, 0.6)' },
+  { value: 'green',  label: 'Green',  color: 'rgba(0, 240, 100, 0.6)' },
+  { value: 'blue',   label: 'Blue',   color: 'rgba(0, 200, 255, 0.65)' },
+]
+
 interface Props {
   onClose: () => void
 }
@@ -34,6 +41,7 @@ export function GlobalSettings({ onClose }: Props) {
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
     voiceCommands: DEFAULT_VOICE_COMMANDS,
+    highlighterColor: 'yellow' as const,
   }
 
   const cmdWords: VoiceCommandWords = prefs.voiceCommands ?? DEFAULT_VOICE_COMMANDS
@@ -218,6 +226,29 @@ export function GlobalSettings({ onClose }: Props) {
               </>
             )}
           </section>
+          {/* Highlighter colour */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Highlighter colour</h3>
+            <div className="flex gap-3">
+              {HIGHLIGHTER_OPTIONS.map((opt) => {
+                const selected = (prefs.highlighterColor ?? 'yellow') === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => update('highlighterColor', opt.value)}
+                    title={opt.label}
+                    className={`w-9 h-9 rounded-full border-2 transition-all ${
+                      selected
+                        ? 'border-white scale-110 shadow-md'
+                        : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                    style={{ background: opt.color }}
+                  />
+                )
+              })}
+            </div>
+          </section>
+
           {/* Voice commands */}
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Voice commands</h3>

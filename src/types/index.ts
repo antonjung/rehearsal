@@ -58,6 +58,7 @@ export interface RehearsalSettings {
   errorPromptEnabled: boolean
   errorPromptPhrase: string
   voiceCommands?: VoiceCommandWords
+  highlighterColor?: 'yellow' | 'pink' | 'green' | 'blue'
 }
 
 export interface MarkedBlock {
