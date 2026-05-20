@@ -34,8 +34,8 @@ const isSeparator = (s: string) => /^[=\-]{3,}$/.test(s)
 // Lone page numbers produced by PDF extraction
 const isPageNumber = (s: string) => /^\d{1,4}$/.test(s)
 
-// Non-character all-caps keywords used as script labels
-const LABEL_KEYWORDS = new Set(['SETTING', 'SCENE', 'TIME', 'PLACE', 'NOTE', 'NOTES', 'CAST'])
+// Non-character all-caps keywords used as script labels or production directions
+const LABEL_KEYWORDS = new Set(['SETTING', 'SCENE', 'TIME', 'PLACE', 'NOTE', 'NOTES', 'CAST', 'MUSIC', 'SOUND', 'SFX', 'EFFECTS', 'SFXS'])
 
 // ── Main parser ───────────────────────────────────────────────────────────────
 
@@ -109,6 +109,17 @@ export function parseScript(text: string, name: string): Script {
       continue
     }
 
+    // Scripts without ACT/SCENE headings (e.g. radio play format): a valid
+    // "CHARACTER: dialogue" line triggers parsing to start
+    if (!playStarted) {
+      const peek = trimmed.match(/^([A-Z][A-Z0-9\s\-'.]*[A-Z0-9])\s*:\s+.+$/)
+      if (peek) {
+        const n = peek[1].trim()
+        if (isAllCaps(n) && n.length >= 2 && n.length <= 50 && !LABEL_KEYWORDS.has(n)) {
+          playStarted = true
+        }
+      }
+    }
     if (!playStarted) continue
 
     // ── Directions ────────────────────────────────────────────────────────────

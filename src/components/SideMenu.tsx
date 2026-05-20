@@ -4,13 +4,14 @@ import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 import { importScriptFromUrl } from '../utils/importScript'
 import { Notes } from './Notes'
+import type { Script } from '../types'
 
 interface ExampleMeta { name: string; file: string; description: string }
 
 interface Props { onClose: () => void }
 
 export function SideMenu({ onClose }: Props) {
-  const { addScript, selectScript } = useAppStore()
+  const { scripts, addScript, removeScript, selectScript } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [urlInput, setUrlInput] = useState('')
@@ -25,6 +26,17 @@ export function SideMenu({ onClose }: Props) {
       .catch(() => {})
   }, [])
 
+  const confirmAndAdd = (script: Script): boolean => {
+    const existing = scripts.find((s) => s.name === script.name)
+    if (existing) {
+      if (!window.confirm(`"${script.name}" is already loaded. Replace it?`)) return false
+      removeScript(existing.id)
+    }
+    addScript(script)
+    selectScript(script.id)
+    return true
+  }
+
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
     setImporting(true)
@@ -35,8 +47,7 @@ export function SideMenu({ onClose }: Props) {
           ? await extractPdfText(file)
           : await file.text()
         const script = parseScript(text, name)
-        addScript(script)
-        selectScript(script.id)
+        confirmAndAdd(script)
       }
     } finally {
       setImporting(false)
@@ -48,8 +59,7 @@ export function SideMenu({ onClose }: Props) {
     setImporting(true)
     try {
       const script = await importScriptFromUrl(url.trim(), nameOverride)
-      addScript(script)
-      selectScript(script.id)
+      confirmAndAdd(script)
       setUrlInput('')
     } catch (e) {
       setUrlError(e instanceof Error ? e.message : 'Failed to load')
