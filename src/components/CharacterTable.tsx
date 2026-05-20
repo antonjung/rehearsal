@@ -46,12 +46,20 @@ export function CharacterTable() {
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const panelScrollRef = useRef<HTMLDivElement>(null)
 
   // Clear panel when scene mode changes
   useEffect(() => { setCharHighlight(null) }, [sceneMode])
 
   useEffect(() => {
-    if (charHighlight) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (!charHighlight) return
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // After the panel renders, scroll its content to the first highlighted line
+    const t = setTimeout(() => {
+      const el = panelScrollRef.current?.querySelector<HTMLElement>('[data-char-highlight]')
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 120)
+    return () => clearTimeout(t)
   }, [charHighlight])
 
   if (!script) {
@@ -200,7 +208,7 @@ export function CharacterTable() {
               ✕
             </button>
           </div>
-          <div className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
+          <div ref={panelScrollRef} className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
             {panelGroups.map((group, idx) => (
               <SceneLineGroup key={idx} group={group} highlightChar={charHighlight.char} highlightStyle={highlightStyle} />
             ))}
@@ -238,7 +246,7 @@ function SceneLineGroup({
   const isHighlighted = group.character === highlightChar
 
   return (
-    <div className="rounded px-2 py-1.5">
+    <div className="rounded px-2 py-1.5" data-char-highlight={isHighlighted ? '' : undefined}>
       <span className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
         isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
       }`}>
