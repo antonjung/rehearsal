@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { rebuildScript } from '../utils/rebuildScript'
 import type { Script, ScriptLine, LineType } from '../types'
@@ -155,7 +155,7 @@ export function ScriptEditor({ script, onClose }: Props) {
     setEditingIdx(null)
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (selectMode && scrollRef.current) {
       scrollRef.current.scrollTop = savedScrollRef.current
     }
