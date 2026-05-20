@@ -8,6 +8,10 @@ export interface ListenOptions {
   expectedText?: string
   /** Milliseconds of silence after the last word before auto-stopping (default 1000) */
   silenceMs?: number
+  /** Estimated ms the line should take to say. When set and speech arrives, silence
+   *  timeouts are extended proportionally if the actor pauses before the line is
+   *  likely complete — avoids cutting off mid-line pauses. */
+  estimatedMs?: number
 }
 
 // Fraction of expected words found in spoken text — used for early line-end detection
@@ -32,7 +36,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { expectedText, silenceMs = 1000 } = options
+    const { expectedText, silenceMs = 1000, estimatedMs } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -48,6 +52,7 @@ export function useSpeechRecognition() {
       let liveTranscript = ''
       let silenceTimer: ReturnType<typeof setTimeout> | null = null
       let done = false
+      let speechStartTime: number | null = null
 
       const finish = () => {
         if (done) return
@@ -58,10 +63,20 @@ export function useSpeechRecognition() {
 
       const scheduleSilenceStop = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
-        silenceTimer = setTimeout(finish, silenceMs)
+        let wait = silenceMs
+        // If we know how long the line should take and the actor hasn't spoken
+        // for that long yet, they're probably mid-pause — extend the wait.
+        if (estimatedMs !== undefined && speechStartTime !== null) {
+          const elapsed = Date.now() - speechStartTime
+          if (elapsed < estimatedMs * 0.7) {
+            wait = Math.max(silenceMs, (estimatedMs - elapsed) + silenceMs)
+          }
+        }
+        silenceTimer = setTimeout(finish, wait)
       }
 
       rec.onresult = (e: AnySR) => {
+        if (speechStartTime === null) speechStartTime = Date.now()
         let combined = ''
         let hasFinal = false
         for (let i = 0; i < e.results.length; i++) {
@@ -99,8 +114,8 @@ export function useSpeechRecognition() {
 
       rec.start()
       setListening(true)
-      // Safety: if user never speaks, give up after 10 s
-      silenceTimer = setTimeout(finish, 10000)
+      // Safety: give up if nothing ever happens, scaled to line length
+      silenceTimer = setTimeout(finish, Math.max(10000, (estimatedMs ?? 0) * 2 + silenceMs))
     })
   }, [])
 

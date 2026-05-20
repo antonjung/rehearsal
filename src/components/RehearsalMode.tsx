@@ -385,7 +385,7 @@ export function RehearsalMode({ onExit }: Props) {
             if (accuracyEnabled && supported) {
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs })
+              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
               if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
@@ -406,7 +406,7 @@ export function RehearsalMode({ onExit }: Props) {
               // No speech recognition: listen for voice activity or fall back to fixed gap
               setPhase('my-line-silence')
               if (supported) {
-                const _heard = await listen({ silenceMs })
+                const _heard = await listen({ silenceMs, estimatedMs: gap })
                 await delay(600)
                 if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
@@ -423,7 +423,7 @@ export function RehearsalMode({ onExit }: Props) {
             // Wait for user to finish attempting the line, then read it
             setPhase('my-line-silence')
             if (supported) {
-              const _heard = await listen({ silenceMs })
+              const _heard = await listen({ silenceMs, estimatedMs: gap })
               await delay(600)
               if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
@@ -444,7 +444,7 @@ export function RehearsalMode({ onExit }: Props) {
             if (!stopRef.current) {
               setPhase('my-line-listening')
               if (supported) {
-                const heard = await listen({ expectedText: groupText, silenceMs })
+                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap })
                 await delay(600)
                 if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
