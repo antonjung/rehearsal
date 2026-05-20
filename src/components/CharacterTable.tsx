@@ -2,6 +2,13 @@ import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type { ScriptLine } from '../types'
 
+const HIGHLIGHTER_COLORS: Record<string, { background: string; color: string }> = {
+  yellow: { background: 'rgba(255,255,0,0.65)',  color: '#111' },
+  pink:   { background: 'rgba(255,0,200,0.48)',  color: '#fff' },
+  green:  { background: 'rgba(0,255,60,0.5)',    color: '#fff' },
+  blue:   { background: 'rgba(0,240,255,0.52)',  color: '#fff' },
+}
+
 interface LineGroup {
   type: 'dialogue' | 'direction' | 'heading'
   character?: string
@@ -33,7 +40,7 @@ function groupSceneLines(lines: ScriptLine[]): LineGroup[] {
 }
 
 export function CharacterTable() {
-  const { scripts, selectedScriptId } = useAppStore()
+  const { scripts, selectedScriptId, rehearsalSettings } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
   // '' = no scene info | 'all' = all scene chips | scene ID = one chip per character
   const [sceneMode, setSceneMode] = useState<string>('')
@@ -86,6 +93,8 @@ export function CharacterTable() {
   const panelGroups = panelScene
     ? groupSceneLines(script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1))
     : []
+
+  const highlightStyle = HIGHLIGHTER_COLORS[rehearsalSettings?.highlighterColor ?? 'yellow']
 
   const toggleChip = (char: string, sceneId: string) =>
     setCharHighlight((prev) =>
@@ -182,7 +191,7 @@ export function CharacterTable() {
           </div>
           <div className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
             {panelGroups.map((group, idx) => (
-              <SceneLineGroup key={idx} group={group} highlightChar={charHighlight.char} />
+              <SceneLineGroup key={idx} group={group} highlightChar={charHighlight.char} highlightStyle={highlightStyle} />
             ))}
           </div>
         </div>
@@ -191,7 +200,15 @@ export function CharacterTable() {
   )
 }
 
-function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightChar: string }) {
+function SceneLineGroup({
+  group,
+  highlightChar,
+  highlightStyle,
+}: {
+  group: LineGroup
+  highlightChar: string
+  highlightStyle: { background: string; color: string }
+}) {
   if (group.type === 'heading') {
     return (
       <div className="py-2 text-center text-[var(--color-stage-gold)] font-semibold text-xs uppercase tracking-widest">
@@ -210,24 +227,19 @@ function SceneLineGroup({ group, highlightChar }: { group: LineGroup; highlightC
   const isHighlighted = group.character === highlightChar
 
   return (
-    <div
-      className={`rounded px-2 py-1.5 ${
-        isHighlighted
-          ? 'bg-[var(--color-stage-accent)]/35 ring-1 ring-[var(--color-stage-accent)]/70'
-          : ''
-      }`}
-    >
-      <span
-        className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
-          isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
-        }`}
-      >
+    <div className="rounded px-2 py-1.5">
+      <span className={`block text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
+        isHighlighted ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-gold)]'
+      }`}>
         {group.character}
       </span>
       {group.lines.map((line, i) => (
         <span
           key={i}
-          className={`block text-sm ${isHighlighted ? 'text-white font-medium' : 'text-[var(--color-stage-text)]'}`}
+          className="block text-sm"
+          style={isHighlighted
+            ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px', display: 'inline-block' }
+            : {}}
         >
           {line.text}
         </span>
