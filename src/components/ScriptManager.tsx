@@ -10,7 +10,6 @@ export function ScriptManager() {
   if (scripts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="text-5xl mb-4">📜</div>
         <p className="text-[var(--color-stage-text)] font-medium mb-1">No scripts loaded</p>
         <p className="text-[var(--color-stage-muted)] text-sm">Use ☰ to load a script</p>
       </div>
