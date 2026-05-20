@@ -123,7 +123,10 @@ export function RecordingStudio() {
 
   return (
     <div className="space-y-5">
-      <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Record Voices</h2>
+      <div>
+        <p className="text-xs text-[var(--color-stage-muted)]">{script.name}</p>
+        <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Record</h2>
+      </div>
 
       <div className="flex gap-3">
         <select

@@ -58,9 +58,10 @@ export function RehearsalSetup({ onStart }: Props) {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <div>
-        <p className="text-sm text-[var(--color-stage-accent-light)]">{script.name}</p>
+        <p className="text-xs text-[var(--color-stage-muted)]">{script.name}</p>
+        <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Run through</h2>
         <p className="text-xs text-[var(--color-stage-muted)] mt-1">
-          Adjust line mode and accuracy in ☰ Settings
+          Adjust line mode and accuracy in ⚙️ Settings
         </p>
       </div>
 
