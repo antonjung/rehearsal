@@ -57,12 +57,7 @@ export default function App() {
         {/* Centred title */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-14">
           {tab === 'scripts' || !selectedScript ? (
-            <div className="flex items-baseline gap-2">
-              <h1 className="offbook-title text-3xl text-[var(--color-stage-accent-light)]">OffBook</h1>
-              {tab === 'scripts' && (
-                <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
-              )}
-            </div>
+            <h1 className="offbook-title text-3xl">OffBook</h1>
           ) : (
             <h1 className={`font-bold text-[var(--color-stage-accent-light)] truncate text-center ${scriptTitleClass(selectedScript.name)}`}>
               {selectedScript.name}
@@ -96,7 +91,7 @@ export default function App() {
           </main>
 
           {/* Footer nav */}
-          <nav className="flex border-t border-[var(--color-stage-border)] shrink-0">
+          <nav className="flex border-t border-[var(--color-stage-border)] shrink-0 relative">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -112,6 +107,9 @@ export default function App() {
               </button>
             ))}
           </nav>
+          <div className="text-center py-1 shrink-0">
+            <span className="text-[10px] text-[var(--color-stage-border)]">v{__APP_VERSION__}</span>
+          </div>
         </>
       )}
 

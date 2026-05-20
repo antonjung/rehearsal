@@ -37,6 +37,7 @@ html, body, #root {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-weight: 600;
   letter-spacing: 0.01em;
+  color: var(--color-stage-gold);
 }
 
 .select-field {
