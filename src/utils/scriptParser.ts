@@ -109,8 +109,8 @@ export function parseScript(text: string, name: string): Script {
       continue
     }
 
-    // Bracketed stage directions are always recognised, even before play starts
-    if (trimmed.startsWith('[')) {
+    // Stage directions in [] or () are always recognised, even before play starts
+    if (trimmed.startsWith('[') || (trimmed.startsWith('(') && trimmed.endsWith(')'))) {
       lines.push(mkLine(idx++, 'direction', trimmed))
       continue
     }

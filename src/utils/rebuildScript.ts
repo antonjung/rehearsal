@@ -14,14 +14,16 @@ const isSceneStart = (t: string) =>
   /^(PROLOGUE|EPILOGUE|INDUCTION)$/i.test(t)
 
 export function rebuildScript(script: Script, editedLines: ScriptLine[]): Script {
-  const lines: ScriptLine[] = editedLines.map((l, i) => ({
-    ...l,
-    // Reclassify bracketed lines as directions regardless of stored type
-    type: l.text.startsWith('[') ? 'direction' : l.type,
-    character: l.text.startsWith('[') ? undefined : l.character,
-    lineIndex: i,
-    id: `line-${i}`,
-  }))
+  const lines: ScriptLine[] = editedLines.map((l, i) => {
+    const isDirection = l.text.startsWith('[') || (l.text.startsWith('(') && l.text.endsWith(')'))
+    return {
+      ...l,
+      type: isDirection ? 'direction' : l.type,
+      character: isDirection ? undefined : l.character,
+      lineIndex: i,
+      id: `line-${i}`,
+    }
+  })
 
   const charSet = new Set<string>()
   for (const l of lines) {
