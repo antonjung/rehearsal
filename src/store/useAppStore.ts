@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Script, RehearsalSettings, Note } from '../types'
+import { rebuildScript } from '../utils/rebuildScript'
 
 interface AppState {
   scripts: Script[]
@@ -78,6 +79,15 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'rehearsal-store',
+      version: 1,
+      migrate: (state) => {
+        const s = state as AppState
+        // Rebuild scenes for all scripts to fix stale parse data from older app versions
+        return {
+          ...s,
+          scripts: (s.scripts ?? []).map((script) => rebuildScript(script, script.lines)),
+        }
+      },
       partialize: (s) => ({
         scripts: s.scripts,
         selectedScriptId: s.selectedScriptId,
