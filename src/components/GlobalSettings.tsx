@@ -6,10 +6,10 @@ import type { MyLineMode, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
 const HIGHLIGHTER_OPTIONS: { value: 'yellow' | 'pink' | 'green' | 'blue'; label: string; color: string }[] = [
-  { value: 'yellow', label: 'Yellow', color: 'rgba(255, 235, 0, 0.7)' },
-  { value: 'pink',   label: 'Pink',   color: 'rgba(255, 80, 165, 0.6)' },
-  { value: 'green',  label: 'Green',  color: 'rgba(0, 240, 100, 0.6)' },
-  { value: 'blue',   label: 'Blue',   color: 'rgba(0, 200, 255, 0.65)' },
+  { value: 'yellow', label: 'Yellow', color: 'rgba(255, 255, 0, 0.85)' },
+  { value: 'pink',   label: 'Pink',   color: 'rgba(255, 0, 200, 0.75)' },
+  { value: 'green',  label: 'Green',  color: 'rgba(0, 255, 60, 0.8)' },
+  { value: 'blue',   label: 'Blue',   color: 'rgba(0, 240, 255, 0.8)' },
 ]
 
 interface Props {

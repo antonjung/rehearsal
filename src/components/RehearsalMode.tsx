@@ -16,10 +16,10 @@ interface Props {
 }
 
 const HIGHLIGHTER_COLORS: Record<string, string> = {
-  yellow: 'rgba(255, 235, 0, 0.5)',
-  pink:   'rgba(255, 80, 165, 0.42)',
-  green:  'rgba(0, 240, 100, 0.42)',
-  blue:   'rgba(0, 200, 255, 0.45)',
+  yellow: 'rgba(255, 255, 0, 0.65)',
+  pink:   'rgba(255, 0, 200, 0.48)',
+  green:  'rgba(0, 255, 60, 0.5)',
+  blue:   'rgba(0, 240, 255, 0.52)',
 }
 
 type HandsFreeCmd =
