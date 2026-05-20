@@ -111,7 +111,7 @@ export function CharacterTable() {
           <select
             value={sceneMode}
             onChange={(e) => setSceneMode(e.target.value)}
-            className="text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
+            className="w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1.5 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
           >
             <option value="">— scene —</option>
             <option value="all">All scenes</option>
