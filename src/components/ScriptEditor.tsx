@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { rebuildScript } from '../utils/rebuildScript'
 import type { Script, ScriptLine, LineType } from '../types'
@@ -48,6 +48,10 @@ export function ScriptEditor({ script, onClose }: Props) {
   const [matchCursor, setMatchCursor] = useState(0)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
+  const [bulkCharMode, setBulkCharMode] = useState(false)
+  const [bulkCharacter, setBulkCharacter] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const savedScrollRef = useRef(0)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 300)
@@ -125,21 +129,37 @@ export function ScriptEditor({ script, onClose }: Props) {
     })
   }
 
-  const applyBulkType = (type: LineType) => {
+  const applyBulkType = (type: LineType, character = '') => {
     setLines((prev) => prev.map((l, i) =>
       selectedIndices.has(i)
-        ? { ...l, type, character: type === 'dialogue' ? l.character : '' }
+        ? { ...l, type, character: type === 'dialogue' ? (character || l.character) : '' }
         : l
     ))
     setDirty(true)
     setSelectedIndices(new Set())
     setSelectMode(false)
+    setBulkCharMode(false)
+    setBulkCharacter('')
   }
 
   const exitSelectMode = () => {
     setSelectMode(false)
     setSelectedIndices(new Set())
+    setBulkCharMode(false)
+    setBulkCharacter('')
   }
+
+  const enterSelectMode = () => {
+    savedScrollRef.current = scrollRef.current?.scrollTop ?? 0
+    setSelectMode(true)
+    setEditingIdx(null)
+  }
+
+  useEffect(() => {
+    if (selectMode && scrollRef.current) {
+      scrollRef.current.scrollTop = savedScrollRef.current
+    }
+  }, [selectMode])
 
   const allCharacters = [...new Set(
     lines.filter((l) => l.type === 'dialogue' && l.character).map((l) => l.character)
@@ -163,7 +183,7 @@ export function ScriptEditor({ script, onClose }: Props) {
           <h2 className="flex-1 font-semibold text-[var(--color-stage-text)] truncate">{script.name}</h2>
           {!selectMode && (
             <button
-              onClick={() => { setSelectMode(true); setEditingIdx(null) }}
+              onClick={enterSelectMode}
               className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-2 py-1 rounded border border-[var(--color-stage-border)] shrink-0"
             >
               Select
@@ -228,7 +248,7 @@ export function ScriptEditor({ script, onClose }: Props) {
         </div>
 
         {/* Lines list */}
-        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           {allLines.map(({ line, idx }) => {
             const isEditing = !selectMode && editingIdx === idx
             const isSelected = selectedIndices.has(idx)
@@ -285,26 +305,70 @@ export function ScriptEditor({ script, onClose }: Props) {
         {/* Bulk action bar */}
         {selectMode && (
           <div className="shrink-0 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3 space-y-2">
-            <p className="text-xs text-[var(--color-stage-muted)]">
-              {selectedIndices.size === 0
-                ? 'Tap lines to select them'
-                : `Set ${selectedIndices.size} line${selectedIndices.size !== 1 ? 's' : ''} to:`}
-            </p>
-            <div className="flex gap-2">
-              {(['dialogue', 'direction', 'heading'] as LineType[]).map((t) => (
-                <button
-                  key={t}
-                  disabled={selectedIndices.size === 0}
-                  onClick={() => applyBulkType(t)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium border transition-colors
-                    disabled:opacity-30
-                    border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)] hover:text-[var(--color-stage-accent-light)]"
-                >
-                  <span>{TYPE_ICONS[t]}</span>
-                  <span>{TYPE_LABELS[t]}</span>
-                </button>
-              ))}
-            </div>
+            {!bulkCharMode ? (
+              <>
+                <p className="text-xs text-[var(--color-stage-muted)]">
+                  {selectedIndices.size === 0
+                    ? 'Tap lines to select them'
+                    : `Set ${selectedIndices.size} line${selectedIndices.size !== 1 ? 's' : ''} to:`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    disabled={selectedIndices.size === 0}
+                    onClick={() => setBulkCharMode(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium border transition-colors disabled:opacity-30 border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)] hover:text-[var(--color-stage-accent-light)]"
+                  >
+                    <span>{TYPE_ICONS.dialogue}</span><span>{TYPE_LABELS.dialogue}</span>
+                  </button>
+                  {(['direction', 'heading'] as LineType[]).map((t) => (
+                    <button
+                      key={t}
+                      disabled={selectedIndices.size === 0}
+                      onClick={() => applyBulkType(t)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium border transition-colors disabled:opacity-30 border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)] hover:text-[var(--color-stage-accent-light)]"
+                    >
+                      <span>{TYPE_ICONS[t]}</span><span>{TYPE_LABELS[t]}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-[var(--color-stage-muted)]">Character for selected lines:</p>
+                <div className="flex gap-1">
+                  <select
+                    value={bulkCharacter}
+                    onChange={(e) => setBulkCharacter(e.target.value)}
+                    className="flex-1 text-xs px-2 py-1.5 rounded-md bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] text-[var(--color-stage-text)]"
+                  >
+                    <option value="">— select —</option>
+                    {allCharacters.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    value={bulkCharacter}
+                    onChange={(e) => setBulkCharacter(e.target.value.toUpperCase())}
+                    placeholder="or type name"
+                    className="flex-1 text-xs px-2 py-1.5 rounded-md bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] text-[var(--color-stage-text)] placeholder:text-[var(--color-stage-muted)]"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setBulkCharMode(false); setBulkCharacter('') }}
+                    className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    disabled={!bulkCharacter.trim()}
+                    onClick={() => applyBulkType('dialogue', bulkCharacter.trim())}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white bg-[var(--color-stage-accent)] hover:opacity-90 disabled:opacity-40 transition-opacity"
+                  >
+                    Apply — {bulkCharacter || '…'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
