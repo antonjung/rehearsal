@@ -57,8 +57,8 @@ export default function App() {
         {/* Centred title */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-14">
           {tab === 'scripts' || !selectedScript ? (
-            <div className="flex items-center gap-2">
-              <img src="offbook.png" alt="OffBook" style={{ height: 48, width: 'auto' }} />
+            <div className="flex items-baseline gap-2">
+              <h1 className="offbook-title text-3xl text-[var(--color-stage-accent-light)]">OffBook</h1>
               {tab === 'scripts' && (
                 <span className="text-xs text-[var(--color-stage-muted)]">v{__APP_VERSION__}</span>
               )}

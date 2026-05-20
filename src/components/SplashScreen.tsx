@@ -21,7 +21,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         transform: ready ? 'scale(1)' : 'scale(0.35)',
         opacity: ready ? 1 : 0,
       }}>
-        <img src="offbook.png" alt="OffBook" style={{ width: 320, height: 'auto', display: 'block' }} />
+        <h1 className="offbook-title text-[var(--color-stage-accent-light)]" style={{ fontSize: 72, lineHeight: 1 }}>OffBook</h1>
       </div>
     </div>
   )

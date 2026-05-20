@@ -33,6 +33,12 @@ html, body, #root {
   border-radius: 3px;
 }
 
+.offbook-title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .select-field {
   -webkit-appearance: none;
   appearance: none;
