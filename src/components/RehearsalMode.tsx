@@ -158,6 +158,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
@@ -176,6 +177,9 @@ export function RehearsalMode({ onExit }: Props) {
   const dragLastGiRef = useRef(-1)
   const dragTouchYRef = useRef(0)
   const dragScrollRafRef = useRef<number | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressTouchRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressMenuFiredRef = useRef(false)
   const dragOverlayRef = useRef<HTMLDivElement>(null)
   const dragLabelRef = useRef<HTMLSpanElement>(null)
   const blockStartRef = useRef(defaultBlockStart)
@@ -246,6 +250,11 @@ export function RehearsalMode({ onExit }: Props) {
 
   const scrollToLine = (idx: number) =>
     lineRefs.current[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null }
+    longPressTouchRef.current = null
+  }
 
   // Scroll to clip start on mount
   useEffect(() => {
@@ -687,6 +696,7 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const startDrag = (type: 'start' | 'end', gi: number, clientY: number) => {
+    cancelLongPress()
     draggingRef.current = type
     dragLastGiRef.current = gi
     dragTouchYRef.current = clientY
@@ -755,7 +765,30 @@ export function RehearsalMode({ onExit }: Props) {
           const isInClip = group.startIdx >= blockStart && group.startIdx <= blockEnd
 
           return (
-            <div key={group.startIdx} data-gi={gi} className={isInClip ? 'bg-amber-400/10 rounded' : ''}>
+            <div
+              key={group.startIdx}
+              data-gi={gi}
+              className={isInClip ? 'bg-amber-400/10 rounded' : ''}
+              onTouchStart={(e) => {
+                longPressMenuFiredRef.current = false
+                longPressTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+                const capturedY = e.touches[0].clientY
+                longPressTimerRef.current = setTimeout(() => {
+                  longPressMenuFiredRef.current = true
+                  setClipMenu({ startIdx: group.startIdx, y: capturedY })
+                  longPressTouchRef.current = null
+                }, 2000)
+              }}
+              onTouchMove={(e) => {
+                if (longPressTouchRef.current) {
+                  const dx = Math.abs(e.touches[0].clientX - longPressTouchRef.current.x)
+                  const dy = Math.abs(e.touches[0].clientY - longPressTouchRef.current.y)
+                  if (dx > 8 || dy > 8) cancelLongPress()
+                }
+              }}
+              onTouchEnd={cancelLongPress}
+              onTouchCancel={cancelLongPress}
+            >
               {group.startIdx === blockStart && (
                 <ClipMarker type="start" hidden={isDragging} onTouchStart={(e) => startDrag('start', gi, e.touches[0].clientY)} />
               )}
@@ -795,6 +828,30 @@ export function RehearsalMode({ onExit }: Props) {
         )}
 
       </div>
+
+      {/* Long-press clip menu */}
+      {clipMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onTouchStart={() => setClipMenu(null)} onClick={() => setClipMenu(null)} />
+          <div
+            className="fixed z-50 bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl shadow-2xl overflow-hidden min-w-[180px]"
+            style={{ left: '50%', transform: 'translateX(-50%)', top: Math.max(60, Math.min(clipMenu.y - 20, (typeof window !== 'undefined' ? window.innerHeight : 600) - 130)) }}
+          >
+            <button
+              className="w-full px-5 py-3.5 text-sm text-left text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/20 border-b border-[var(--color-stage-border)] flex items-center gap-2"
+              onClick={() => { setBlockStart(clipMenu.startIdx); blockStartRef.current = clipMenu.startIdx; setClipMenu(null) }}
+            >
+              <span className="text-red-400 text-xs">▲</span> Start clip here
+            </button>
+            <button
+              className="w-full px-5 py-3.5 text-sm text-left text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/20 flex items-center gap-2"
+              onClick={() => { setBlockEnd(clipMenu.startIdx); blockEndRef.current = clipMenu.startIdx; setClipMenu(null) }}
+            >
+              <span className="text-red-400 text-xs">▼</span> End clip here
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Summary modal */}
       {showSummary && (
