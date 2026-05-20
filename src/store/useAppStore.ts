@@ -79,7 +79,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'rehearsal-store',
-      version: 1,
+      version: 2,
       migrate: (state) => {
         const s = state as AppState
         // Rebuild scenes for all scripts to fix stale parse data from older app versions

@@ -1,21 +1,31 @@
 import type { Script, ScriptLine, Scene } from '../types'
 
+// Mirror scriptParser.ts heading classifiers exactly
+const isActScene = (t: string) =>
+  /^ACT\s+[\dIVXivx]+\s*[:\s]\s*Scene\s+\d+/i.test(t) ||
+  /^Act\s+\d+[,\s]+Scene\s+\d+/i.test(t)
+
+const isActLabel = (t: string) =>
+  /^ACT\s+[\dIVXivx]+[\s:–—-]*(–|—|-)?$/i.test(t.trim()) ||
+  /^ACT\s+[\dIVXivx]+$/.test(t.trim())
+
+const isSceneStart = (t: string) =>
+  /^Scene\s+\d+/i.test(t) ||
+  /^(PROLOGUE|EPILOGUE|INDUCTION)$/i.test(t)
+
 export function rebuildScript(script: Script, editedLines: ScriptLine[]): Script {
-  // Re-index lines sequentially
   const lines: ScriptLine[] = editedLines.map((l, i) => ({
     ...l,
     lineIndex: i,
     id: `line-${i}`,
   }))
 
-  // Re-derive characters from dialogue lines
   const charSet = new Set<string>()
   for (const l of lines) {
     if (l.type === 'dialogue' && l.character) charSet.add(l.character)
   }
   const characters = [...charSet].sort()
 
-  // Re-derive scenes from heading lines
   const scenes: Scene[] = []
   let currentAct = ''
   let currentSceneTitle = ''
@@ -39,13 +49,15 @@ export function rebuildScript(script: Script, editedLines: ScriptLine[]): Script
     sceneStart = -1
   }
 
-  const isActLabel = (t: string) => /^ACT\s+\d+$/i.test(t)
-  const isSceneStart = (t: string) =>
-    /^(PROLOGUE|EPILOGUE|INDUCTION|Scene\s+\d+)$/i.test(t)
-
   for (const l of lines) {
     if (l.type === 'heading') {
-      if (isActLabel(l.text)) {
+      if (isActScene(l.text)) {
+        closeScene(l.lineIndex - 1)
+        const actMatch = l.text.match(/^(ACT\s+[\dIVXivx]+)/i)
+        currentAct = actMatch ? actMatch[1].trim() : ''
+        currentSceneTitle = l.text
+        sceneStart = l.lineIndex
+      } else if (isActLabel(l.text)) {
         closeScene(l.lineIndex - 1)
         currentAct = l.text
         currentSceneTitle = ''
