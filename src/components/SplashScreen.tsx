@@ -21,30 +21,8 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         transform: ready ? 'scale(1)' : 'scale(0.35)',
         opacity: ready ? 1 : 0,
       }}>
-        <img src="offbook.png" alt="OffBook" style={{ width: 160, height: 'auto', display: 'block' }} />
+        <img src="offbook.png" alt="OffBook" style={{ width: 320, height: 'auto', display: 'block' }} />
       </div>
-
-      <h1
-        className="text-3xl font-bold text-[var(--color-stage-accent-light)] mt-6"
-        style={{
-          transition: 'opacity 600ms ease 180ms, transform 600ms ease 180ms',
-          opacity: ready ? 1 : 0,
-          transform: ready ? 'translateY(0)' : 'translateY(10px)',
-        }}
-      >
-        OffBook
-      </h1>
-
-      <p
-        className="text-sm text-[var(--color-stage-muted)] mt-2"
-        style={{
-          transition: 'opacity 600ms ease 320ms, transform 600ms ease 320ms',
-          opacity: ready ? 1 : 0,
-          transform: ready ? 'translateY(0)' : 'translateY(8px)',
-        }}
-      >
-        Learn your lines
-      </p>
     </div>
   )
 }
