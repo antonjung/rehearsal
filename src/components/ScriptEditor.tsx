@@ -42,8 +42,9 @@ export function ScriptEditor({ script, onClose }: Props) {
   const { updateScript } = useAppStore()
   const [lines, setLines] = useState<EditableLine[]>(() => toEditable(script.lines))
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
-  const [dirty, setDirty] = useState(false)
   const [query, setQuery] = useState('')
+  const didMountRef = useRef(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [matchCursor, setMatchCursor] = useState(0)
   const [selectMode, setSelectMode] = useState(false)
@@ -57,6 +58,25 @@ export function ScriptEditor({ script, onClose }: Props) {
     const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 300)
     return () => clearTimeout(t)
   }, [query])
+
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      const scriptLines: ScriptLine[] = lines
+        .filter((l) => l.text.trim())
+        .map((l, i) => ({
+          id: `line-${i}`,
+          type: l.type,
+          character: l.character || undefined,
+          text: l.text.trim(),
+          lineIndex: i,
+        }))
+      updateScript(rebuildScript(script, scriptLines))
+    }, 500)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines])
 
   const q = debouncedQuery
   const matchesLine = (line: EditableLine) =>
@@ -81,7 +101,6 @@ export function ScriptEditor({ script, onClose }: Props) {
 
   const update = (idx: number, patch: Partial<EditableLine>) => {
     setLines((prev) => prev.map((l, i) => i === idx ? { ...l, ...patch } : l))
-    setDirty(true)
   }
 
   const addLineAfter = (idx: number) => {
@@ -95,29 +114,11 @@ export function ScriptEditor({ script, onClose }: Props) {
     }
     setLines((prev) => [...prev.slice(0, idx + 1), newLine, ...prev.slice(idx + 1)])
     setEditingIdx(idx + 1)
-    setDirty(true)
   }
 
   const removeLine = (idx: number) => {
     setLines((prev) => prev.filter((_, i) => i !== idx))
     if (editingIdx === idx) setEditingIdx(null)
-    setDirty(true)
-  }
-
-  const handleSave = () => {
-    const scriptLines: ScriptLine[] = lines
-      .filter((l) => l.text.trim())
-      .map((l, i) => ({
-        id: `line-${i}`,
-        type: l.type,
-        character: l.character || undefined,
-        text: l.text.trim(),
-        lineIndex: i,
-      }))
-    const rebuilt = rebuildScript(script, scriptLines)
-    updateScript(rebuilt)
-    setDirty(false)
-    onClose()
   }
 
   const toggleSelect = (idx: number) => {
@@ -135,7 +136,6 @@ export function ScriptEditor({ script, onClose }: Props) {
         ? { ...l, type, character: type === 'dialogue' ? (character || l.character) : '' }
         : l
     ))
-    setDirty(true)
     setSelectedIndices(new Set())
     setSelectMode(false)
     setBulkCharMode(false)
@@ -168,7 +168,7 @@ export function ScriptEditor({ script, onClose }: Props) {
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/60" onClick={() => !dirty && onClose()} />
+      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} />
 
       {/* Panel */}
       <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-stage-bg)] max-w-2xl mx-auto">
@@ -178,30 +178,20 @@ export function ScriptEditor({ script, onClose }: Props) {
             onClick={selectMode ? exitSelectMode : onClose}
             className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors shrink-0"
           >
-            ← {selectMode ? 'Cancel' : 'Cancel'}
+            {selectMode ? '← Cancel' : '← Done'}
           </button>
           <h2 className="flex-1 font-semibold text-[var(--color-stage-text)] truncate">{script.name}</h2>
-          {!selectMode && (
+          {selectMode ? (
+            <span className="text-xs text-[var(--color-stage-muted)] shrink-0">
+              {selectedIndices.size} selected
+            </span>
+          ) : (
             <button
               onClick={enterSelectMode}
               className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-2 py-1 rounded border border-[var(--color-stage-border)] shrink-0"
             >
               Select
             </button>
-          )}
-          {!selectMode && (
-            <button
-              onClick={handleSave}
-              disabled={!dirty}
-              className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-[var(--color-stage-accent)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-            >
-              Save
-            </button>
-          )}
-          {selectMode && (
-            <span className="text-xs text-[var(--color-stage-muted)]">
-              {selectedIndices.size} selected
-            </span>
           )}
         </div>
 
