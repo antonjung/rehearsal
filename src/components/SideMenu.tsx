@@ -116,27 +116,33 @@ export function SideMenu({ onClose }: Props) {
                 <span>Example scripts</span>
                 <span className="text-base leading-none">{examplesOpen ? '▲' : '▼'}</span>
               </button>
-              {examplesOpen && examples.map((ex) => (
-                <div
-                  key={ex.file}
-                  className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5"
-                >
-                  <div className="min-w-0 mr-3">
-                    <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
-                    <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
-                  </div>
-                  <button
-                    disabled={importing}
-                    onClick={() => {
-                      setLoadingExample(ex.file)
-                      void loadFromUrl(`${import.meta.env.BASE_URL}examples/${ex.file}`, ex.name)
-                    }}
-                    className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+              {examplesOpen && examples.map((ex) => {
+                const loaded = scripts.some((s) => s.name === ex.name)
+                return (
+                  <div
+                    key={ex.file}
+                    className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5"
                   >
-                    {loadingExample === ex.file ? '⏳' : 'Load'}
-                  </button>
-                </div>
-              ))}
+                    <div className="min-w-0 mr-3 flex items-start gap-1.5">
+                      <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}>✓</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
+                        <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      disabled={importing}
+                      onClick={() => {
+                        setLoadingExample(ex.file)
+                        void loadFromUrl(`${import.meta.env.BASE_URL}examples/${ex.file}`, ex.name)
+                      }}
+                      className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+                    >
+                      {loadingExample === ex.file ? '⏳' : 'Load'}
+                    </button>
+                  </div>
+                )
+              })}
             </section>
           )}
 
