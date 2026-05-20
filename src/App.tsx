@@ -45,15 +45,17 @@ export default function App() {
   return (
     <div className="h-full flex flex-col max-w-2xl mx-auto">
       {/* App header — always visible */}
-      <header className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => setShowMenu(true)}
-            className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
-            title="Menu"
-          >
-            ☰
-          </button>
+      <header className="relative flex items-center px-4 pt-4 pb-3 shrink-0">
+        <button
+          onClick={() => setShowMenu(true)}
+          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
+          title="Menu"
+        >
+          ☰
+        </button>
+
+        {/* Centred title */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-14">
           {tab === 'scripts' || !selectedScript ? (
             <div className="flex items-baseline gap-2">
               <h1 className="text-2xl font-bold text-[var(--color-stage-text)]">
@@ -64,14 +66,15 @@ export default function App() {
               )}
             </div>
           ) : (
-            <h1 className={`font-bold text-[var(--color-stage-accent-light)] truncate ${scriptTitleClass(selectedScript.name)}`}>
+            <h1 className={`font-bold text-[var(--color-stage-accent-light)] truncate text-center ${scriptTitleClass(selectedScript.name)}`}>
               {selectedScript.name}
             </h1>
           )}
         </div>
+
         <button
           onClick={() => setShowSettings(true)}
-          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0"
+          className="text-2xl text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-1 shrink-0 ml-auto"
           title="Settings"
         >
           ⚙️

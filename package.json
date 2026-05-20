@@ -1,7 +1,7 @@
 {
   "name": "rehearsal",
   "private": true,
-  "version": "2.92.2",
+  "version": "2.93.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
