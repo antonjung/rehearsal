@@ -208,9 +208,6 @@ export function GlobalSettings({ onClose }: Props) {
 
           {/* ── Voice commands ── */}
           <SettingsSection title="Voice commands">
-            <SettingsRow label="Speak command back">
-              <ToggleSwitch checked={prefs.vocalizeCommandsEnabled ?? false} onChange={(v) => update('vocalizeCommandsEnabled', v)} />
-            </SettingsRow>
             <p className="text-xs text-[var(--color-stage-muted)]">Comma-separated trigger words for each hands-free command.</p>
             {(
               [
