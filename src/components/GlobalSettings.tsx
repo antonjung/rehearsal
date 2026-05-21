@@ -39,7 +39,7 @@ export function GlobalSettings({ onClose }: Props) {
     speechRate: 1,
     accuracyEnabled: true,
     accuracyWarningThreshold: 70,
-    endLineSilenceMs: 1000,
+    endLineSilenceMs: 500,
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
     voiceCommands: DEFAULT_VOICE_COMMANDS,

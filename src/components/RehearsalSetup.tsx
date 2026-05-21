@@ -19,7 +19,7 @@ export function RehearsalSetup({ onStart }: Props) {
     speechRate: 1,
     accuracyEnabled: true,
     accuracyWarningThreshold: 70,
-    endLineSilenceMs: 1000,
+    endLineSilenceMs: 500,
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
   }
