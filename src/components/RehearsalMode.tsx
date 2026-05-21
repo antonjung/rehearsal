@@ -163,7 +163,10 @@ export function RehearsalMode({ onExit }: Props) {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
-  const handsFreeEnabled = settings.handsFreeEnabled ?? false
+  const [countdownSecs, setCountdownSecs] = useState<number | null>(null)
+  const countdownEndMsRef = useRef<number | null>(null)
+  const maxPauseMs = settings.maxPauseMs ?? 8000
+  const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
   const handsFreeRef = useRef(false)
@@ -286,6 +289,27 @@ export function RehearsalMode({ onExit }: Props) {
     return () => { stopRef.current = true; cancel(); abort() }
   }, [cancel, abort])
 
+  // Start countdown when silence/listening phase begins; clear when phase changes
+  useEffect(() => {
+    if (phase === 'my-line-silence' || phase === 'my-line-listening') {
+      countdownEndMsRef.current = Date.now() + maxPauseMs
+    } else {
+      countdownEndMsRef.current = null
+      setCountdownSecs(null)
+    }
+  }, [phase, maxPauseMs])
+
+  // Tick the countdown display at 200ms resolution
+  useEffect(() => {
+    const id = setInterval(() => {
+      const end = countdownEndMsRef.current
+      if (end === null) { setCountdownSecs(null); return }
+      const rem = Math.ceil((end - Date.now()) / 1000)
+      setCountdownSecs(rem > 0 ? rem : 0)
+    }, 200)
+    return () => clearInterval(id)
+  }, [])
+
   // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing.
   // Uses idleListeningRef rather than a local `active` flag so handlePlay() can stop
   // the loop synchronously (before runPlayback starts its own listen() session).
@@ -387,7 +411,25 @@ export function RehearsalMode({ onExit }: Props) {
         if (!isMyLine) {
           setPhase('playing-other')
           const rec = recMapRef.current.get(lineIdx)
-          if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
+          const speakOther = async () => {
+            if (!rec || !(await playRecording(rec))) {
+              if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate })
+            }
+          }
+          if (handsFreeRef.current && supported) {
+            let otherCmd: HandsFreeCmd | null = null
+            const listenP = listen({ silenceMs: 1500 }).then(heard => {
+              if (heard && !stopRef.current) {
+                const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
+                if (cmd) { otherCmd = cmd; cancel(); cancelRecording() }
+              }
+            })
+            await Promise.race([speakOther(), listenP])
+            abort()
+            if (otherCmd && !stopRef.current) { execHandsFreeCommand(otherCmd, lineIdx); return }
+          } else {
+            await speakOther()
+          }
         } else {
           const { myLineMode } = settings
 
@@ -915,8 +957,8 @@ export function RehearsalMode({ onExit }: Props) {
 
         {/* Status line */}
         <div className="text-center text-xs text-[var(--color-stage-muted)] h-4">
-          {phase === 'my-line-listening' && listening && <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Listening…</span>}
-          {phase === 'my-line-silence' && !listening && 'Your line…'}
+          {phase === 'my-line-listening' && listening && <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Listening…{countdownSecs !== null && <span className="font-mono tabular-nums ml-1">{countdownSecs}s</span>}</span>}
+          {phase === 'my-line-silence' && !listening && <span>Your line…{countdownSecs !== null && <span className="font-mono tabular-nums ml-1">{countdownSecs}s</span>}</span>}
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
           {phase === 'paused' && 'Paused — tap a line to restart from it'}
