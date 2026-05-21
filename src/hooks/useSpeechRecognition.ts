@@ -8,13 +8,12 @@ export interface ListenOptions {
   expectedText?: string
   /** Milliseconds of silence after the last word before auto-stopping (default 1000) */
   silenceMs?: number
-  /** Estimated ms the line should take to say. When set and speech arrives, silence
-   *  timeouts are extended proportionally if the actor pauses before the line is
-   *  likely complete — avoids cutting off mid-line pauses. */
+  /** Estimated ms the line should take to say — drives the 75% threshold */
   estimatedMs?: number
-  /** Absolute cap on any single pause duration in ms. Overrides smart extension — move on
-   *  regardless of how much of the line has been spoken. */
+  /** Silence wait used before 75% of estimatedMs has elapsed (default: silenceMs) */
   maxPauseMs?: number
+  /** When set true externally, always use silenceMs regardless of elapsed time */
+  switchToShortSilenceRef?: { current: boolean }
 }
 
 // Fraction of expected words found in spoken text — used for early line-end detection
@@ -39,7 +38,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs } = options
+    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -66,10 +65,10 @@ export function useSpeechRecognition() {
 
       const scheduleSilenceStop = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
-        // After 75% of estimated time: use silenceMs (actor has probably finished).
-        // Before 75%: use maxPauseMs (actor may still be mid-line).
+        // After 75% of estimated time (or countdown expired): use silenceMs.
+        // Before 75%: use maxPauseMs so a brief pause doesn't end the line too soon.
         let wait = silenceMs
-        if (estimatedMs !== undefined && speechStartTime !== null && maxPauseMs !== undefined) {
+        if (!switchToShortSilenceRef?.current && estimatedMs !== undefined && speechStartTime !== null && maxPauseMs !== undefined) {
           const elapsed = Date.now() - speechStartTime
           if (elapsed < estimatedMs * 0.75) wait = maxPauseMs
         }

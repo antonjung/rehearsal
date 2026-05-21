@@ -163,9 +163,12 @@ export function RehearsalMode({ onExit }: Props) {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [rate, setRate] = useState(settings.speechRate)
-  const [countdownSecs, setCountdownSecs] = useState<number | null>(null)
+  const [countdownMs, setCountdownMs] = useState<number | null>(null)
   const countdownEndMsRef = useRef<number | null>(null)
   const countdownGapRef = useRef<number>(0)
+  const countdownExpiredRef = useRef(false)
+  const silenceMsRef = useRef(settings.endLineSilenceMs ?? 1000)
+  silenceMsRef.current = settings.endLineSilenceMs ?? 1000
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
@@ -297,24 +300,26 @@ export function RehearsalMode({ onExit }: Props) {
       countdownEndMsRef.current = Date.now() + countdownGapRef.current
     } else {
       countdownEndMsRef.current = null
-      setCountdownSecs(null)
+      setCountdownMs(null)
     }
   }, [phase])
 
-  // Tick the countdown; at zero abort recognition so playback auto-advances
+  // Tick at 100ms; at zero switch to short-silence mode + schedule fallback abort
   useEffect(() => {
     const id = setInterval(() => {
       const end = countdownEndMsRef.current
-      if (end === null) { setCountdownSecs(null); return }
-      const rem = Math.ceil((end - Date.now()) / 1000)
+      if (end === null) { setCountdownMs(null); return }
+      const rem = end - Date.now()
       if (rem <= 0) {
         countdownEndMsRef.current = null
-        setCountdownSecs(0)
-        abortRef.current()
+        setCountdownMs(0)
+        countdownExpiredRef.current = true
+        // Fallback: if no speech stops naturally, force advance after silenceMs
+        setTimeout(() => { abortRef.current() }, silenceMsRef.current)
       } else {
-        setCountdownSecs(rem)
+        setCountdownMs(rem)
       }
-    }, 200)
+    }, 100)
     return () => clearInterval(id)
   }, [])
 
@@ -450,9 +455,10 @@ export function RehearsalMode({ onExit }: Props) {
           if (myLineMode === 'silence') {
             if (accuracyEnabled && supported) {
               countdownGapRef.current = gap
+              countdownExpiredRef.current = false
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000 })
+              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
               if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
@@ -472,9 +478,10 @@ export function RehearsalMode({ onExit }: Props) {
             } else {
               // No speech recognition: listen for voice activity or fall back to fixed gap
               countdownGapRef.current = gap
+              countdownExpiredRef.current = false
               setPhase('my-line-silence')
               if (supported) {
-                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000 })
+                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
                 await delay(600)
                 if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
@@ -490,9 +497,10 @@ export function RehearsalMode({ onExit }: Props) {
           } else if (myLineMode === 'gap-before') {
             // Wait for user to finish attempting the line, then read it
             countdownGapRef.current = gap
+            countdownExpiredRef.current = false
             setPhase('my-line-silence')
             if (supported) {
-              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000 })
+              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
               await delay(600)
               if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
@@ -512,9 +520,10 @@ export function RehearsalMode({ onExit }: Props) {
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
             if (!stopRef.current) {
               countdownGapRef.current = gap
+              countdownExpiredRef.current = false
               setPhase('my-line-listening')
               if (supported) {
-                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000 })
+                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
                 await delay(600)
                 if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
@@ -951,9 +960,13 @@ export function RehearsalMode({ onExit }: Props) {
                 : <span className="text-[var(--color-stage-text)]">Your line</span>
               }
             </span>
-            {countdownSecs !== null && (
-              <span className="font-mono tabular-nums text-2xl font-bold text-[var(--color-stage-accent-light)]">
-                {countdownSecs}s
+            {countdownMs !== null && (
+              <span className={`font-mono tabular-nums text-2xl font-bold transition-colors ${
+                countdownMs <= countdownGapRef.current * 0.25
+                  ? 'text-amber-400'
+                  : 'text-[var(--color-stage-accent-light)]'
+              }`}>
+                {Math.max(0, countdownMs / 1000).toFixed(1)}s
               </span>
             )}
           </div>
