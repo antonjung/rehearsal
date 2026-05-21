@@ -71,13 +71,10 @@ export function useSpeechRecognition() {
 
       const scheduleSilenceStop = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
-        // After 75% of estimated time (or countdown expired): use silenceMs.
-        // Before 75%: use maxPauseMs so a brief pause doesn't end the line too soon.
-        let wait = silenceMs
-        if (!switchToShortSilenceRef?.current && estimatedMs !== undefined && speechStartTime !== null && maxPauseMs !== undefined) {
-          const elapsed = Date.now() - speechStartTime
-          if (elapsed < estimatedMs * 0.75) wait = maxPauseMs
-        }
+        // Use maxPauseMs until accumulated speech time reaches the gap (countdownExpiredRef flips),
+        // then switch to the shorter silenceMs. Never use wall-clock time — a natural breath mid-line
+        // should never cut the actor off.
+        const wait = (!switchToShortSilenceRef?.current && maxPauseMs !== undefined) ? maxPauseMs : silenceMs
         silenceTimer = setTimeout(finish, wait)
       }
 

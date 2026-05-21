@@ -75,7 +75,7 @@ interface LineGroup {
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { listening, supported, listen, abort, reset: resetTranscript } = useSpeechRecognition()
+  const { transcript, listening, supported, listen, abort, reset: resetTranscript } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const settings = rehearsalSettings!
@@ -346,6 +346,20 @@ export function RehearsalMode({ onExit }: Props) {
     return () => { idleListeningRef.current = false }
   }, [handsFreeEnabled, phase, supported, listen])
 
+  // Instant hands-free play: fires as soon as a command word appears in the interim transcript,
+  // without waiting for the 2.5s silence timer to expire.
+  useEffect(() => {
+    if (!handsFreeEnabled) return
+    if (phase !== 'idle' && phase !== 'done') return
+    if (!transcript) return
+    const parts = transcript.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean)
+    if (parts.some(w => voiceCmdWordsRef.current.play.includes(w))) {
+      idleListeningRef.current = false
+      abortRef.current()
+      handlePlayRef.current()
+    }
+  }, [transcript, handsFreeEnabled, phase])
+
   // Executes a hands-free command detected during a listen() window inside runPlayback.
   // Uses only refs so it's safe to call from within the async loop without stale-closure issues.
   const execHandsFreeCommand = (cmd: HandsFreeCmd, lineIdx: number) => {
@@ -575,7 +589,7 @@ export function RehearsalMode({ onExit }: Props) {
       // If a newer run has started (line tap mid-play), don't clobber its phase.
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
-        if (settingsRef.current.scenePingEnabled !== false) await playCompletion()
+        if (settingsRef.current.scenePingEnabled === true) await playCompletion()
         if (loopRef.current && runIdRef.current === runId) {
           const loopRunId = runId
           setTimeout(() => {
