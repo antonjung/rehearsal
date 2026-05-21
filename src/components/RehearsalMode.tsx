@@ -28,6 +28,7 @@ type HandsFreeCmd =
   | { type: 'back'; n: number }
   | { type: 'skip' }
   | { type: 'repeat' }
+  | { type: 'loop' }
 
 // Short utterance → command detection (≤3 words so dialogue doesn't false-trigger).
 // "back N" (digit or word) goes back N line groups; bare "back" defaults to 1.
@@ -37,6 +38,7 @@ function matchHandsFreeCommand(text: string, words: VoiceCommandWords): HandsFre
   if (parts.length === 0 || parts.length > 3) return null
   if (parts.some(w => words.stop.includes(w)))   return { type: 'stop' }
   if (parts.some(w => words.repeat.includes(w))) return { type: 'repeat' }
+  if (parts.some(w => words.loop.includes(w)))   return { type: 'loop' }
   if (parts.some(w => words.skip.includes(w)))   return { type: 'skip' }
   const backIdx = parts.findIndex(w => words.back.includes(w))
   if (backIdx >= 0) {
@@ -170,6 +172,8 @@ export function RehearsalMode({ onExit }: Props) {
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
+  const setLoopEnabledRef = useRef(setLoopEnabled)
+  setLoopEnabledRef.current = setLoopEnabled
   const handsFreeRef = useRef(false)
   handsFreeRef.current = handsFreeEnabled
   const abortRef = useRef(abort)
@@ -351,6 +355,7 @@ export function RehearsalMode({ onExit }: Props) {
       interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(blockStartRef.current, blockEndRef.current) })
       return
     }
+    if (cmd.type === 'loop') { setLoopEnabledRef.current(v => !v); return }
     const gs = sceneGroupsRef.current
     const gi = gs.findIndex(g => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
     if (cmd.type === 'back') {

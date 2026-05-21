@@ -214,6 +214,7 @@ export function GlobalSettings({ onClose }: Props) {
                 { key: 'play',   label: '▶ Start' },
                 { key: 'stop',   label: '⏹ Stop' },
                 { key: 'repeat', label: '↺ Repeat' },
+                { key: 'loop',   label: '🔁 Loop on/off' },
                 { key: 'back',   label: '⏮ Back' },
                 { key: 'skip',   label: '⏭ Skip' },
               ] as { key: keyof VoiceCommandWords; label: string }[]
