@@ -4,8 +4,6 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 type AnySR = any
 
 export interface ListenOptions {
-  /** If provided, recognition stops as soon as ~80% of these words are detected */
-  expectedText?: string
   /** Milliseconds of silence after the last word before auto-stopping (default 1000) */
   silenceMs?: number
   /** Estimated ms the line should take to say — drives the 75% threshold */
@@ -20,14 +18,6 @@ export interface ListenOptions {
   onSpeechActivity?: (active: boolean) => void
 }
 
-// Fraction of expected words found in spoken text — used for early line-end detection
-function wordCoverage(expected: string, spoken: string): number {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '')
-  const expWords = norm(expected).split(/\s+/).filter(Boolean)
-  if (expWords.length === 0) return 0
-  const spokenSet = new Set(norm(spoken).split(/\s+/).filter(Boolean))
-  return expWords.filter(w => spokenSet.has(w)).length / expWords.length
-}
 
 export function useSpeechRecognition() {
   const [transcript, setTranscript] = useState('')
@@ -42,7 +32,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity } = options
+    const { silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -97,13 +87,9 @@ export function useSpeechRecognition() {
       rec.onresult = (e: AnySR) => {
         if (speechStartTime === null) { speechStartTime = Date.now() - DETECTION_LAG_MS; onSpeechStart?.() }
         let combined = ''
-        let hasFinal = false
         for (let i = 0; i < e.results.length; i++) {
           combined += e.results[i][0].transcript
-          if (e.results[i].isFinal) {
-            finalTranscript = combined
-            hasFinal = true
-          }
+          if (e.results[i].isFinal) finalTranscript = combined
         }
         liveTranscript = combined
         setTranscript(combined)
@@ -112,12 +98,6 @@ export function useSpeechRecognition() {
         notifyActivity(true)
         if (activityTimer) clearTimeout(activityTimer)
         activityTimer = setTimeout(() => notifyActivity(false), PAUSE_DETECT_MS)
-
-        // Stop immediately if enough of the expected line has been spoken
-        if (expectedText && hasFinal && wordCoverage(expectedText, combined) >= 0.8) {
-          finish()
-          return
-        }
 
         scheduleSilenceStop()
       }

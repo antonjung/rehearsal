@@ -479,7 +479,7 @@ export function RehearsalMode({ onExit }: Props) {
               countdownExpiredRef.current = false
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
+              const heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
               speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
@@ -547,7 +547,7 @@ export function RehearsalMode({ onExit }: Props) {
               countdownExpiredRef.current = false
               setPhase('my-line-listening')
               if (supported) {
-                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
+                const heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
                 speechAccumMsRef.current = 0; speechBoutStartRef.current = null
                 await delay(600)
                 if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
