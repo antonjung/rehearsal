@@ -157,7 +157,7 @@ export function GlobalSettings({ onClose }: Props) {
 
           {/* ── Signals ── */}
           <SettingsSection title="Signals">
-            <SettingsRow label="Cue when my line comes first">
+            <SettingsRow label="Cue before my lines">
               <ToggleSwitch checked={prefs.clipStartPingEnabled ?? true} onChange={(v) => update('clipStartPingEnabled', v)} />
             </SettingsRow>
             <SettingsRow label="Ping after each line">
@@ -208,6 +208,9 @@ export function GlobalSettings({ onClose }: Props) {
 
           {/* ── Voice commands ── */}
           <SettingsSection title="Voice commands">
+            <SettingsRow label="Speak command back">
+              <ToggleSwitch checked={prefs.vocalizeCommandsEnabled ?? false} onChange={(v) => update('vocalizeCommandsEnabled', v)} />
+            </SettingsRow>
             <p className="text-xs text-[var(--color-stage-muted)]">Comma-separated trigger words for each hands-free command.</p>
             {(
               [

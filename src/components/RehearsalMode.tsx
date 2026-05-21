@@ -179,6 +179,8 @@ export function RehearsalMode({ onExit }: Props) {
   handsFreeRef.current = handsFreeEnabled
   const abortRef = useRef(abort)
   abortRef.current = abort
+  const speakRef = useRef(speak)
+  speakRef.current = speak
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
@@ -342,7 +344,11 @@ export function RehearsalMode({ onExit }: Props) {
           break
         }
         if (heardParts.length <= 3 && heardParts.some(w => voiceCmdWordsRef.current.loop.includes(w))) {
-          setLoopEnabledRef.current(v => !v)
+          const newState = !loopRef.current
+          setLoopEnabledRef.current(newState)
+          if (settingsRef.current.vocalizeCommandsEnabled) {
+            await speakRef.current(newState ? 'loop on' : 'loop off', { rate: 1.3 })
+          }
         }
       }
     })()
@@ -365,13 +371,34 @@ export function RehearsalMode({ onExit }: Props) {
 
   // Executes a hands-free command detected during a listen() window inside runPlayback.
   // Uses only refs so it's safe to call from within the async loop without stale-closure issues.
-  const execHandsFreeCommand = (cmd: HandsFreeCmd, lineIdx: number) => {
+  const execHandsFreeCommand = async (cmd: HandsFreeCmd, lineIdx: number) => {
     if (cmd.type === 'stop') { interruptPlayback(); setPhase('idle'); return }
-    if (cmd.type === 'repeat') {
-      interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(blockStartRef.current, blockEndRef.current) })
+
+    if (cmd.type === 'loop') {
+      const newState = !loopRef.current
+      setLoopEnabledRef.current(newState)
+      if (settingsRef.current.vocalizeCommandsEnabled) {
+        await speakRef.current(newState ? 'loop on' : 'loop off', { rate: 1.3 })
+      }
       return
     }
-    if (cmd.type === 'loop') { setLoopEnabledRef.current(v => !v); return }
+
+    // For repeat/back/skip: interrupt, optionally vocalize, then restart
+    interruptPlayback()
+    stopRef.current = false
+
+    if (settingsRef.current.vocalizeCommandsEnabled) {
+      let phrase = ''
+      if (cmd.type === 'repeat') phrase = 'repeat'
+      else if (cmd.type === 'back') phrase = cmd.n > 1 ? `back ${cmd.n}` : 'back'
+      else if (cmd.type === 'skip') phrase = 'skip'
+      if (phrase) await speakRef.current(phrase, { rate: 1.3 })
+    }
+
+    if (cmd.type === 'repeat') {
+      runPlaybackRef.current(blockStartRef.current, blockEndRef.current)
+      return
+    }
     const gs = sceneGroupsRef.current
     const gi = gs.findIndex(g => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
     if (cmd.type === 'back') {
@@ -379,10 +406,10 @@ export function RehearsalMode({ onExit }: Props) {
       const prev = targetGi >= 0
         ? Math.max(gs[targetGi].startIdx, blockStartRef.current)
         : blockStartRef.current
-      interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(prev, blockEndRef.current) })
+      runPlaybackRef.current(prev, blockEndRef.current)
     } else {
       const next = gi >= 0 && gi + 1 < gs.length ? Math.min(gs[gi + 1].startIdx, blockEndRef.current) : blockEndRef.current
-      interruptPlayback(() => { stopRef.current = false; runPlaybackRef.current(next, blockEndRef.current) })
+      runPlaybackRef.current(next, blockEndRef.current)
     }
   }
 
@@ -478,15 +505,14 @@ export function RehearsalMode({ onExit }: Props) {
                 if (cmd) { otherCmd = cmd; cancel(); cancelRecording(); break }
               }
             }
-            if (otherCmd && !stopRef.current) { execHandsFreeCommand(otherCmd, lineIdx); return }
+            if (otherCmd && !stopRef.current) { await execHandsFreeCommand(otherCmd, lineIdx); return }
           } else {
             await speakOther()
           }
         } else {
           const { myLineMode } = settings
 
-          // Cue sound when the very first line in the clip is the user's
-          if (lineIdx === startIdx && (settingsRef.current.clipStartPingEnabled ?? true)) {
+          if (settingsRef.current.clipStartPingEnabled ?? true) {
             await playClipStart()
           }
 
@@ -500,7 +526,7 @@ export function RehearsalMode({ onExit }: Props) {
               speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
-              if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
+              if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { await execHandsFreeCommand(_c, lineIdx); return } }
               if (!stopRef.current) {
                 setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
                 if (heard) {
@@ -567,7 +593,7 @@ export function RehearsalMode({ onExit }: Props) {
                 const heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
                 speechAccumMsRef.current = 0; speechBoutStartRef.current = null
                 await delay(600)
-                if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
+                if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { await execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
                   const acc = wordAccuracy(groupText, heard)
                   const diff = buildWordDiff(groupText, heard)
