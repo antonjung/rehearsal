@@ -865,7 +865,7 @@ export function RehearsalMode({ onExit }: Props) {
             <div
               key={group.startIdx}
               data-gi={gi}
-              className={isInClip ? 'bg-gray-400/15 rounded' : ''}
+              className={isInClip ? '' : 'bg-gray-400/15 rounded'}
               style={{ userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
               onTouchStart={(e) => {
                 longPressMenuFiredRef.current = false
