@@ -77,8 +77,11 @@ export function useSpeechRecognition() {
         silenceTimer = setTimeout(finish, wait)
       }
 
+      // Speech recognition typically lags ~500ms behind actual speech onset
+      const DETECTION_LAG_MS = 500
+
       rec.onresult = (e: AnySR) => {
-        if (speechStartTime === null) { speechStartTime = Date.now(); onSpeechStart?.() }
+        if (speechStartTime === null) { speechStartTime = Date.now() - DETECTION_LAG_MS; onSpeechStart?.() }
         let combined = ''
         let hasFinal = false
         for (let i = 0; i < e.results.length; i++) {
