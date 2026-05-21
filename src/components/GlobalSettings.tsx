@@ -236,6 +236,9 @@ export function GlobalSettings({ onClose }: Props) {
                 onChange={(e) => setScriptFontSize(Number(e.target.value))}
                 className="w-full accent-[var(--color-stage-accent)]"
               />
+              <p className="mt-2 text-[var(--color-stage-muted)]" style={{ fontSize: `${scriptFontSize}px` }}>
+                All the world&apos;s a stage
+              </p>
             </div>
           </section>
 

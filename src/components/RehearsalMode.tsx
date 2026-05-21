@@ -294,11 +294,10 @@ export function RehearsalMode({ onExit }: Props) {
     return () => { stopRef.current = true; cancel(); abort() }
   }, [cancel, abort])
 
-  // Start countdown when silence/listening phase begins; clear when phase changes
+  // Clear countdown when leaving silence/listening phase
+  // (countdown is started by onSpeechStart in each listen() call, not on phase entry)
   useEffect(() => {
-    if (phase === 'my-line-silence' || phase === 'my-line-listening') {
-      countdownEndMsRef.current = Date.now() + countdownGapRef.current
-    } else {
+    if (phase !== 'my-line-silence' && phase !== 'my-line-listening') {
       countdownEndMsRef.current = null
       setCountdownMs(null)
     }
@@ -457,7 +456,7 @@ export function RehearsalMode({ onExit }: Props) {
               countdownExpiredRef.current = false
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
+              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap } })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
               if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
@@ -480,7 +479,7 @@ export function RehearsalMode({ onExit }: Props) {
               countdownExpiredRef.current = false
               setPhase('my-line-silence')
               if (supported) {
-                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
+                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap } })
                 await delay(600)
                 if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
@@ -499,7 +498,7 @@ export function RehearsalMode({ onExit }: Props) {
             countdownExpiredRef.current = false
             setPhase('my-line-silence')
             if (supported) {
-              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
+              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap } })
               await delay(600)
               if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
@@ -522,7 +521,7 @@ export function RehearsalMode({ onExit }: Props) {
               countdownExpiredRef.current = false
               setPhase('my-line-listening')
               if (supported) {
-                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef })
+                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 8000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap } })
                 await delay(600)
                 if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
