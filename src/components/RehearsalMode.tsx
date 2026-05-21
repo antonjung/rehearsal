@@ -167,8 +167,6 @@ export function RehearsalMode({ onExit }: Props) {
   const countdownEndMsRef = useRef<number | null>(null)
   const countdownGapRef = useRef<number>(0)
   const countdownExpiredRef = useRef(false)
-  const silenceMsRef = useRef(settings.endLineSilenceMs ?? 1000)
-  silenceMsRef.current = settings.endLineSilenceMs ?? 1000
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
@@ -304,7 +302,8 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }, [phase])
 
-  // Tick at 100ms; at zero switch to short-silence mode + schedule fallback abort
+  // Tick at 100ms; at zero switch to short-silence mode — do NOT abort
+  // listen() will resolve naturally once the actor stops speaking
   useEffect(() => {
     const id = setInterval(() => {
       const end = countdownEndMsRef.current
@@ -314,8 +313,6 @@ export function RehearsalMode({ onExit }: Props) {
         countdownEndMsRef.current = null
         setCountdownMs(0)
         countdownExpiredRef.current = true
-        // Fallback: if no speech stops naturally, force advance after silenceMs
-        setTimeout(() => { abortRef.current() }, silenceMsRef.current)
       } else {
         setCountdownMs(rem)
       }
