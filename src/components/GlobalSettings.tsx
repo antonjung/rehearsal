@@ -389,11 +389,23 @@ function VoiceCalibration({
       </div>
 
       {pct !== null && (
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-[var(--color-stage-muted)]">Calibration coefficient</span>
-          <span className={`font-mono font-bold text-sm ${pct > 110 ? 'text-amber-400' : pct < 90 ? 'text-blue-400' : 'text-[var(--color-stage-accent-light)]'}`}>
-            {pct}%
-          </span>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[var(--color-stage-muted)]">Calibration coefficient</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => onSave(Math.max(0.3, (stored ?? 1) - 0.05))}
+                className="w-6 h-6 rounded border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)]/50 text-sm leading-none flex items-center justify-center transition-colors"
+              >−</button>
+              <span className={`font-mono font-bold text-sm w-10 text-center ${pct > 110 ? 'text-amber-400' : pct < 90 ? 'text-blue-400' : 'text-[var(--color-stage-accent-light)]'}`}>
+                {pct}%
+              </span>
+              <button
+                onClick={() => onSave(Math.min(3.0, (stored ?? 1) + 0.05))}
+                className="w-6 h-6 rounded border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)]/50 text-sm leading-none flex items-center justify-center transition-colors"
+              >+</button>
+            </div>
+          </div>
         </div>
       )}
 
