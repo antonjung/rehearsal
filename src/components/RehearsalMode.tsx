@@ -166,9 +166,10 @@ export function RehearsalMode({ onExit }: Props) {
   const [showSummary, setShowSummary] = useState(false)
   const rate = settings.speechRate
   const [countdownMs, setCountdownMs] = useState<number | null>(null)
-  const countdownEndMsRef = useRef<number | null>(null)
   const countdownGapRef = useRef<number>(0)
   const countdownExpiredRef = useRef(false)
+  const speechAccumMsRef = useRef(0)          // total ms of speaking accumulated this line
+  const speechBoutStartRef = useRef<number | null>(null)  // start of current speaking bout
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
@@ -299,28 +300,26 @@ export function RehearsalMode({ onExit }: Props) {
   }, [cancel, abort])
 
   // Clear countdown when leaving silence/listening phase
-  // (countdown is started by onSpeechStart in each listen() call, not on phase entry)
   useEffect(() => {
     if (phase !== 'my-line-silence' && phase !== 'my-line-listening') {
-      countdownEndMsRef.current = null
+      speechAccumMsRef.current = 0
+      speechBoutStartRef.current = null
       setCountdownMs(null)
     }
   }, [phase])
 
-  // Tick at 100ms; at zero switch to short-silence mode — do NOT abort
-  // listen() will resolve naturally once the actor stops speaking
+  // Tick at 100ms: accumulate speaking time, pause when actor is silent
   useEffect(() => {
     const id = setInterval(() => {
-      const end = countdownEndMsRef.current
-      if (end === null) { setCountdownMs(null); return }
-      const rem = end - Date.now()
-      if (rem <= 0) {
-        countdownEndMsRef.current = null
-        setCountdownMs(0)
-        countdownExpiredRef.current = true
-      } else {
-        setCountdownMs(rem)
-      }
+      const gap = countdownGapRef.current
+      const accum = speechAccumMsRef.current
+      const boutStart = speechBoutStartRef.current
+      // Show nothing until speech starts
+      if (accum === 0 && boutStart === null) { setCountdownMs(null); return }
+      const totalSpoken = accum + (boutStart !== null ? Date.now() - boutStart : 0)
+      const rem = Math.max(0, gap - totalSpoken)
+      setCountdownMs(rem)
+      if (rem <= 0 && !countdownExpiredRef.current) countdownExpiredRef.current = true
     }, 100)
     return () => clearInterval(id)
   }, [])
@@ -376,6 +375,20 @@ export function RehearsalMode({ onExit }: Props) {
       const runId = ++runIdRef.current
       stopRef.current = false
       let i = startIdx
+
+      // Callback passed to listen(): accumulates only time when actor is speaking.
+      // Called with true when onresult fires (speech active), false after 300ms quiet.
+      // finish() in the hook always fires false before resolving, finalising the tally.
+      const onSpeechActivity = (active: boolean) => {
+        if (active) {
+          if (speechBoutStartRef.current === null) speechBoutStartRef.current = Date.now() - 300
+        } else {
+          if (speechBoutStartRef.current !== null) {
+            speechAccumMsRef.current += Date.now() - speechBoutStartRef.current
+            speechBoutStartRef.current = null
+          }
+        }
+      }
 
       while (i <= endIdx && !stopRef.current) {
         await waitWhilePaused()
@@ -462,12 +475,12 @@ export function RehearsalMode({ onExit }: Props) {
 
           if (myLineMode === 'silence') {
             if (accuracyEnabled && supported) {
-              countdownGapRef.current = gap
+              countdownGapRef.current = gap; speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               countdownExpiredRef.current = false
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap - 500 } })
-              countdownEndMsRef.current = null
+              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
+              speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
               if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
@@ -481,17 +494,17 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  if (settingsRef.current.linePingEnabled) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
+                  if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
                 }
               }
             } else {
               // No speech recognition: listen for voice activity or fall back to fixed gap
-              countdownGapRef.current = gap
+              countdownGapRef.current = gap; speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               countdownExpiredRef.current = false
               setPhase('my-line-silence')
               if (supported) {
-                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap - 500 } })
-                countdownEndMsRef.current = null
+                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
+                speechAccumMsRef.current = 0; speechBoutStartRef.current = null
                 await delay(600)
                 if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
@@ -506,12 +519,12 @@ export function RehearsalMode({ onExit }: Props) {
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
           } else if (myLineMode === 'gap-before') {
             // Wait for user to finish attempting the line, then read it
-            countdownGapRef.current = gap
+            countdownGapRef.current = gap; speechAccumMsRef.current = 0; speechBoutStartRef.current = null
             countdownExpiredRef.current = false
             setPhase('my-line-silence')
             if (supported) {
-              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap - 500 } })
-              countdownEndMsRef.current = null
+              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
+              speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               await delay(600)
               if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
@@ -530,12 +543,12 @@ export function RehearsalMode({ onExit }: Props) {
             const rec = recMapRef.current.get(lineIdx)
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
             if (!stopRef.current) {
-              countdownGapRef.current = gap
+              countdownGapRef.current = gap; speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               countdownExpiredRef.current = false
               setPhase('my-line-listening')
               if (supported) {
-                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechStart: () => { countdownEndMsRef.current = Date.now() + gap - 500 } })
-                countdownEndMsRef.current = null
+                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef, onSpeechActivity })
+                speechAccumMsRef.current = 0; speechBoutStartRef.current = null
                 await delay(600)
                 if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
@@ -546,7 +559,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  if (settingsRef.current.linePingEnabled) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
+                  if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
                 }
               } else {
                 await delay(gap)
@@ -562,7 +575,7 @@ export function RehearsalMode({ onExit }: Props) {
       // If a newer run has started (line tap mid-play), don't clobber its phase.
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
-        if (settingsRef.current.scenePingEnabled ?? true) await playCompletion()
+        if (settingsRef.current.scenePingEnabled !== false) await playCompletion()
         if (loopRef.current && runIdRef.current === runId) {
           const loopRunId = runId
           setTimeout(() => {

@@ -16,6 +16,8 @@ export interface ListenOptions {
   switchToShortSilenceRef?: { current: boolean }
   /** Called once when the first speech result arrives */
   onSpeechStart?: () => void
+  /** Called with true when speech activity starts/resumes, false when it pauses/ends */
+  onSpeechActivity?: (active: boolean) => void
 }
 
 // Fraction of expected words found in spoken text — used for early line-end detection
@@ -40,7 +42,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart } = options
+    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -55,13 +57,25 @@ export function useSpeechRecognition() {
       let finalTranscript = ''
       let liveTranscript = ''
       let silenceTimer: ReturnType<typeof setTimeout> | null = null
+      let activityTimer: ReturnType<typeof setTimeout> | null = null
       let done = false
       let speechStartTime: number | null = null
+      let speechActive = false
+
+      // Fires onSpeechActivity only on transitions, not on every result
+      const PAUSE_DETECT_MS = 300
+      const notifyActivity = (active: boolean) => {
+        if (active === speechActive) return
+        speechActive = active
+        onSpeechActivity?.(active)
+      }
 
       const finish = () => {
         if (done) return
         done = true
         if (silenceTimer) clearTimeout(silenceTimer)
+        if (activityTimer) clearTimeout(activityTimer)
+        notifyActivity(false)  // finalize accumulated time in component before rec.onend
         rec.stop()
       }
 
@@ -93,6 +107,11 @@ export function useSpeechRecognition() {
         }
         liveTranscript = combined
         setTranscript(combined)
+
+        // Track speech activity: fire true on resume, schedule false after silence
+        notifyActivity(true)
+        if (activityTimer) clearTimeout(activityTimer)
+        activityTimer = setTimeout(() => notifyActivity(false), PAUSE_DETECT_MS)
 
         // Stop immediately if enough of the expected line has been spoken
         if (expectedText && hasFinal && wordCoverage(expectedText, combined) >= 0.8) {
