@@ -174,6 +174,8 @@ export function RehearsalMode({ onExit }: Props) {
   handsFreeRef.current = handsFreeEnabled
   const abortRef = useRef(abort)
   abortRef.current = abort
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -469,7 +471,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  if (settings.linePingEnabled) await playPing(acc, settings.accuracyWarningThreshold)
+                  if (settingsRef.current.linePingEnabled) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
                 }
               }
             } else {
@@ -531,7 +533,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  if (settings.linePingEnabled) await playPing(acc, settings.accuracyWarningThreshold)
+                  if (settingsRef.current.linePingEnabled) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
                 }
               } else {
                 await delay(gap)
@@ -547,7 +549,7 @@ export function RehearsalMode({ onExit }: Props) {
       // If a newer run has started (line tap mid-play), don't clobber its phase.
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
-        if (settings.scenePingEnabled ?? true) await playCompletion()
+        if (settingsRef.current.scenePingEnabled ?? true) await playCompletion()
         if (loopRef.current && runIdRef.current === runId) {
           const loopRunId = runId
           setTimeout(() => {
