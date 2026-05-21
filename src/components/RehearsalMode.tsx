@@ -341,6 +341,9 @@ export function RehearsalMode({ onExit }: Props) {
           handlePlayRef.current()
           break
         }
+        if (heardParts.length <= 3 && heardParts.some(w => voiceCmdWordsRef.current.loop.includes(w))) {
+          setLoopEnabledRef.current(v => !v)
+        }
       }
     })()
     return () => { idleListeningRef.current = false }
