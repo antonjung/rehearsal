@@ -137,16 +137,12 @@ export function GlobalSettings({ onClose }: Props) {
             </label>
 
             {/* Speech rate */}
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-sm text-[var(--color-stage-text)]">Speech rate</span>
-                <span className="text-xs text-[var(--color-stage-muted)]">{prefs.speechRate.toFixed(1)}×</span>
-              </div>
-              <input
-                type="range" min={0.5} max={2} step={0.1}
-                value={prefs.speechRate}
-                onChange={(e) => update('speechRate', Number(e.target.value))}
-                className="w-full accent-[var(--color-stage-accent)]"
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--color-stage-text)]">Speech rate</span>
+              <Stepper
+                value={prefs.speechRate} min={0.5} max={2} step={0.1}
+                display={`${prefs.speechRate.toFixed(1)}×`}
+                onChange={(v) => update('speechRate', Math.round(v * 10) / 10)}
               />
             </div>
 
@@ -161,42 +157,30 @@ export function GlobalSettings({ onClose }: Props) {
 
             {prefs.accuracyEnabled && (
               <>
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-[var(--color-stage-muted)]">Warning threshold</span>
-                    <span className="text-xs text-[var(--color-stage-muted)]">{prefs.accuracyWarningThreshold}%</span>
-                  </div>
-                  <input
-                    type="range" min={0} max={100} step={5}
-                    value={prefs.accuracyWarningThreshold}
-                    onChange={(e) => update('accuracyWarningThreshold', Number(e.target.value))}
-                    className="w-full accent-[var(--color-stage-accent)]"
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--color-stage-muted)]">Warning threshold</span>
+                  <Stepper
+                    value={prefs.accuracyWarningThreshold} min={0} max={100} step={5}
+                    display={`${prefs.accuracyWarningThreshold}%`}
+                    onChange={(v) => update('accuracyWarningThreshold', v)}
                   />
                 </div>
 
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-[var(--color-stage-muted)]">Silence gap</span>
-                    <span className="text-xs text-[var(--color-stage-muted)]">{(prefs.endLineSilenceMs / 1000).toFixed(1)}s</span>
-                  </div>
-                  <input
-                    type="range" min={200} max={3000} step={100}
-                    value={prefs.endLineSilenceMs}
-                    onChange={(e) => update('endLineSilenceMs', Number(e.target.value))}
-                    className="w-full accent-[var(--color-stage-accent)]"
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--color-stage-muted)]">Silence gap</span>
+                  <Stepper
+                    value={prefs.endLineSilenceMs} min={200} max={3000} step={100}
+                    display={`${(prefs.endLineSilenceMs / 1000).toFixed(1)}s`}
+                    onChange={(v) => update('endLineSilenceMs', v)}
                   />
                 </div>
 
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-xs text-[var(--color-stage-muted)]">Max pause</span>
-                    <span className="text-xs text-[var(--color-stage-muted)]">{((prefs.maxPauseMs ?? 8000) / 1000).toFixed(0)}s</span>
-                  </div>
-                  <input
-                    type="range" min={1000} max={10000} step={1000}
-                    value={prefs.maxPauseMs ?? 8000}
-                    onChange={(e) => update('maxPauseMs', Number(e.target.value))}
-                    className="w-full accent-[var(--color-stage-accent)]"
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--color-stage-muted)]">Max pause</span>
+                  <Stepper
+                    value={prefs.maxPauseMs ?? 2000} min={200} max={3000} step={200}
+                    display={`${((prefs.maxPauseMs ?? 2000) / 1000).toFixed(1)}s`}
+                    onChange={(v) => update('maxPauseMs', v)}
                   />
                 </div>
               </>
@@ -225,18 +209,16 @@ export function GlobalSettings({ onClose }: Props) {
           {/* Script font size */}
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Script font size</h3>
-            <div>
-              <div className="flex justify-between mb-1">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <span className="text-sm text-[var(--color-stage-text)]">Size</span>
-                <span className="text-xs text-[var(--color-stage-muted)]">{scriptFontSize}px</span>
+                <Stepper
+                  value={scriptFontSize} min={11} max={22} step={1}
+                  display={`${scriptFontSize}px`}
+                  onChange={setScriptFontSize}
+                />
               </div>
-              <input
-                type="range" min={11} max={22} step={1}
-                value={scriptFontSize}
-                onChange={(e) => setScriptFontSize(Number(e.target.value))}
-                className="w-full accent-[var(--color-stage-accent)]"
-              />
-              <p className="mt-2 text-[var(--color-stage-muted)]" style={{ fontSize: `${scriptFontSize}px` }}>
+              <p className="text-[var(--color-stage-muted)]" style={{ fontSize: `${scriptFontSize}px` }}>
                 All the world&apos;s a stage
               </p>
             </div>
@@ -439,6 +421,25 @@ function VoiceCalibration({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function Stepper({ value, min, max, step, display, onChange }: {
+  value: number; min: number; max: number; step: number; display: string
+  onChange: (v: number) => void
+}) {
+  const decrement = () => { if (value > min) onChange(Math.max(min, Math.round((value - step) / step) * step)) }
+  const increment = () => { if (value < max) onChange(Math.min(max, Math.round((value + step) / step) * step)) }
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={decrement} disabled={value <= min}
+        className="w-9 h-9 rounded-lg border border-[var(--color-stage-border)] text-[var(--color-stage-text)] text-xl leading-none flex items-center justify-center transition-colors hover:border-[var(--color-stage-accent)] disabled:opacity-30 disabled:cursor-not-allowed"
+      >−</button>
+      <span className="text-sm font-mono tabular-nums text-[var(--color-stage-text)] w-14 text-center">{display}</span>
+      <button onClick={increment} disabled={value >= max}
+        className="w-9 h-9 rounded-lg border border-[var(--color-stage-border)] text-[var(--color-stage-text)] text-xl leading-none flex items-center justify-center transition-colors hover:border-[var(--color-stage-accent)] disabled:opacity-30 disabled:cursor-not-allowed"
+      >+</button>
     </div>
   )
 }
