@@ -353,8 +353,8 @@ function VoiceCalibration({
 
 function SettingsSection({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <div className="px-4 py-4 space-y-3 border-b border-[var(--color-stage-border)]">
-      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-stage-muted)]">{title}</h3>
+    <div className="px-4 py-4 space-y-3 border-b border-[var(--color-stage-text)]/20">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-stage-text)]">{title}</h3>
       {children}
     </div>
   )
