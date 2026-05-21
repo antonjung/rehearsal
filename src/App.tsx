@@ -4,7 +4,6 @@ import { CharacterTable } from './components/CharacterTable'
 import { RecordingStudio } from './components/RecordingStudio'
 import { RehearsalSetup } from './components/RehearsalSetup'
 import { RehearsalMode } from './components/RehearsalMode'
-import { SplashScreen } from './components/SplashScreen'
 import { GlobalSettings } from './components/GlobalSettings'
 import { SideMenu } from './components/SideMenu'
 import { useAppStore } from './store/useAppStore'
@@ -35,7 +34,6 @@ function scriptTitleClass(name: string) {
 }
 
 export default function App() {
-  const [splashDone, setSplashDone] = useState(false)
   const [tab, setTab] = useState<Tab>('scripts')
   const [rehearsing, setRehearsing] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -47,8 +45,6 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
-
-  if (!splashDone) return <SplashScreen onDone={() => setSplashDone(true)} />
 
   return (
     <div className="h-full flex flex-col max-w-2xl mx-auto">
