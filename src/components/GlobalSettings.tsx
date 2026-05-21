@@ -50,7 +50,7 @@ export function GlobalSettings({ onClose }: Props) {
     clipStartPingEnabled: true,
   }
 
-  const cmdWords: VoiceCommandWords = prefs.voiceCommands ?? DEFAULT_VOICE_COMMANDS
+  const cmdWords: VoiceCommandWords = { ...DEFAULT_VOICE_COMMANDS, ...(prefs.voiceCommands ?? {}) }
 
   const parseWords = (s: string) => s.split(',').map(w => w.trim().toLowerCase()).filter(Boolean)
   const fmtWords = (ws: string[]) => ws.join(', ')

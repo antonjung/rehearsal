@@ -209,8 +209,8 @@ export function RehearsalMode({ onExit }: Props) {
   // handlePlay sets this false + calls abort() synchronously, stopping the loop
   // before runPlayback starts its own listen() — avoiding competing SR sessions.
   const idleListeningRef = useRef(false)
-  const voiceCmdWordsRef = useRef<VoiceCommandWords>(settings.voiceCommands ?? DEFAULT_VOICE_COMMANDS)
-  voiceCmdWordsRef.current = settings.voiceCommands ?? DEFAULT_VOICE_COMMANDS
+  const voiceCmdWordsRef = useRef<VoiceCommandWords>({ ...DEFAULT_VOICE_COMMANDS, ...(settings.voiceCommands ?? {}) })
+  voiceCmdWordsRef.current = { ...DEFAULT_VOICE_COMMANDS, ...(settings.voiceCommands ?? {}) }
 
   // --- Audio helpers ---
   // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
