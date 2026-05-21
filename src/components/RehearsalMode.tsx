@@ -165,12 +165,14 @@ export function RehearsalMode({ onExit }: Props) {
   const [rate, setRate] = useState(settings.speechRate)
   const [countdownSecs, setCountdownSecs] = useState<number | null>(null)
   const countdownEndMsRef = useRef<number | null>(null)
-  const maxPauseMs = settings.maxPauseMs ?? 8000
+  const countdownGapRef = useRef<number>(0)
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
   const handsFreeRef = useRef(false)
   handsFreeRef.current = handsFreeEnabled
+  const abortRef = useRef(abort)
+  abortRef.current = abort
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -292,20 +294,26 @@ export function RehearsalMode({ onExit }: Props) {
   // Start countdown when silence/listening phase begins; clear when phase changes
   useEffect(() => {
     if (phase === 'my-line-silence' || phase === 'my-line-listening') {
-      countdownEndMsRef.current = Date.now() + maxPauseMs
+      countdownEndMsRef.current = Date.now() + countdownGapRef.current
     } else {
       countdownEndMsRef.current = null
       setCountdownSecs(null)
     }
-  }, [phase, maxPauseMs])
+  }, [phase])
 
-  // Tick the countdown display at 200ms resolution
+  // Tick the countdown; at zero abort recognition so playback auto-advances
   useEffect(() => {
     const id = setInterval(() => {
       const end = countdownEndMsRef.current
       if (end === null) { setCountdownSecs(null); return }
       const rem = Math.ceil((end - Date.now()) / 1000)
-      setCountdownSecs(rem > 0 ? rem : 0)
+      if (rem <= 0) {
+        countdownEndMsRef.current = null
+        setCountdownSecs(0)
+        abortRef.current()
+      } else {
+        setCountdownSecs(rem)
+      }
     }, 200)
     return () => clearInterval(id)
   }, [])
@@ -418,14 +426,20 @@ export function RehearsalMode({ onExit }: Props) {
           }
           if (handsFreeRef.current && supported) {
             let otherCmd: HandsFreeCmd | null = null
-            const listenP = listen({ silenceMs: 1500 }).then(heard => {
-              if (heard && !stopRef.current) {
+            let speakDone = false
+            const speakPromise = speakOther().then(() => { speakDone = true })
+            while (!speakDone && !stopRef.current) {
+              const heard = await Promise.race([
+                listen({ silenceMs: 1500 }),
+                speakPromise.then(() => ''),
+              ])
+              abort()
+              if (stopRef.current) break
+              if (heard) {
                 const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
-                if (cmd) { otherCmd = cmd; cancel(); cancelRecording() }
+                if (cmd) { otherCmd = cmd; cancel(); cancelRecording(); break }
               }
-            })
-            await Promise.race([speakOther(), listenP])
-            abort()
+            }
             if (otherCmd && !stopRef.current) { execHandsFreeCommand(otherCmd, lineIdx); return }
           } else {
             await speakOther()
@@ -435,9 +449,10 @@ export function RehearsalMode({ onExit }: Props) {
 
           if (myLineMode === 'silence') {
             if (accuracyEnabled && supported) {
+              countdownGapRef.current = gap
               setPhase('my-line-listening')
               resetTranscript()
-              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs })
+              const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap })
               // iOS needs a moment to hand the audio session back from mic to speaker
               await delay(600)
               if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
@@ -456,9 +471,10 @@ export function RehearsalMode({ onExit }: Props) {
               }
             } else {
               // No speech recognition: listen for voice activity or fall back to fixed gap
+              countdownGapRef.current = gap
               setPhase('my-line-silence')
               if (supported) {
-                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs })
+                const _heard = await listen({ silenceMs, estimatedMs: gap })
                 await delay(600)
                 if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
               } else {
@@ -473,9 +489,10 @@ export function RehearsalMode({ onExit }: Props) {
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
           } else if (myLineMode === 'gap-before') {
             // Wait for user to finish attempting the line, then read it
+            countdownGapRef.current = gap
             setPhase('my-line-silence')
             if (supported) {
-              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs })
+              const _heard = await listen({ silenceMs, estimatedMs: gap })
               await delay(600)
               if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
             } else {
@@ -494,9 +511,10 @@ export function RehearsalMode({ onExit }: Props) {
             const rec = recMapRef.current.get(lineIdx)
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
             if (!stopRef.current) {
+              countdownGapRef.current = gap
               setPhase('my-line-listening')
               if (supported) {
-                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs })
+                const heard = await listen({ expectedText: groupText, silenceMs, estimatedMs: gap })
                 await delay(600)
                 if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
                 if (!stopRef.current && heard && accuracyEnabled) {
