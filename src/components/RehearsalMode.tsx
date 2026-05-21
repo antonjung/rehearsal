@@ -8,7 +8,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
 import { AccuracySummary } from './AccuracySummary'
-import { unlockAudio, /*playPing, playCompletion, playClipStart,*/ getAudioContext } from '../utils/sounds'
+import { unlockAudio, playPing, playCompletion, playClipStart, getAudioContext } from '../utils/sounds'
 import type { WordDiff, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
@@ -483,9 +483,9 @@ export function RehearsalMode({ onExit }: Props) {
           const { myLineMode } = settings
 
           // Cue sound when the very first line in the clip is the user's
-          // if (lineIdx === startIdx && (settingsRef.current.clipStartPingEnabled ?? true)) {
-          //   await playClipStart()
-          // }
+          if (lineIdx === startIdx && (settingsRef.current.clipStartPingEnabled ?? true)) {
+            await playClipStart()
+          }
 
           if (myLineMode === 'silence') {
             if (accuracyEnabled && supported) {
@@ -508,7 +508,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  // if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
+                  if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
                 }
               }
             } else {
@@ -573,7 +573,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  // if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
+                  if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
                 }
               } else {
                 await delay(gap)
@@ -589,7 +589,7 @@ export function RehearsalMode({ onExit }: Props) {
       // If a newer run has started (line tap mid-play), don't clobber its phase.
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
-        // if (settingsRef.current.scenePingEnabled === true) await playCompletion()
+        if (settingsRef.current.scenePingEnabled === true) await playCompletion()
         if (loopRef.current && runIdRef.current === runId) {
           const loopRunId = runId
           setTimeout(() => {
