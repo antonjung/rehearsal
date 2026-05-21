@@ -1,9 +1,11 @@
 import { useAppStore } from '../store/useAppStore'
 import { THEMES } from '../utils/themes'
 import { MicTest } from './MicTest'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { MyLineMode, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
+import { estimateDuration } from '../utils/speechDuration'
 
 const HIGHLIGHTER_OPTIONS: { value: 'yellow' | 'pink' | 'green' | 'blue'; label: string; color: string }[] = [
   { value: 'yellow', label: 'Yellow', color: 'rgba(255, 255, 0, 0.85)' },
@@ -285,6 +287,17 @@ export function GlobalSettings({ onClose }: Props) {
             ))}
           </section>
 
+          {/* Voice calibration */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Voice calibration</h3>
+            <p className="text-xs text-[var(--color-stage-muted)]">Read the phrase below at your natural acting pace to calibrate line timing.</p>
+            <VoiceCalibration
+              stored={prefs.voiceCalibration}
+              onSave={(c) => update('voiceCalibration', c as number)}
+              onReset={() => saveRehearsalSettings({ ...prefs, voiceCalibration: undefined })}
+            />
+          </section>
+
           {/* Test microphone */}
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Microphone</h3>
@@ -324,6 +337,94 @@ export function GlobalSettings({ onClose }: Props) {
         </div>
       </div>
     </>
+  )
+}
+
+const CALIBRATION_PHRASE = "All the world's a stage, and all the men and women merely players."
+const CALIBRATION_SILENCE_MS = 800
+
+function VoiceCalibration({
+  stored,
+  onSave,
+  onReset,
+}: {
+  stored?: number
+  onSave: (c: number) => void
+  onReset: () => void
+}) {
+  const [status, setStatus] = useState<'idle' | 'waiting' | 'speaking' | 'done' | 'no-speech'>('idle')
+  const { listen, abort, supported } = useSpeechRecognition()
+  const speechStartRef = useRef<number | null>(null)
+
+  const handleStart = async () => {
+    speechStartRef.current = null
+    setStatus('waiting')
+    await listen({
+      silenceMs: CALIBRATION_SILENCE_MS,
+      onSpeechStart: () => { speechStartRef.current = Date.now(); setStatus('speaking') },
+    })
+    const speechStart = speechStartRef.current
+    if (speechStart !== null) {
+      const userMs = Date.now() - CALIBRATION_SILENCE_MS - speechStart
+      if (userMs > 300) {
+        // baseMs = raw word-timing only, no breathing margin
+        const baseMs = estimateDuration(CALIBRATION_PHRASE, 1.0) - 500
+        const coeff = Math.max(0.3, Math.min(3.0, userMs / baseMs))
+        onSave(coeff)
+        setStatus('done')
+        return
+      }
+    }
+    setStatus('no-speech')
+  }
+
+  const handleReset = () => { abort(); onReset(); setStatus('idle') }
+
+  const pct = stored !== undefined ? Math.round(stored * 100) : null
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-[var(--color-stage-border)] px-3 py-2.5 text-sm italic text-[var(--color-stage-text)] leading-relaxed">
+        "{CALIBRATION_PHRASE}"
+      </div>
+
+      {pct !== null && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-[var(--color-stage-muted)]">Calibration coefficient</span>
+          <span className={`font-mono font-bold text-sm ${pct > 110 ? 'text-amber-400' : pct < 90 ? 'text-blue-400' : 'text-[var(--color-stage-accent-light)]'}`}>
+            {pct}%
+          </span>
+        </div>
+      )}
+
+      {status === 'no-speech' && (
+        <p className="text-xs text-red-400">No speech detected — try again.</p>
+      )}
+
+      <div className="flex gap-2">
+        {status === 'idle' || status === 'done' || status === 'no-speech' ? (
+          <button
+            onClick={handleStart}
+            disabled={!supported}
+            className="flex-1 text-xs py-2 rounded-lg bg-[var(--color-stage-accent)]/20 border border-[var(--color-stage-accent)]/40 text-[var(--color-stage-accent-light)] hover:bg-[var(--color-stage-accent)]/30 transition-colors disabled:opacity-40"
+          >
+            {status === 'done' ? 'Recalibrate' : 'Read phrase aloud'}
+          </button>
+        ) : (
+          <div className="flex-1 text-xs py-2 rounded-lg border border-[var(--color-stage-accent)]/40 text-center text-[var(--color-stage-muted)] animate-pulse">
+            {status === 'waiting' ? 'Start speaking…' : 'Listening…'}
+          </div>
+        )}
+        {pct !== null && (
+          <button
+            onClick={handleReset}
+            className="text-xs px-3 py-2 rounded-lg border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 

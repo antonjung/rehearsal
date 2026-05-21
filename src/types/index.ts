@@ -63,6 +63,7 @@ export interface RehearsalSettings {
   maxPauseMs?: number
   linePingEnabled?: boolean
   scenePingEnabled?: boolean
+  voiceCalibration?: number
 }
 
 export interface MarkedBlock {

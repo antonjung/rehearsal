@@ -417,7 +417,7 @@ export function RehearsalMode({ onExit }: Props) {
         }
 
         const isMyLine = line.character === settings.myCharacter
-        const gap = estimateDuration(groupText, rate)
+        const gap = estimateDuration(groupText, rate) * (settingsRef.current.voiceCalibration ?? 1)
         const silenceMs = settings.endLineSilenceMs ?? 1000
 
         if (!isMyLine) {

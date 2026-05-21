@@ -14,6 +14,8 @@ export interface ListenOptions {
   maxPauseMs?: number
   /** When set true externally, always use silenceMs regardless of elapsed time */
   switchToShortSilenceRef?: { current: boolean }
+  /** Called once when the first speech result arrives */
+  onSpeechStart?: () => void
 }
 
 // Fraction of expected words found in spoken text — used for early line-end detection
@@ -38,7 +40,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef } = options
+    const { expectedText, silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -76,7 +78,7 @@ export function useSpeechRecognition() {
       }
 
       rec.onresult = (e: AnySR) => {
-        if (speechStartTime === null) speechStartTime = Date.now()
+        if (speechStartTime === null) { speechStartTime = Date.now(); onSpeechStart?.() }
         let combined = ''
         let hasFinal = false
         for (let i = 0; i < e.results.length; i++) {
