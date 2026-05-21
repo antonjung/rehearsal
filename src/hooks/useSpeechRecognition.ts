@@ -66,7 +66,8 @@ export function useSpeechRecognition() {
         if (silenceTimer) clearTimeout(silenceTimer)
         if (activityTimer) clearTimeout(activityTimer)
         notifyActivity(false)  // finalize accumulated time in component before rec.onend
-        rec.stop()
+        // abort() rather than stop() to avoid triggering the iOS mic-off system sound
+        rec.abort()
       }
 
       const scheduleSilenceStop = () => {
@@ -109,7 +110,7 @@ export function useSpeechRecognition() {
       rec.onerror = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
         setListening(false)
-        resolve(finalTranscript || '')
+        resolve(finalTranscript || liveTranscript)
         resolveRef.current = null
       }
 
