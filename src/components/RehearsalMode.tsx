@@ -162,7 +162,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
-  const [rate, setRate] = useState(settings.speechRate)
+  const rate = settings.speechRate
   const [countdownMs, setCountdownMs] = useState<number | null>(null)
   const countdownEndMsRef = useRef<number | null>(null)
   const countdownGapRef = useRef<number>(0)
@@ -788,32 +788,18 @@ export function RehearsalMode({ onExit }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Sub-header: just script name + rate */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] shrink-0 flex items-center gap-1 text-sm">
-            <IconArrowLeft className="text-base" /> Back
-          </button>
-          <span className="text-sm font-semibold text-[var(--color-stage-text)] truncate">{script.name}</span>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-xs text-[var(--color-stage-muted)]">{rate.toFixed(1)}×</span>
-          <input
-            type="range" min={0.5} max={2} step={0.1} value={rate}
-            onChange={(e) => setRate(Number(e.target.value))}
-            className="w-20 accent-[var(--color-stage-accent)]"
-            disabled={isPlaying}
-          />
-        </div>
-      </div>
-
-      {/* Show/hide my lines toggle */}
-      <div className="px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 flex items-center justify-between">
-        <span className="text-xs text-[var(--color-stage-text)]">Show all {settings.myCharacter}'s lines</span>
-        <ToggleSwitch checked={showAllMyLines} onChange={(v) => {
-          setShowAllMyLines(v)
-          setRevealedLines({})
-        }} />
+      {/* Sub-header: back | scene/character label | show-lines toggle */}
+      <div className="flex items-center px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
+        <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] shrink-0 flex items-center gap-1 text-sm">
+          <IconArrowLeft className="text-base" /> Back
+        </button>
+        <span className="flex-1 text-sm font-semibold text-[var(--color-stage-text)] truncate text-center">
+          {activeScene ? activeScene.sceneTitle || activeScene.title : settings.myCharacter}
+        </span>
+        <ToggleSwitch
+          checked={showAllMyLines}
+          onChange={(v) => { setShowAllMyLines(v); setRevealedLines({}) }}
+        />
       </div>
 
       {/* Drag overlay: fixed line that follows the finger during clip marker drag */}
@@ -1047,12 +1033,19 @@ function ClipMarker({ type, hidden, onTouchStart }: {
 
 function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
-      <div className={`w-11 h-6 rounded-full transition-colors relative ${checked ? 'bg-[var(--color-stage-accent)]' : 'bg-[var(--color-stage-border)]'}`}>
-        <div className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
-      </div>
-    </label>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex w-11 h-6 rounded-full transition-colors shrink-0 focus:outline-none ${
+        checked ? 'bg-[var(--color-stage-accent)]' : 'bg-[var(--color-stage-border)]'
+      }`}
+    >
+      <span className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full bg-white shadow transition-transform ${
+        checked ? 'translate-x-5' : 'translate-x-0'
+      }`} />
+    </button>
   )
 }
 
