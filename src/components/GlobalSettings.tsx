@@ -47,6 +47,7 @@ export function GlobalSettings({ onClose }: Props) {
     handsFreeEnabled: true,
     linePingEnabled: false,
     scenePingEnabled: true,
+    clipStartPingEnabled: true,
   }
 
   const cmdWords: VoiceCommandWords = prefs.voiceCommands ?? DEFAULT_VOICE_COMMANDS
@@ -156,6 +157,9 @@ export function GlobalSettings({ onClose }: Props) {
 
           {/* ── Signals ── */}
           <SettingsSection title="Signals">
+            <SettingsRow label="Cue when my line comes first">
+              <ToggleSwitch checked={prefs.clipStartPingEnabled ?? true} onChange={(v) => update('clipStartPingEnabled', v)} />
+            </SettingsRow>
             <SettingsRow label="Ping after each line">
               <ToggleSwitch checked={prefs.linePingEnabled ?? false} onChange={(v) => update('linePingEnabled', v)} />
             </SettingsRow>
@@ -392,18 +396,18 @@ function Stepper({ value, min, max, step, display, onChange }: {
 
 function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="sr-only peer"
-      />
-      <div className={`w-11 h-6 rounded-full transition-colors peer-focus:outline-none relative
-        ${checked ? 'bg-[var(--color-stage-accent)]' : 'bg-[var(--color-stage-border)]'}`}>
-        <div className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full bg-white shadow transition-transform
-          ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
-      </div>
-    </label>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex w-11 h-6 rounded-full transition-colors shrink-0 focus:outline-none ${
+        checked ? 'bg-[var(--color-stage-accent)]' : 'bg-[var(--color-stage-border)]'
+      }`}
+    >
+      <span className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full bg-white shadow transition-transform ${
+        checked ? 'translate-x-5' : 'translate-x-0'
+      }`} />
+    </button>
   )
 }

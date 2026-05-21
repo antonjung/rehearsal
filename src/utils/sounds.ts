@@ -37,6 +37,12 @@ function tone(freq: number, duration: number, startOffset = 0, vol = 0.35): Prom
   })
 }
 
+export function playClipStart(): Promise<void> {
+  if (!ctx || ctx.state === 'closed') return Promise.resolve()
+  tone(523, 0.08, 0)          // C5 — short lead-in
+  return tone(784, 0.15, 0.12) // G5 — ready cue
+}
+
 export function playPing(accuracy: number, threshold: number): Promise<void> {
   if (accuracy >= 100) return tone(880, 0.2)     // green: bright high
   if (accuracy >= threshold) return tone(660, 0.2) // yellow: mid

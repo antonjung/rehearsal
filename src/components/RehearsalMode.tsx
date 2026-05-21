@@ -8,7 +8,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
 import { AccuracySummary } from './AccuracySummary'
-import { unlockAudio, playPing, playCompletion, getAudioContext } from '../utils/sounds'
+import { unlockAudio, playPing, playCompletion, playClipStart, getAudioContext } from '../utils/sounds'
 import type { WordDiff, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
@@ -449,6 +449,11 @@ export function RehearsalMode({ onExit }: Props) {
           }
         } else {
           const { myLineMode } = settings
+
+          // Cue sound when the very first line in the clip is the user's
+          if (lineIdx === startIdx && (settingsRef.current.clipStartPingEnabled ?? true)) {
+            await playClipStart()
+          }
 
           if (myLineMode === 'silence') {
             if (accuracyEnabled && supported) {
