@@ -66,17 +66,13 @@ export function useSpeechRecognition() {
 
       const scheduleSilenceStop = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
+        // After 75% of estimated time: use silenceMs (actor has probably finished).
+        // Before 75%: use maxPauseMs (actor may still be mid-line).
         let wait = silenceMs
-        // If we know how long the line should take and the actor hasn't spoken
-        // for that long yet, they're probably mid-pause — extend the wait.
-        if (estimatedMs !== undefined && speechStartTime !== null) {
+        if (estimatedMs !== undefined && speechStartTime !== null && maxPauseMs !== undefined) {
           const elapsed = Date.now() - speechStartTime
-          if (elapsed < estimatedMs * 0.7) {
-            wait = Math.max(silenceMs, (estimatedMs - elapsed) + silenceMs)
-          }
+          if (elapsed < estimatedMs * 0.75) wait = maxPauseMs
         }
-        // Hard cap — move on regardless of how much has been spoken
-        if (maxPauseMs !== undefined) wait = Math.min(wait, maxPauseMs)
         silenceTimer = setTimeout(finish, wait)
       }
 
