@@ -902,7 +902,7 @@ export function RehearsalMode({ onExit }: Props) {
                   longPressMenuFiredRef.current = true
                   setClipMenu({ startIdx: group.startIdx, y: capturedY })
                   longPressTouchRef.current = null
-                }, 2000)
+                }, 600)
               }}
               onTouchMove={(e) => {
                 if (longPressTouchRef.current) {
@@ -947,9 +947,7 @@ export function RehearsalMode({ onExit }: Props) {
         })}
 
         {phase === 'done' && (
-          <div className="text-center py-6 text-[var(--color-stage-gold)] text-lg font-semibold">
-            🎭 End of scene
-          </div>
+          <div className="py-4" />
         )}
 
       </div>
