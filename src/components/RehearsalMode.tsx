@@ -956,15 +956,30 @@ export function RehearsalMode({ onExit }: Props) {
         </div>
 
         {/* Status line */}
-        <div className="text-center text-xs text-[var(--color-stage-muted)] h-4">
-          {phase === 'my-line-listening' && listening && <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Listening…{countdownSecs !== null && <span className="font-mono tabular-nums ml-1">{countdownSecs}s</span>}</span>}
-          {phase === 'my-line-silence' && !listening && <span>Your line…{countdownSecs !== null && <span className="font-mono tabular-nums ml-1">{countdownSecs}s</span>}</span>}
+        <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-5 flex items-center justify-center">
+          {phase === 'my-line-listening' && (
+            <span className="flex items-center gap-1.5">
+              <IconMic className="text-sm text-[var(--color-stage-accent-light)]" />
+              <span>Listening…</span>
+              {countdownSecs !== null && (
+                <span className="font-mono tabular-nums font-semibold text-sm text-[var(--color-stage-accent-light)]">{countdownSecs}s</span>
+              )}
+            </span>
+          )}
+          {phase === 'my-line-silence' && (
+            <span className="flex items-center gap-1.5">
+              <span>Your line…</span>
+              {countdownSecs !== null && (
+                <span className="font-mono tabular-nums font-semibold text-sm text-[var(--color-stage-accent-light)]">{countdownSecs}s</span>
+              )}
+            </span>
+          )}
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
           {phase === 'paused' && 'Paused — tap a line to restart from it'}
           {phase === 'done' && 'Scene complete'}
           {phase === 'idle' && !handsFreeEnabled && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
-          {phase === 'idle' && handsFreeEnabled && (listening ? <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Listening for command…</span> : <span className="flex items-center justify-center gap-1"><IconMic className="text-sm" /> Say "start" to begin</span>)}
+          {phase === 'idle' && handsFreeEnabled && (listening ? <span className="flex items-center gap-1"><IconMic className="text-sm" /> Listening for command…</span> : <span className="flex items-center gap-1"><IconMic className="text-sm" /> Say "start" to begin</span>)}
         </div>
       </div>
     </div>
