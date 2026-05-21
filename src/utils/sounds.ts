@@ -14,7 +14,7 @@ export function unlockAudio(): void {
   }
 }
 
-function tone(freq: number, duration: number, startOffset = 0, vol = 0.35): Promise<void> {
+function tone(freq: number, duration: number, startOffset = 0, vol = 0.55): Promise<void> {
   return new Promise((resolve) => {
     if (!ctx || ctx.state === 'closed') { resolve(); return }
     try {
@@ -37,16 +37,19 @@ function tone(freq: number, duration: number, startOffset = 0, vol = 0.35): Prom
   })
 }
 
-export function playClipStart(): Promise<void> {
-  if (!ctx || ctx.state === 'closed') return Promise.resolve()
-  tone(523, 0.08, 0)          // C5 — short lead-in
-  return tone(784, 0.15, 0.12) // G5 — ready cue
+export async function playClipStart(): Promise<void> {
+  if (!ctx || ctx.state === 'closed') return
+  // Ensure the context is running before scheduling tones — resume() in unlockAudio
+  // is fire-and-forget, so the context may still be suspended when we get here.
+  if (ctx.state === 'suspended') await ctx.resume()
+  tone(523, 0.12, 0)           // C5 — short lead-in
+  return tone(784, 0.22, 0.16) // G5 — ready cue
 }
 
 export function playPing(accuracy: number, threshold: number): Promise<void> {
-  if (accuracy >= 100) return tone(880, 0.2)     // green: bright high
-  if (accuracy >= threshold) return tone(660, 0.2) // yellow: mid
-  return tone(330, 0.25)                            // red: low
+  if (accuracy >= 100) return tone(880, 0.25)     // green: bright high
+  if (accuracy >= threshold) return tone(660, 0.25) // yellow: mid
+  return tone(330, 0.3)                              // red: low
 }
 
 export function playCompletion(): Promise<void> {
