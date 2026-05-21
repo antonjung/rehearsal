@@ -84,15 +84,11 @@ export function GlobalSettings({ onClose }: Props) {
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+        <div className="flex-1 overflow-y-auto">
 
-          {/* Run through */}
-          <section className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Run through</h3>
-
-            {/* Line mode */}
+          {/* ── Your lines ── */}
+          <SettingsSection title="Your lines">
             <div className="space-y-1.5">
-              <p className="text-xs text-[var(--color-stage-muted)]">Your lines</p>
               {LINE_MODES.map((m) => (
                 <label
                   key={m.value}
@@ -103,9 +99,7 @@ export function GlobalSettings({ onClose }: Props) {
                   }`}
                 >
                   <input
-                    type="radio"
-                    name="lineMode"
-                    value={m.value}
+                    type="radio" name="lineMode" value={m.value}
                     checked={prefs.myLineMode === m.value}
                     onChange={() => update('myLineMode', m.value)}
                     className="mt-0.5"
@@ -117,207 +111,139 @@ export function GlobalSettings({ onClose }: Props) {
                 </label>
               ))}
             </div>
+            <SettingsRow label="Hands-free mode">
+              <ToggleSwitch checked={prefs.handsFreeEnabled ?? true} onChange={(v) => update('handsFreeEnabled', v)} />
+            </SettingsRow>
+          </SettingsSection>
 
-            {/* Stage directions */}
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-[var(--color-stage-text)]">Stage directions aloud</span>
-              <ToggleSwitch
-                checked={prefs.readStageDirections}
-                onChange={(v) => update('readStageDirections', v)}
-              />
-            </label>
-
-            {/* Hands-free */}
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-[var(--color-stage-text)]">🎙 Hands-free mode</span>
-              <ToggleSwitch
-                checked={prefs.handsFreeEnabled ?? true}
-                onChange={(v) => update('handsFreeEnabled', v)}
-              />
-            </label>
-
-            {/* Speech rate */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[var(--color-stage-text)]">Speech rate</span>
-              <Stepper
-                value={prefs.speechRate} min={0.5} max={2} step={0.1}
+          {/* ── Playback ── */}
+          <SettingsSection title="Playback">
+            <SettingsRow label="Speech rate">
+              <Stepper value={prefs.speechRate} min={0.5} max={2} step={0.1}
                 display={`${prefs.speechRate.toFixed(1)}×`}
-                onChange={(v) => update('speechRate', Math.round(v * 10) / 10)}
-              />
-            </div>
+                onChange={(v) => update('speechRate', Math.round(v * 10) / 10)} />
+            </SettingsRow>
+            <SettingsRow label="Stage directions aloud">
+              <ToggleSwitch checked={prefs.readStageDirections} onChange={(v) => update('readStageDirections', v)} />
+            </SettingsRow>
+          </SettingsSection>
 
-            {/* Accuracy */}
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-[var(--color-stage-text)]">Accuracy checking</span>
-              <ToggleSwitch
-                checked={prefs.accuracyEnabled}
-                onChange={(v) => update('accuracyEnabled', v)}
-              />
-            </label>
-
+          {/* ── Accuracy & timing ── */}
+          <SettingsSection title="Accuracy & timing">
+            <SettingsRow label="Accuracy checking">
+              <ToggleSwitch checked={prefs.accuracyEnabled} onChange={(v) => update('accuracyEnabled', v)} />
+            </SettingsRow>
             {prefs.accuracyEnabled && (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--color-stage-muted)]">Warning threshold</span>
-                  <Stepper
-                    value={prefs.accuracyWarningThreshold} min={0} max={100} step={5}
+                <SettingsRow label="Warning threshold" sub>
+                  <Stepper value={prefs.accuracyWarningThreshold} min={0} max={100} step={5}
                     display={`${prefs.accuracyWarningThreshold}%`}
-                    onChange={(v) => update('accuracyWarningThreshold', v)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--color-stage-muted)]">Silence gap</span>
-                  <Stepper
-                    value={prefs.endLineSilenceMs} min={200} max={3000} step={100}
+                    onChange={(v) => update('accuracyWarningThreshold', v)} />
+                </SettingsRow>
+                <SettingsRow label="Silence gap" sub>
+                  <Stepper value={prefs.endLineSilenceMs} min={200} max={3000} step={100}
                     display={`${(prefs.endLineSilenceMs / 1000).toFixed(1)}s`}
-                    onChange={(v) => update('endLineSilenceMs', v)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--color-stage-muted)]">Max pause</span>
-                  <Stepper
-                    value={prefs.maxPauseMs ?? 2000} min={200} max={3000} step={200}
+                    onChange={(v) => update('endLineSilenceMs', v)} />
+                </SettingsRow>
+                <SettingsRow label="Max pause" sub>
+                  <Stepper value={prefs.maxPauseMs ?? 2000} min={200} max={3000} step={200}
                     display={`${((prefs.maxPauseMs ?? 2000) / 1000).toFixed(1)}s`}
-                    onChange={(v) => update('maxPauseMs', v)}
-                  />
-                </div>
+                    onChange={(v) => update('maxPauseMs', v)} />
+                </SettingsRow>
               </>
             )}
-          </section>
+          </SettingsSection>
 
-          {/* Audible signals */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Audible signals</h3>
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-[var(--color-stage-text)]">Ping after each line</span>
-              <ToggleSwitch
-                checked={prefs.linePingEnabled ?? false}
-                onChange={(v) => update('linePingEnabled', v)}
-              />
-            </label>
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-[var(--color-stage-text)]">Sound at end of scene</span>
-              <ToggleSwitch
-                checked={prefs.scenePingEnabled ?? true}
-                onChange={(v) => update('scenePingEnabled', v)}
-              />
-            </label>
-          </section>
+          {/* ── Signals ── */}
+          <SettingsSection title="Signals">
+            <SettingsRow label="Ping after each line">
+              <ToggleSwitch checked={prefs.linePingEnabled ?? false} onChange={(v) => update('linePingEnabled', v)} />
+            </SettingsRow>
+            <SettingsRow label="Sound at end of scene">
+              <ToggleSwitch checked={prefs.scenePingEnabled ?? true} onChange={(v) => update('scenePingEnabled', v)} />
+            </SettingsRow>
+          </SettingsSection>
 
-          {/* Script font size */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Script font size</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[var(--color-stage-text)]">Size</span>
-                <Stepper
-                  value={scriptFontSize} min={11} max={22} step={1}
-                  display={`${scriptFontSize}px`}
-                  onChange={setScriptFontSize}
-                />
-              </div>
-              <p className="text-[var(--color-stage-muted)]" style={{ fontSize: `${scriptFontSize}px` }}>
-                All the world&apos;s a stage
-              </p>
-            </div>
-          </section>
-
-          {/* Highlighter colour */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Highlighter colour</h3>
-            <div className="flex gap-3">
-              {HIGHLIGHTER_OPTIONS.map((opt) => {
-                const selected = (prefs.highlighterColor ?? 'yellow') === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => update('highlighterColor', opt.value)}
-                    title={opt.label}
-                    className={`w-9 h-9 rounded-full border-2 transition-all ${
-                      selected
-                        ? 'border-white scale-110 shadow-md'
-                        : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
-                    style={{ background: opt.color }}
-                  />
-                )
-              })}
-            </div>
-          </section>
-
-          {/* Voice commands */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Voice commands</h3>
-            <p className="text-xs text-[var(--color-stage-muted)]">Comma-separated trigger words for each hands-free command.</p>
-            {(
-              [
-                { key: 'play',   label: '▶ Start playback' },
-                { key: 'stop',   label: '⏹ Stop' },
-                { key: 'repeat', label: '↺ Repeat (clip top)' },
-                { key: 'back',   label: '◀ Back (add a number to go back N lines, e.g. "back 3")' },
-                { key: 'skip',   label: '▶▶ Skip' },
-              ] as { key: keyof VoiceCommandWords; label: string }[]
-            ).map(({ key, label }) => (
-              <div key={key} className="space-y-1">
-                <label className="text-xs text-[var(--color-stage-text)]">{label}</label>
-                <input
-                  type="text"
-                  defaultValue={fmtWords(cmdWords[key])}
-                  onBlur={(e) => updateCmd(key, e.target.value)}
-                  className="w-full rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-2 py-1.5 focus:outline-none focus:border-[var(--color-stage-accent)]"
-                />
-              </div>
-            ))}
-          </section>
-
-          {/* Voice calibration */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Voice calibration</h3>
-            <p className="text-xs text-[var(--color-stage-muted)]">Read the phrase below at your natural acting pace to calibrate line timing.</p>
-            <VoiceCalibration
-              stored={prefs.voiceCalibration}
-              onSave={(c) => update('voiceCalibration', c as number)}
-              onReset={() => saveRehearsalSettings({ ...prefs, voiceCalibration: undefined })}
-            />
-          </section>
-
-          {/* Test microphone */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Microphone</h3>
-            <button
-              onClick={() => setShowMicTest((v) => !v)}
-              className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
-            >
-              {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
-            </button>
-            {showMicTest && <div className="mt-2"><MicTest /></div>}
-          </section>
-
-          {/* Theme */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Theme</h3>
+          {/* ── Appearance ── */}
+          <SettingsSection title="Appearance">
+            <SettingsRow label="Theme" />
             <div className="grid grid-cols-2 gap-2">
               {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id)}
+                <button key={t.id} onClick={() => setTheme(t.id)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition-colors ${
                     theme === t.id
                       ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]'
                       : 'border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-muted)]'
                   }`}
                 >
-                  <span
-                    className="w-4 h-4 rounded-full shrink-0 border border-white/20"
-                    style={{ background: t.swatch }}
-                  />
+                  <span className="w-4 h-4 rounded-full shrink-0 border border-white/20" style={{ background: t.swatch }} />
                   {t.name}
                 </button>
               ))}
             </div>
-          </section>
+            <SettingsRow label="Script font size">
+              <Stepper value={scriptFontSize} min={11} max={22} step={1}
+                display={`${scriptFontSize}px`} onChange={setScriptFontSize} />
+            </SettingsRow>
+            <p className="text-[var(--color-stage-muted)]" style={{ fontSize: `${scriptFontSize}px` }}>
+              All the world&apos;s a stage
+            </p>
+            <SettingsRow label="Highlighter colour" />
+            <div className="flex gap-3">
+              {HIGHLIGHTER_OPTIONS.map((opt) => {
+                const selected = (prefs.highlighterColor ?? 'yellow') === opt.value
+                return (
+                  <button key={opt.value} onClick={() => update('highlighterColor', opt.value)} title={opt.label}
+                    className={`w-9 h-9 rounded-full border-2 transition-all ${selected ? 'border-white scale-110 shadow-md' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                    style={{ background: opt.color }}
+                  />
+                )
+              })}
+            </div>
+          </SettingsSection>
+
+          {/* ── Voice commands ── */}
+          <SettingsSection title="Voice commands">
+            <p className="text-xs text-[var(--color-stage-muted)]">Comma-separated trigger words for each hands-free command.</p>
+            {(
+              [
+                { key: 'play',   label: '▶ Start' },
+                { key: 'stop',   label: '⏹ Stop' },
+                { key: 'repeat', label: '↺ Repeat' },
+                { key: 'back',   label: '⏮ Back' },
+                { key: 'skip',   label: '⏭ Skip' },
+              ] as { key: keyof VoiceCommandWords; label: string }[]
+            ).map(({ key, label }) => (
+              <div key={key} className="space-y-1">
+                <label className="text-xs text-[var(--color-stage-muted)]">{label}</label>
+                <input type="text"
+                  defaultValue={fmtWords(cmdWords[key])}
+                  onBlur={(e) => updateCmd(key, e.target.value)}
+                  className="w-full rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-2 py-1.5 focus:outline-none focus:border-[var(--color-stage-accent)]"
+                />
+              </div>
+            ))}
+          </SettingsSection>
+
+          {/* ── Voice calibration ── */}
+          <SettingsSection title="Voice calibration">
+            <p className="text-xs text-[var(--color-stage-muted)]">Read the phrase below at your natural acting pace to calibrate line timing.</p>
+            <VoiceCalibration
+              stored={prefs.voiceCalibration}
+              onSave={(c) => update('voiceCalibration', c as number)}
+              onReset={() => saveRehearsalSettings({ ...prefs, voiceCalibration: undefined })}
+            />
+          </SettingsSection>
+
+          {/* ── Microphone ── */}
+          <SettingsSection title="Microphone">
+            <button onClick={() => setShowMicTest((v) => !v)}
+              className="text-xs text-[var(--color-stage-accent-light)] hover:text-white transition-colors"
+            >
+              {showMicTest ? 'Hide mic test ▲' : 'Test microphone ▼'}
+            </button>
+            {showMicTest && <div className="mt-2"><MicTest /></div>}
+          </SettingsSection>
 
         </div>
       </div>
@@ -421,6 +347,24 @@ function VoiceCalibration({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function SettingsSection({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <div className="px-4 py-4 space-y-3 border-b border-[var(--color-stage-border)]">
+      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-stage-muted)]">{title}</h3>
+      {children}
+    </div>
+  )
+}
+
+function SettingsRow({ label, sub, children }: { label: string; sub?: boolean; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className={sub ? 'text-xs text-[var(--color-stage-muted)] pl-2' : 'text-sm text-[var(--color-stage-text)]'}>{label}</span>
+      {children}
     </div>
   )
 }
