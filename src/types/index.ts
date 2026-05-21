@@ -62,6 +62,7 @@ export interface RehearsalSettings {
   voiceCommands?: VoiceCommandWords
   highlighterColor?: 'yellow' | 'pink' | 'green' | 'blue'
   handsFreeEnabled?: boolean
+  voiceURI?: string
   maxPauseMs?: number
   linePingEnabled?: boolean
   scenePingEnabled?: boolean

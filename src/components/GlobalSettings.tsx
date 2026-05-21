@@ -1,10 +1,11 @@
 import { useAppStore } from '../store/useAppStore'
 import { THEMES } from '../utils/themes'
 import { MicTest } from './MicTest'
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import type { MyLineMode, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { estimateDuration } from '../utils/speechDuration'
 
 const HIGHLIGHTER_OPTIONS: { value: 'yellow' | 'pink' | 'green' | 'blue'; label: string; color: string }[] = [
@@ -127,6 +128,12 @@ export function GlobalSettings({ onClose }: Props) {
             <SettingsRow label="Stage directions aloud">
               <ToggleSwitch checked={prefs.readStageDirections} onChange={(v) => update('readStageDirections', v)} />
             </SettingsRow>
+            <SettingsRow label="Voice" />
+            <VoiceSelector
+              value={prefs.voiceURI}
+              rate={prefs.speechRate}
+              onChange={(v) => update('voiceURI', v || undefined)}
+            />
           </SettingsSection>
 
           {/* ── Accuracy & timing ── */}
@@ -352,6 +359,56 @@ function VoiceCalibration({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function VoiceSelector({ value, rate, onChange }: { value: string | undefined; rate: number; onChange: (uri: string) => void }) {
+  const { voices, speak, cancel } = useSpeechSynthesis()
+  const [previewing, setPreviewing] = useState(false)
+
+  const grouped = useMemo(() => {
+    const enGB  = voices.filter(v => v.lang === 'en-GB')
+    const enOther = voices.filter(v => v.lang.startsWith('en') && v.lang !== 'en-GB')
+    const rest  = voices.filter(v => !v.lang.startsWith('en'))
+    const byLang = new Map<string, SpeechSynthesisVoice[]>()
+    for (const v of rest) { if (!byLang.has(v.lang)) byLang.set(v.lang, []); byLang.get(v.lang)!.push(v) }
+    const groups: { label: string; voices: SpeechSynthesisVoice[] }[] = []
+    if (enGB.length)   groups.push({ label: 'English (British)', voices: enGB })
+    if (enOther.length) groups.push({ label: 'English', voices: enOther })
+    for (const [lang, vs] of byLang) groups.push({ label: lang, voices: vs })
+    return groups
+  }, [voices])
+
+  const handlePreview = async () => {
+    if (previewing) { cancel(); setPreviewing(false); return }
+    setPreviewing(true)
+    await speak("All the world's a stage", { voiceURI: value, rate })
+    setPreviewing(false)
+  }
+
+  return (
+    <div className="flex gap-2 items-center">
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        className="flex-1 rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-2 py-1.5 focus:outline-none focus:border-[var(--color-stage-accent)]"
+      >
+        <option value="">Default</option>
+        {grouped.map(g => (
+          <optgroup key={g.label} label={g.label}>
+            {g.voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <button
+        onClick={handlePreview}
+        className={`shrink-0 px-3 py-1.5 rounded-md border text-xs transition-colors ${
+          previewing
+            ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)]'
+            : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+        }`}
+      >{previewing ? '■' : '▶'}</button>
     </div>
   )
 }

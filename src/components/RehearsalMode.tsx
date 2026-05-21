@@ -442,7 +442,7 @@ export function RehearsalMode({ onExit }: Props) {
         if (line.type === 'direction') {
           if (settings.readStageDirections) {
             setPhase('playing-other')
-            await speak(groupText, { rate })
+            await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
           } else {
             await delay(100)
           }
@@ -459,7 +459,7 @@ export function RehearsalMode({ onExit }: Props) {
           const rec = recMapRef.current.get(lineIdx)
           const speakOther = async () => {
             if (!rec || !(await playRecording(rec))) {
-              if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate })
+              if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
             }
           }
           if (handsFreeRef.current && supported) {
@@ -532,7 +532,7 @@ export function RehearsalMode({ onExit }: Props) {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
+            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
           } else if (myLineMode === 'gap-before') {
             // Wait for user to finish attempting the line, then read it
             countdownGapRef.current = gap; speechAccumMsRef.current = 0; speechBoutStartRef.current = null
@@ -550,14 +550,14 @@ export function RehearsalMode({ onExit }: Props) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
               const rec = recMapRef.current.get(lineIdx)
-              if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
+              if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
             }
           } else {
             // gap-after: read the line, then wait for user to repeat
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate }) }
+            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
             if (!stopRef.current) {
               countdownGapRef.current = gap; speechAccumMsRef.current = 0; speechBoutStartRef.current = null
               countdownExpiredRef.current = false
