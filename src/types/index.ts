@@ -61,6 +61,8 @@ export interface RehearsalSettings {
   highlighterColor?: 'yellow' | 'pink' | 'green' | 'blue'
   handsFreeEnabled?: boolean
   maxPauseMs?: number
+  linePingEnabled?: boolean
+  scenePingEnabled?: boolean
 }
 
 export interface MarkedBlock {

@@ -469,7 +469,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  await playPing(acc, settings.accuracyWarningThreshold)
+                  if (settings.linePingEnabled) await playPing(acc, settings.accuracyWarningThreshold)
                 }
               }
             } else {
@@ -531,7 +531,7 @@ export function RehearsalMode({ onExit }: Props) {
                   setAccuracies(next)
                   setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
                   setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  await playPing(acc, settings.accuracyWarningThreshold)
+                  if (settings.linePingEnabled) await playPing(acc, settings.accuracyWarningThreshold)
                 }
               } else {
                 await delay(gap)
@@ -547,7 +547,7 @@ export function RehearsalMode({ onExit }: Props) {
       // If a newer run has started (line tap mid-play), don't clobber its phase.
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
-        await playCompletion()
+        if (settings.scenePingEnabled ?? true) await playCompletion()
         if (loopRef.current && runIdRef.current === runId) {
           const loopRunId = runId
           setTimeout(() => {

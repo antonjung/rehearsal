@@ -43,6 +43,8 @@ export function GlobalSettings({ onClose }: Props) {
     voiceCommands: DEFAULT_VOICE_COMMANDS,
     highlighterColor: 'yellow' as const,
     handsFreeEnabled: true,
+    linePingEnabled: false,
+    scenePingEnabled: true,
   }
 
   const cmdWords: VoiceCommandWords = prefs.voiceCommands ?? DEFAULT_VOICE_COMMANDS
@@ -197,6 +199,25 @@ export function GlobalSettings({ onClose }: Props) {
                 </div>
               </>
             )}
+          </section>
+
+          {/* Audible signals */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Audible signals</h3>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm text-[var(--color-stage-text)]">Ping after each line</span>
+              <ToggleSwitch
+                checked={prefs.linePingEnabled ?? false}
+                onChange={(v) => update('linePingEnabled', v)}
+              />
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm text-[var(--color-stage-text)]">Sound at end of scene</span>
+              <ToggleSwitch
+                checked={prefs.scenePingEnabled ?? true}
+                onChange={(v) => update('scenePingEnabled', v)}
+              />
+            </label>
           </section>
 
           {/* Script font size */}
