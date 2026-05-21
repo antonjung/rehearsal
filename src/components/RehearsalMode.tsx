@@ -919,6 +919,28 @@ export function RehearsalMode({ onExit }: Props) {
 
       {/* Controls */}
       <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+
+        {/* Your-line status banner — prominently visible during silence/listening */}
+        {(phase === 'my-line-silence' || phase === 'my-line-listening') && (
+          <div className={`flex items-center justify-between rounded-lg px-4 py-2.5 mb-3 ${
+            phase === 'my-line-listening'
+              ? 'bg-[var(--color-stage-accent)]/20 border border-[var(--color-stage-accent)]/40'
+              : 'bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)]'
+          }`}>
+            <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-stage-accent-light)]">
+              {phase === 'my-line-listening'
+                ? <><IconMic /> Listening…</>
+                : <span className="text-[var(--color-stage-text)]">Your line</span>
+              }
+            </span>
+            {countdownSecs !== null && (
+              <span className="font-mono tabular-nums text-2xl font-bold text-[var(--color-stage-accent-light)]">
+                {countdownSecs}s
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Transport row — always visible, all same large size */}
         <div className="flex items-center justify-center gap-3 mb-2">
           <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
@@ -956,24 +978,7 @@ export function RehearsalMode({ onExit }: Props) {
         </div>
 
         {/* Status line */}
-        <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-5 flex items-center justify-center">
-          {phase === 'my-line-listening' && (
-            <span className="flex items-center gap-1.5">
-              <IconMic className="text-sm text-[var(--color-stage-accent-light)]" />
-              <span>Listening…</span>
-              {countdownSecs !== null && (
-                <span className="font-mono tabular-nums font-semibold text-sm text-[var(--color-stage-accent-light)]">{countdownSecs}s</span>
-              )}
-            </span>
-          )}
-          {phase === 'my-line-silence' && (
-            <span className="flex items-center gap-1.5">
-              <span>Your line…</span>
-              {countdownSecs !== null && (
-                <span className="font-mono tabular-nums font-semibold text-sm text-[var(--color-stage-accent-light)]">{countdownSecs}s</span>
-              )}
-            </span>
-          )}
+        <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-4 flex items-center justify-center">
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
           {phase === 'paused' && 'Paused — tap a line to restart from it'}
