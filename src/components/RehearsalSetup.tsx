@@ -39,6 +39,9 @@ export function RehearsalSetup({ onStart }: Props) {
   const [myCharacter, setMyCharacter] = useState(
     sameScript ? (rehearsalSettings?.myCharacter ?? '') : ''
   )
+  const [condensedLines, setCondensedLines] = useState<number>(
+    sameScript ? (rehearsalSettings?.condensedLines ?? 10) : 10
+  )
 
   if (!script) {
     return (
@@ -58,6 +61,7 @@ export function RehearsalSetup({ onStart }: Props) {
       scriptId: script.id,
       sceneId,
       myCharacter,
+      condensedLines,
     }
     saveRehearsalSettings(settings)
     onStart()
@@ -112,6 +116,28 @@ export function RehearsalSetup({ onStart }: Props) {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
+      </Field>
+
+      {/* Condensed mode */}
+      <Field label="Condensed mode">
+        <div className="flex items-center gap-3">
+          <select
+            value={condensedLines}
+            onChange={(e) => setCondensedLines(Number(e.target.value))}
+            className="select-field"
+          >
+            <option value={0}>Off</option>
+            <option value={5}>5 lines</option>
+            <option value={10}>10 lines</option>
+            <option value={15}>15 lines</option>
+            <option value={20}>20 lines</option>
+          </select>
+          <p className="text-xs text-[var(--color-stage-muted)]">
+            {condensedLines > 0
+              ? `Skip middle of long gaps — play only the cue line before your next line`
+              : 'Play every line'}
+          </p>
+        </div>
       </Field>
 
       <button

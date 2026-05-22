@@ -139,6 +139,7 @@ export function useSpeechRecognition() {
       }
 
       lastResultCountRef.current = 0
+      setTranscript('')
       const rec: AnySR = new SR()
       recognitionRef.current = rec
       rec.lang = 'en-GB'

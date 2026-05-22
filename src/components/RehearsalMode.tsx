@@ -148,7 +148,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [blockStart, setBlockStart] = useState(defaultBlockStart)
   const [blockEnd, setBlockEnd] = useState(defaultBlockEnd)
   const [phase, setPhase] = useState<Phase>('idle')
-  const [showAllMyLines, setShowAllMyLines] = useState(false)
+  const [showAllMyLines, setShowAllMyLines] = useState(true)
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -548,6 +548,43 @@ export function RehearsalMode({ onExit }: Props) {
             if (!stopRef.current) {
               setPhase('my-line-silence')
               await waitWithProgress()
+            }
+          }
+        }
+
+        // Condensed mode: after user's line, skip large other-character sections
+        if (isMyLine && !stopRef.current && !pauseRef.current) {
+          const condensedThreshold = settingsRef.current.condensedLines ?? 10
+          if (condensedThreshold > 0) {
+            const groups = sceneGroupsRef.current
+            const myGi = groups.findIndex((g) => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
+            let nextUserGi = -1
+            for (let gi = myGi + 1; gi < groups.length; gi++) {
+              if (groups[gi].type === 'dialogue' && groups[gi].character === settingsRef.current.myCharacter) {
+                nextUserGi = gi
+                break
+              }
+            }
+            if (nextUserGi > myGi + 1) {
+              const linesBetween = groups[nextUserGi].startIdx - (groupEnd + 1)
+              if (linesBetween > condensedThreshold) {
+                const precedingGroup = groups[nextUserGi - 1]
+                // only skip if there's actually a gap (preceding group is not the current group)
+                if (precedingGroup.startIdx > groupEnd + 1) {
+                  const skippedCount = precedingGroup.startIdx - (groupEnd + 1)
+                  await playCompletion()
+                  if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) {
+                    await speak(`${skippedCount} line${skippedCount !== 1 ? 's' : ''} skipped`, { rate, voiceURI: settingsRef.current.voiceURI })
+                  }
+                  if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) {
+                    await playCompletion()
+                  }
+                  if (!stopRef.current && runIdRef.current === runId) {
+                    i = precedingGroup.startIdx
+                    continue
+                  }
+                }
+              }
             }
           }
         }
