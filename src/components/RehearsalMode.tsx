@@ -910,6 +910,7 @@ export function RehearsalMode({ onExit }: Props) {
                 }
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
+                hasRecording={recMapRef.current.has(group.startIdx)}
                 countdownMs={isCurrentGroup && isMyLine ? countdownMs : null}
                 countdownTotal={countdownGapRef.current || undefined}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
@@ -1119,6 +1120,7 @@ interface LineRowProps {
   onRecord?: () => void
   isRecordingThis?: boolean
   anyRecording?: boolean
+  hasRecording?: boolean
   countdownMs?: number | null
   countdownTotal?: number
 }
@@ -1126,7 +1128,7 @@ interface LineRowProps {
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible,
   accuracy, threshold, highlightStyle,
-  onSelect, onReveal, onRecord, isRecordingThis, anyRecording,
+  onSelect, onReveal, onRecord, isRecordingThis, anyRecording, hasRecording,
   countdownMs, countdownTotal, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -1198,6 +1200,9 @@ const LineRow = ({
             }`}>
               {group.character}
             </span>
+            {hasRecording && !isRecordingThis && (
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400/70 shrink-0 self-center" title="Has recording" />
+            )}
             {accuracy !== null && <AccuracyDot accuracy={accuracy} threshold={threshold} />}
           </div>
           {lineVisible ? (
