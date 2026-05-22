@@ -39,11 +39,11 @@ export interface VoiceCommandWords {
 }
 
 export const DEFAULT_VOICE_COMMANDS: VoiceCommandWords = {
-  play:   ['start', 'play', 'go', 'begin'],
-  stop:   ['stop', 'cut', 'cancel', 'halt', 'abort', 'pause'],
-  back:   ['back', 'again', 'previous', 'redo'],
-  skip:   ['skip', 'next', 'forward'],
-  repeat: ['repeat', 'top', 'restart'],
+  play:   ['play', 'go', 'start'],
+  stop:   ['stop', 'end'],
+  back:   ['back', 'again'],
+  skip:   ['skip', 'next'],
+  repeat: ['repeat', 'restart'],
   loop:   ['loop', 'cycle'],
 }
 

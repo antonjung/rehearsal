@@ -19,9 +19,16 @@ export function RehearsalSetup({ onStart }: Props) {
     speechRate: 1,
     accuracyEnabled: true,
     accuracyWarningThreshold: 70,
-    endLineSilenceMs: 500,
+    endLineSilenceMs: 400,
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
+    handsFreeEnabled: true,
+    linePingEnabled: true,
+    scenePingEnabled: true,
+    clipStartPingEnabled: true,
+    maxPauseMs: 1000,
+    highlighterColor: 'yellow' as const,
+    voiceCalibration: 0.6,
   }
 
   const [sceneId, setSceneId] = useState<string | null>(

@@ -40,15 +40,17 @@ export function GlobalSettings({ onClose }: Props) {
     speechRate: 1,
     accuracyEnabled: true,
     accuracyWarningThreshold: 70,
-    endLineSilenceMs: 500,
+    endLineSilenceMs: 400,
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
     voiceCommands: DEFAULT_VOICE_COMMANDS,
     highlighterColor: 'yellow' as const,
     handsFreeEnabled: true,
-    linePingEnabled: false,
+    linePingEnabled: true,
     scenePingEnabled: true,
     clipStartPingEnabled: true,
+    maxPauseMs: 1000,
+    voiceCalibration: 0.6,
   }
 
   const cmdWords: VoiceCommandWords = { ...DEFAULT_VOICE_COMMANDS, ...(prefs.voiceCommands ?? {}) }
