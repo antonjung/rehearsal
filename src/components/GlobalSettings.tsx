@@ -147,44 +147,10 @@ export function GlobalSettings({ onClose }: Props) {
             />
           </SettingsSection>
 
-          {/* ── Accuracy & timing ── */}
-          <SettingsSection title="Accuracy & timing">
-            <SettingsRow label="Accuracy checking">
-              <ToggleSwitch checked={prefs.accuracyEnabled} onChange={(v) => update('accuracyEnabled', v)} />
-            </SettingsRow>
-            {prefs.accuracyEnabled && (
-              <>
-                <SettingsRow label="Warning threshold" sub>
-                  <Stepper value={prefs.accuracyWarningThreshold} min={0} max={100} step={5}
-                    display={`${prefs.accuracyWarningThreshold}%`}
-                    onChange={(v) => update('accuracyWarningThreshold', v)} />
-                </SettingsRow>
-                <SettingsRow label="Silence gap" sub>
-                  <Stepper value={prefs.endLineSilenceMs} min={200} max={3000} step={100}
-                    display={`${(prefs.endLineSilenceMs / 1000).toFixed(1)}s`}
-                    onChange={(v) => update('endLineSilenceMs', v)} />
-                </SettingsRow>
-                <SettingsRow label="Max pause" sub>
-                  <Stepper value={prefs.maxPauseMs ?? 2000} min={200} max={3000} step={200}
-                    display={`${((prefs.maxPauseMs ?? 2000) / 1000).toFixed(1)}s`}
-                    onChange={(v) => update('maxPauseMs', v)} />
-                </SettingsRow>
-                <SettingsRow label="Coverage to advance" sub>
-                  <Stepper value={prefs.speechCoverageThreshold ?? 70} min={30} max={100} step={5}
-                    display={`${prefs.speechCoverageThreshold ?? 70}%`}
-                    onChange={(v) => update('speechCoverageThreshold', v)} />
-                </SettingsRow>
-              </>
-            )}
-          </SettingsSection>
-
           {/* ── Signals ── */}
           <SettingsSection title="Signals">
             <SettingsRow label="Cue before my lines">
               <ToggleSwitch checked={prefs.clipStartPingEnabled ?? true} onChange={(v) => update('clipStartPingEnabled', v)} />
-            </SettingsRow>
-            <SettingsRow label="Ping after each line">
-              <ToggleSwitch checked={prefs.linePingEnabled ?? false} onChange={(v) => update('linePingEnabled', v)} />
             </SettingsRow>
             <SettingsRow label="Sound at end of scene">
               <ToggleSwitch checked={prefs.scenePingEnabled ?? true} onChange={(v) => update('scenePingEnabled', v)} />

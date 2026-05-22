@@ -154,6 +154,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
+  const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -210,6 +211,7 @@ export function RehearsalMode({ onExit }: Props) {
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
+  const recDurMapRef = useRef<Map<number, number>>(new Map())
   const sceneGroupsRef = useRef(sceneGroups)
   const handlePlayRef = useRef<() => void>(() => {})
   const runPlaybackRef = useRef<(start: number, end: number) => void>(() => {})
@@ -286,17 +288,32 @@ export function RehearsalMode({ onExit }: Props) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Pre-load all recordings (sync lookup during playback avoids IDB async mid-loop) ---
+  const getBlobDuration = (blob: Blob): Promise<number> =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      const cleanup = (ms: number) => { URL.revokeObjectURL(url); resolve(ms) }
+      audio.onloadedmetadata = () => cleanup(Math.round(audio.duration * 1000))
+      audio.onerror = () => cleanup(0)
+      setTimeout(() => cleanup(0), 3000)
+    })
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       const map = new Map<number, Blob>()
+      const durMap = new Map<number, number>()
       for (let i = firstLine; i <= sceneEnd; i++) {
         if (lines[i]?.type === 'dialogue') {
           const blob = await getRecording(script.id, i)
-          if (blob) map.set(i, blob)
+          if (blob) {
+            map.set(i, blob)
+            const ms = await getBlobDuration(blob)
+            if (ms > 0) durMap.set(i, ms)
+          }
         }
       }
-      if (!cancelled) recMapRef.current = map
+      if (!cancelled) { recMapRef.current = map; recDurMapRef.current = durMap }
     }
     load()
     return () => { cancelled = true }
@@ -458,66 +475,46 @@ export function RehearsalMode({ onExit }: Props) {
             await playClipStart()
           }
 
-          // ELT + SR: waits at least `elt` ms (Estimated Line Time).
-          // If SR detects speech, also waits for maxPauseMs of silence after the last word.
-          // If SR fails or actor is silent, advances at ELT — reliable fallback.
-          const waitUserLineSilence = (elt: number): Promise<void> => new Promise((resolveElt) => {
+          // ELT: use actual recording duration when available, otherwise calibrated estimate
+          const elt = recDurMapRef.current.get(lineIdx) ?? gap
+
+          // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef.
+          const waitWithProgress = (): Promise<void> => new Promise((resolve) => {
             let resolved = false
-            let eltTimer: ReturnType<typeof setTimeout> | null = null
-            let silenceTimer: ReturnType<typeof setTimeout> | null = null
+            let rafId: number | null = null
+            let timer: ReturnType<typeof setTimeout>
+            const startTime = Date.now()
 
             const done = () => {
               if (resolved) return
               resolved = true
-              if (eltTimer !== null) clearTimeout(eltTimer)
-              if (silenceTimer !== null) clearTimeout(silenceTimer)
+              clearTimeout(timer)
+              if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null }
               myLineResolveRef.current = null
-              resolveElt()
+              setLineProgressMap(prev => ({
+                ...prev,
+                [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
+              }))
+              resolve()
             }
 
             myLineResolveRef.current = done
+            timer = setTimeout(done, elt)
 
-            let eltExpired = false
-            let speechDetected = false
-            let speechStopped = false
-            const maxPauseMs = settingsRef.current.maxPauseMs ?? 2000
-
-            const checkAdvance = () => {
-              if (!eltExpired) return
-              if (!speechDetected || speechStopped) {
-                abortRef.current()
-                done()
-              }
+            const tick = () => {
+              if (resolved) return
+              setLineProgressMap(prev => ({
+                ...prev,
+                [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
+              }))
+              rafId = requestAnimationFrame(tick)
             }
-
-            eltTimer = setTimeout(() => {
-              eltExpired = true
-              checkAdvance()
-            }, elt)
-
-            if (supported) {
-              listen({
-                noAutoFinish: true,
-                onSpeechActivity: (active) => {
-                  if (active) {
-                    speechDetected = true
-                    speechStopped = false
-                    if (silenceTimer !== null) { clearTimeout(silenceTimer); silenceTimer = null }
-                  } else {
-                    silenceTimer = setTimeout(() => {
-                      speechStopped = true
-                      checkAdvance()
-                    }, maxPauseMs)
-                  }
-                },
-              }).then(() => done())
-            }
+            rafId = requestAnimationFrame(tick)
           })
 
           if (myLineMode === 'silence') {
             setPhase('my-line-silence')
-            await waitUserLineSilence(gap)
-            if (!stopRef.current) await delay(300)
+            await waitWithProgress()
             if (!stopRef.current) setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
           } else if (myLineMode === 'read') {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
@@ -526,9 +523,8 @@ export function RehearsalMode({ onExit }: Props) {
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
           } else if (myLineMode === 'gap-before') {
             setPhase('my-line-silence')
-            await waitUserLineSilence(gap)
+            await waitWithProgress()
             if (!stopRef.current) {
-              await delay(300)
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
               const rec = recMapRef.current.get(lineIdx)
@@ -542,8 +538,7 @@ export function RehearsalMode({ onExit }: Props) {
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
             if (!stopRef.current) {
               setPhase('my-line-silence')
-              await waitUserLineSilence(gap)
-              if (!stopRef.current) await delay(300)
+              await waitWithProgress()
             }
           }
         }
@@ -563,6 +558,7 @@ export function RehearsalMode({ onExit }: Props) {
             stopRef.current = false
             setCurrentIdx(blockStartRef.current)
             setRevealedLines({})
+            setLineProgressMap({})
             runPlayback(blockStartRef.current, blockEndRef.current)
           }, 600)
         } else {
@@ -662,6 +658,7 @@ export function RehearsalMode({ onExit }: Props) {
       const blob = await stopMic()
       await setRecording(script.id, recordingLineIdx, blob)
       recMapRef.current.set(recordingLineIdx, blob)
+      getBlobDuration(blob).then((ms) => { if (ms > 0) recDurMapRef.current.set(recordingLineIdx, ms) })
       setRecordingLineIdx(null)
     } else {
       if (isPlaying) {
@@ -908,6 +905,7 @@ export function RehearsalMode({ onExit }: Props) {
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
                 hasRecording={recMapRef.current.has(group.startIdx)}
+                lineProgress={isMyLine ? (lineProgressMap[group.startIdx] ?? null) : null}
                 searchActive={isSearchActive}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
@@ -1065,13 +1063,14 @@ interface LineRowProps {
   isRecordingThis?: boolean
   anyRecording?: boolean
   hasRecording?: boolean
+  lineProgress?: number | null
   searchActive?: boolean
 }
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
   onSelect, onReveal, onRecord, isRecordingThis, anyRecording, hasRecording,
-  searchActive, ref,
+  lineProgress, searchActive, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
@@ -1163,6 +1162,14 @@ const LineRow = ({
                 <span key={idx} className="block" style={highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
               ))}
             </span>
+          )}
+          {lineProgress != null && (
+            <div className="mt-1.5 h-1 rounded-full bg-[var(--color-stage-border)] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-[var(--color-stage-accent)]"
+                style={{ width: `${lineProgress}%` }}
+              />
+            </div>
           )}
         </div>
 
