@@ -952,6 +952,14 @@ export function RehearsalMode({ onExit }: Props) {
           </div>
         )}
 
+        {/* DEBUG: SR transcript monitor */}
+        {listening && (
+          <div className="mb-3 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-xs font-mono">
+            <span className="text-white/40 mr-2">SR:</span>
+            <span className="text-green-300 break-all">{transcript || <span className="text-white/30 italic">silence</span>}</span>
+          </div>
+        )}
+
         {/* Transport row — always visible, all same large size */}
         <div className="flex items-center justify-center gap-3 mb-2">
           <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
