@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { IconEdit, IconDismiss } from './Icons'
+import { IconEdit, IconDismiss, IconExport, IconImport } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
@@ -20,10 +20,10 @@ export function ScriptManager() {
     conflicts: number
   } | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  async function handleExport() {
-    const bundle = await buildExportBundle(scripts)
+  async function handleExport(script: Script) {
+    const bundle = await buildExportBundle([script])
     downloadBundle(bundle)
   }
 
@@ -52,49 +52,46 @@ export function ScriptManager() {
     }
   }
 
-  if (scripts.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-[var(--color-stage-text)] font-medium mb-1">No scripts loaded</p>
-        <p className="text-[var(--color-stage-muted)] text-sm">Use ☰ to load a script</p>
-        <div className="mt-6">
-          <ImportButton fileInputRef={fileInputRef} onFile={handleImportFile} error={importError} />
-        </div>
-        {importState && (
-          <ImportDialog
-            bundle={importState.bundle}
-            conflicts={importState.conflicts}
-            importing={importing}
-            onKeepExisting={() => confirmImport(true)}
-            onOverwrite={() => confirmImport(false)}
-            onCancel={() => setImportState(null)}
-          />
-        )}
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-2">
-      {scripts.map((script: Script) => (
-        <ScriptCard
-          key={script.id}
-          script={script}
-          selected={script.id === selectedScriptId}
-          onSelect={() => selectScript(script.id)}
-          onRemove={() => removeScript(script.id)}
-          onEdit={() => setEditingScript(script)}
-        />
-      ))}
+    <>
+      {scripts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-[var(--color-stage-text)] font-medium mb-1">No scripts loaded</p>
+          <p className="text-[var(--color-stage-muted)] text-sm">Use ☰ to load a script</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {scripts.map((script: Script) => (
+            <ScriptCard
+              key={script.id}
+              script={script}
+              selected={script.id === selectedScriptId}
+              onSelect={() => selectScript(script.id)}
+              onRemove={() => removeScript(script.id)}
+              onEdit={() => setEditingScript(script)}
+              onExport={() => handleExport(script)}
+            />
+          ))}
+        </div>
+      )}
 
-      <div className="flex gap-2 pt-2">
+      {/* Import row */}
+      <div className="mt-4">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={handleImportFile}
+        />
         <button
-          onClick={handleExport}
-          className="flex-1 py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
         >
-          Export all
+          <IconImport />
+          Import script
         </button>
-        <ImportButton fileInputRef={fileInputRef} onFile={handleImportFile} error={importError} className="flex-1" />
+        {importError && <p className="text-xs text-red-400 mt-1 text-center">{importError}</p>}
       </div>
 
       {editingScript && (
@@ -111,38 +108,7 @@ export function ScriptManager() {
           onCancel={() => setImportState(null)}
         />
       )}
-    </div>
-  )
-}
-
-function ImportButton({
-  fileInputRef,
-  onFile,
-  error,
-  className = '',
-}: {
-  fileInputRef: React.RefObject<HTMLInputElement | null>
-  onFile: (e: React.ChangeEvent<HTMLInputElement>) => void
-  error: string | null
-  className?: string
-}) {
-  return (
-    <div className={className}>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={onFile}
-      />
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        className="w-full py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
-      >
-        Import
-      </button>
-      {error && <p className="text-xs text-red-400 mt-1 text-center">{error}</p>}
-    </div>
+    </>
   )
 }
 
@@ -213,12 +179,14 @@ function ScriptCard({
   onSelect,
   onRemove,
   onEdit,
+  onExport,
 }: {
   script: Script
   selected: boolean
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
+  onExport: () => void
 }) {
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
 
@@ -239,10 +207,15 @@ function ScriptCard({
       </div>
       <div className="flex items-center gap-1">
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit()
-          }}
+          onClick={(e) => { e.stopPropagation(); onExport() }}
+          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
+          aria-label="Export script"
+          title="Export script"
+        >
+          <IconExport />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit() }}
           className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded text-sm"
           aria-label="Edit script"
           title="Edit script"
@@ -250,10 +223,7 @@ function ScriptCard({
           <IconEdit />
         </button>
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
+          onClick={(e) => { e.stopPropagation(); onRemove() }}
           className="text-[var(--color-stage-muted)] hover:text-red-400 transition-colors p-1 rounded"
           aria-label="Remove script"
         >

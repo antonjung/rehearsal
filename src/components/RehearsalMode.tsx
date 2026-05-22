@@ -910,6 +910,8 @@ export function RehearsalMode({ onExit }: Props) {
                 }
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
+                countdownMs={isCurrentGroup && isMyLine ? countdownMs : null}
+                countdownTotal={countdownGapRef.current || undefined}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
               {group.startIdx === blockEnd && (
@@ -972,28 +974,12 @@ export function RehearsalMode({ onExit }: Props) {
       {/* Controls */}
       <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
 
-        {/* Your-line status banner — prominently visible during silence/listening */}
-        {(phase === 'my-line-silence' || phase === 'my-line-listening') && (
-          <div className={`flex items-center justify-between rounded-lg px-4 py-2.5 mb-3 ${
-            phase === 'my-line-listening'
-              ? 'bg-[var(--color-stage-accent)]/20 border border-[var(--color-stage-accent)]/40'
-              : 'bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)]'
-          }`}>
+        {/* Listening indicator — only shown when mic is active */}
+        {phase === 'my-line-listening' && (
+          <div className="flex items-center gap-2 rounded-lg px-4 py-2.5 mb-3 bg-[var(--color-stage-accent)]/20 border border-[var(--color-stage-accent)]/40">
             <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-stage-accent-light)]">
-              {phase === 'my-line-listening'
-                ? <><IconMic /> Listening…</>
-                : <span className="text-[var(--color-stage-text)]">Your line</span>
-              }
+              <IconMic /> Listening…
             </span>
-            {countdownMs !== null && (
-              <span className={`font-mono tabular-nums text-2xl font-bold transition-colors ${
-                countdownMs <= countdownGapRef.current * 0.25
-                  ? 'text-amber-400'
-                  : 'text-[var(--color-stage-accent-light)]'
-              }`}>
-                {Math.max(0, countdownMs / 1000).toFixed(1)}s
-              </span>
-            )}
           </div>
         )}
 
@@ -1133,12 +1119,15 @@ interface LineRowProps {
   onRecord?: () => void
   isRecordingThis?: boolean
   anyRecording?: boolean
+  countdownMs?: number | null
+  countdownTotal?: number
 }
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible,
   accuracy, threshold, highlightStyle,
-  onSelect, onReveal, onRecord, isRecordingThis, anyRecording, ref,
+  onSelect, onReveal, onRecord, isRecordingThis, anyRecording,
+  countdownMs, countdownTotal, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
@@ -1230,6 +1219,15 @@ const LineRow = ({
           {accuracy !== null && lineVisible && (
             <p className="text-[10px] text-[var(--color-stage-muted)] mt-0.5 italic">
               {accuracy}%{accuracy < threshold && ' — below threshold'}
+            </p>
+          )}
+          {countdownMs != null && countdownMs > 0 && isCurrent && phase === 'my-line-silence' && (
+            <p className={`font-mono tabular-nums text-base font-bold mt-1 transition-colors ${
+              countdownTotal && countdownMs <= countdownTotal * 0.25
+                ? 'text-amber-400'
+                : 'text-[var(--color-stage-accent-light)]'
+            }`}>
+              {(countdownMs / 1000).toFixed(1)}s
             </p>
           )}
         </div>

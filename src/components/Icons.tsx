@@ -25,4 +25,6 @@ export {
   RecordStopRegular as IconRecordStop,
   RecordRegular as IconRecordDot,
   PersonVoiceRegular as IconPersonVoice,
+  ArrowExportRegular as IconExport,
+  ArrowUploadRegular as IconImport,
 } from '@fluentui/react-icons'
