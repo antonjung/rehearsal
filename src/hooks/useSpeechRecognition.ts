@@ -61,11 +61,21 @@ export function useSpeechRecognition() {
         if (resolveRef.current === resolve) resolveRef.current = null
       }
 
-      // Scheduled after every onresult — fires when the actor has been silent for pauseWait ms.
-      // onresult keeps resetting it, so it can only fire during genuine silence.
+      // Two-mode silence detection:
+      //
+      // BEFORE threshold (switchToShortSilenceRef false):
+      //   scheduleSilenceStop fires maxPauseMs after each onresult.
+      //   Keeps getting reset while speech comes in → fires only on genuine silence.
+      //
+      // AFTER threshold (switchToShortSilenceRef true):
+      //   scheduleSilenceStop is a no-op. notifyActivity(false) fires after
+      //   PAUSE_DETECT_MS of no results, then starts the short silenceMs timer.
+      //   This means: last word → SR quiet → 300ms → silenceMs → finish.
+      //   The line can never be cut while onresult events are still arriving.
       const scheduleSilenceStop = () => {
+        if (switchToShortSilenceRef?.current) return  // handled by notifyActivity
         if (silenceTimer) clearTimeout(silenceTimer)
-        const wait = (!switchToShortSilenceRef?.current && maxPauseMs !== undefined) ? maxPauseMs : silenceMs
+        const wait = maxPauseMs !== undefined ? maxPauseMs : silenceMs
         silenceTimer = setTimeout(finish, wait)
       }
 
@@ -73,6 +83,14 @@ export function useSpeechRecognition() {
         if (active === speechActive) return
         speechActive = active
         onSpeechActivity?.(active)
+        if (!active && switchToShortSilenceRef?.current) {
+          // Speech stopped after threshold — start short silence countdown
+          if (silenceTimer) clearTimeout(silenceTimer)
+          silenceTimer = setTimeout(finish, silenceMs)
+        } else if (active && switchToShortSilenceRef?.current) {
+          // Speech resumed after threshold — cancel any pending short silence
+          if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
+        }
       }
 
       const baseIdx = lastResultCountRef.current
@@ -90,7 +108,6 @@ export function useSpeechRecognition() {
         notifyActivity(true)
         if (activityTimer) clearTimeout(activityTimer)
         activityTimer = setTimeout(() => notifyActivity(false), PAUSE_DETECT_MS)
-        // Reset silence countdown — fires only when actor has genuinely stopped speaking
         scheduleSilenceStop()
       }
 
