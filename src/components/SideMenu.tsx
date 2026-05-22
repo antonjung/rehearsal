@@ -219,25 +219,59 @@ export function SideMenu({ onClose }: Props) {
               {aboutOpen ? <IconChevronUp /> : <IconChevronDown />}
             </button>
             {aboutOpen && (
-              <div className="mt-2 rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-3 space-y-3 text-xs text-[var(--color-stage-muted)]">
+              <div className="mt-2 rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-3 space-y-4 text-xs text-[var(--color-stage-muted)]">
                 <p className="cueline-title text-lg">CueLine</p>
-                <p>Learn your lines for a play by rehearsing with a full read-through of your script.</p>
+                <p>Learn your lines for a play by running through your script with all other parts read aloud.</p>
+
                 <div className="space-y-1.5">
-                  <p className="font-semibold text-[var(--color-stage-text)]">Getting started</p>
-                  <p>1. Tap <span className="text-[var(--color-stage-text)]">☰</span> and load your script as a .txt or .pdf file.</p>
-                  <p>2. Go to <span className="text-[var(--color-stage-text)]">Characters</span> to see who's in your script and view their lines by scene.</p>
-                  <p>3. Go to <span className="text-[var(--color-stage-text)]">Record</span> to pre-record lines for other characters so they play back in their own voice.</p>
-                  <p>4. Go to <span className="text-[var(--color-stage-text)]">Run through</span>, choose your character, and tap Start.</p>
+                  <p className="font-semibold text-[var(--color-stage-text)]">Loading a script</p>
+                  <p>Tap <span className="text-[var(--color-stage-text)]">Load</span> in this menu to open a <span className="text-[var(--color-stage-text)]">.txt</span> or <span className="text-[var(--color-stage-text)]">.pdf</span> file. Multiple scripts can be loaded at once. Scripts are listed on the <span className="text-[var(--color-stage-text)]">Home</span> tab where you can rename, edit, export, or delete them.</p>
+                  <p>Use <span className="text-[var(--color-stage-text)]">Import</span> to restore a previously exported CueLine bundle (scripts + recordings).</p>
                 </div>
+
                 <div className="space-y-1.5">
-                  <p className="font-semibold text-[var(--color-stage-text)]">In rehearsal</p>
-                  <p>Other characters are read aloud (or played from your recordings). Your lines are shown highlighted — speak them yourself, or choose to have them read with a gap before or after.</p>
-                  <p>Drag the red markers to set a clip region and use <span className="text-[var(--color-stage-text)]">↺</span> to loop it until you have the lines.</p>
-                  <p>Your accuracy is measured as you speak — a warning sounds if it drops below your set threshold.</p>
+                  <p className="font-semibold text-[var(--color-stage-text)]">Characters tab</p>
+                  <p>See every character in your script with a line count. Tap a character to browse their lines scene by scene, with your lines highlighted. Tap a scene to jump straight into a run-through of it.</p>
                 </div>
+
                 <div className="space-y-1.5">
-                  <p className="font-semibold text-[var(--color-stage-text)]">Settings <span className="font-normal">(⚙️)</span></p>
-                  <p>Choose your line mode, set speech rate, pick voices per character, adjust accuracy warning threshold, and select a highlighter colour.</p>
+                  <p className="font-semibold text-[var(--color-stage-text)]">Record tab</p>
+                  <p>Pre-record lines for other characters in your own voice (or someone else's). Recordings play back during the run-through instead of text-to-speech, giving each character a distinct, human voice. Tap the microphone icon next to any line to record, re-record, or delete.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">Run through tab</p>
+                  <p>Choose a scene and your character, then tap <span className="text-[var(--color-stage-text)]">Start</span>. All other characters are read aloud (TTS or recordings). Your lines are highlighted — speak them yourself.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">During a run-through</p>
+                  <p><span className="text-[var(--color-stage-text)]">Line modes</span> — set in ⚙️: <span className="text-[var(--color-stage-text)]">Silence</span> leaves a timed gap; <span className="text-[var(--color-stage-text)]">Read</span> speaks your line; <span className="text-[var(--color-stage-text)]">Gap before / Gap after</span> combines both. The gap length matches the estimated speaking time for the line, or the actual recording duration if one exists.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Progress bar</span> — a bar fills across your line as the gap counts down.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Clip markers</span> — two red lines define a practice region. Drag them to reposition. Playback always starts from the clip start. Long-press a line to set the clip start or end there.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Repeat</span> — loops the clip automatically when it ends.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Condensed mode</span> — when there are more lines between your cues than the threshold you set, the middle is skipped: a sound plays, the number of skipped lines is announced, and only the cue line immediately before your next line is read.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Record in rehearsal</span> — tap the ● button next to any line to record it on the spot without leaving the run-through.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Show / hide lines</span> — your lines can be blurred until you tap to reveal them, to test recall without prompts.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Search</span> — tap the magnifier to find any word or phrase in the script and jump to it.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Hands-free</span> — with hands-free mode on, say <span className="text-[var(--color-stage-text)]">"start"</span> to begin. During playback say <span className="text-[var(--color-stage-text)]">"stop"</span>, <span className="text-[var(--color-stage-text)]">"back"</span>, <span className="text-[var(--color-stage-text)]">"skip"</span>, or <span className="text-[var(--color-stage-text)]">"repeat"</span> to control playback without touching the screen.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">Settings ⚙️</p>
+                  <p><span className="text-[var(--color-stage-text)]">Line mode</span> — silence / read / gap before / gap after.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Speech rate</span> — speed up or slow down TTS.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Voice</span> — choose a TTS voice globally; individual characters can have their own voice set on the Characters tab.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Stage directions</span> — choose whether directions are read aloud.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Hands-free</span> — enable voice commands.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Signals</span> — cue ping before your lines; completion sound at scene end.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Highlighter colour</span> — colour used to highlight your lines.</p>
+                  <p><span className="text-[var(--color-stage-text)]">Voice calibration</span> — fine-tune how the gap length is calculated from word count.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-[var(--color-stage-text)]">iOS notes</p>
+                  <p>Standard voices (e.g. Daniel) are available via the Web Speech API. Eloquence voices shown in iOS Settings are not accessible to browser apps.</p>
                 </div>
               </div>
             )}
