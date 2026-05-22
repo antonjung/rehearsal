@@ -131,9 +131,15 @@ export function useSpeechRecognition() {
       const safetyMs = Math.max(10000, (estimatedMs ?? 0) * 2.5 + (maxPauseMs ?? silenceMs))
 
       if (recognitionRef.current && sessionActiveRef.current) {
+        // Reuse the existing session — capture the current instance so the onend
+        // guard below can reject events fired by a stale (already-aborted) session.
+        const sessionRec = recognitionRef.current
         setTranscript('')
         recognitionRef.current.onresult = onresult
-        recognitionRef.current.onend = handleUnexpectedEnd
+        recognitionRef.current.onend = () => {
+          if (recognitionRef.current !== sessionRec) return
+          handleUnexpectedEnd()
+        }
         silenceTimer = setTimeout(finish, safetyMs)
         return
       }
@@ -146,10 +152,16 @@ export function useSpeechRecognition() {
       rec.continuous = true
 
       rec.onresult = onresult
-      rec.onend = handleUnexpectedEnd
+      // Guard: if a newer session has already started (recognitionRef replaced),
+      // ignore onend from this stale instance — it would otherwise kill the new session.
+      rec.onend = () => {
+        if (recognitionRef.current !== rec) return
+        handleUnexpectedEnd()
+      }
       rec.onerror = (e: AnySR) => {
         const err: string = e?.error ?? 'unknown'
         if (err === 'no-speech' || err === 'aborted') return
+        if (recognitionRef.current !== rec) return
         setSrError(err)
         handleUnexpectedEnd()
       }
