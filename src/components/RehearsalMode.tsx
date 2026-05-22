@@ -154,6 +154,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
+  const [condensedLines, setCondensedLines] = useState(settings.condensedLines ?? 10)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -162,6 +163,8 @@ export function RehearsalMode({ onExit }: Props) {
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
+  const condensedLinesRef = useRef(condensedLines)
+  condensedLinesRef.current = condensedLines
   const setLoopEnabledRef = useRef(setLoopEnabled)
   setLoopEnabledRef.current = setLoopEnabled
   const handsFreeRef = useRef(false)
@@ -554,7 +557,7 @@ export function RehearsalMode({ onExit }: Props) {
 
         // Condensed mode: after user's line, skip large other-character sections
         if (isMyLine && !stopRef.current && !pauseRef.current) {
-          const condensedThreshold = settingsRef.current.condensedLines ?? 10
+          const condensedThreshold = condensedLinesRef.current
           if (condensedThreshold > 0) {
             const groups = sceneGroupsRef.current
             const myGi = groups.findIndex((g) => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
@@ -1029,8 +1032,8 @@ export function RehearsalMode({ onExit }: Props) {
           <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} large title="Skip beat"><IconSkipForward /></CtrlBtn>
         </div>
 
-        {/* Repeat pill */}
-        <div className="flex justify-center gap-2 mb-1">
+        {/* Repeat pill + condensed mode */}
+        <div className="flex justify-center items-center gap-2 mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
             className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
@@ -1041,6 +1044,17 @@ export function RehearsalMode({ onExit }: Props) {
           >
             <IconRepeat /> Repeat
           </button>
+          <select
+            value={condensedLines}
+            onChange={(e) => setCondensedLines(Number(e.target.value))}
+            className="text-xs px-2 py-1 rounded-full bg-[var(--color-stage-border)] text-[var(--color-stage-muted)] border-none outline-none appearance-none cursor-pointer font-semibold"
+          >
+            <option value={0}>Full</option>
+            <option value={5}>Skip &gt;5</option>
+            <option value={10}>Skip &gt;10</option>
+            <option value={15}>Skip &gt;15</option>
+            <option value={20}>Skip &gt;20</option>
+          </select>
         </div>
 
         {/* Status line */}
