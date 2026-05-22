@@ -34,6 +34,13 @@ export function wordAccuracy(expected: string, spoken: string): number {
   return Math.max(0, Math.round(((m - distance) / m) * 100))
 }
 
+export function wordCoverage(expected: string, spoken: string): number {
+  const exp = normalise(expected)
+  if (exp.length === 0) return 1
+  const heardSet = new Set(normalise(spoken))
+  return exp.filter(w => heardSet.has(w)).length / exp.length
+}
+
 export function buildWordDiff(expected: string, spoken: string): WordDiff[] {
   const expWords = normalise(expected)
   const gotWords = normalise(spoken)

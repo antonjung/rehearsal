@@ -68,6 +68,7 @@ export interface RehearsalSettings {
   scenePingEnabled?: boolean
   clipStartPingEnabled?: boolean
   voiceCalibration?: number
+  speechCoverageThreshold?: number
 }
 
 export interface MarkedBlock {

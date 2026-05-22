@@ -51,6 +51,7 @@ export function GlobalSettings({ onClose }: Props) {
     clipStartPingEnabled: true,
     maxPauseMs: 1000,
     voiceCalibration: 0.6,
+    speechCoverageThreshold: 70,
   }
 
   const cmdWords: VoiceCommandWords = { ...DEFAULT_VOICE_COMMANDS, ...(prefs.voiceCommands ?? {}) }
@@ -159,6 +160,11 @@ export function GlobalSettings({ onClose }: Props) {
                   <Stepper value={prefs.maxPauseMs ?? 2000} min={200} max={3000} step={200}
                     display={`${((prefs.maxPauseMs ?? 2000) / 1000).toFixed(1)}s`}
                     onChange={(v) => update('maxPauseMs', v)} />
+                </SettingsRow>
+                <SettingsRow label="Coverage to advance" sub>
+                  <Stepper value={prefs.speechCoverageThreshold ?? 70} min={30} max={100} step={5}
+                    display={`${prefs.speechCoverageThreshold ?? 70}%`}
+                    onChange={(v) => update('speechCoverageThreshold', v)} />
                 </SettingsRow>
               </>
             )}

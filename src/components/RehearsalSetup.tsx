@@ -29,6 +29,7 @@ export function RehearsalSetup({ onStart }: Props) {
     maxPauseMs: 1000,
     highlighterColor: 'yellow' as const,
     voiceCalibration: 0.6,
+    speechCoverageThreshold: 70,
   }
 
   const [sceneId, setSceneId] = useState<string | null>(
