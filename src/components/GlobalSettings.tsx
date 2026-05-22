@@ -1,7 +1,7 @@
 import { useAppStore } from '../store/useAppStore'
 import { THEMES } from '../utils/themes'
 import { MicTest } from './MicTest'
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import type { MyLineMode, VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
@@ -31,6 +31,14 @@ const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
 export function GlobalSettings({ onClose }: Props) {
   const { theme, setTheme, rehearsalSettings, saveRehearsalSettings, scriptFontSize, setScriptFontSize, scripts, addScript, updateScript } = useAppStore()
   const [showMicTest, setShowMicTest] = useState(false)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
   const [importing, setImporting] = useState(false)
   const [importState, setImportState] = useState<{
     bundle: Awaited<ReturnType<typeof parseImportFile>>
@@ -105,17 +113,17 @@ export function GlobalSettings({ onClose }: Props) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/50"
-        onClick={onClose}
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        onClick={handleClose}
       />
 
       {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-80 max-w-full bg-[var(--color-stage-surface)] border-l border-[var(--color-stage-border)] flex flex-col shadow-2xl">
+      <div className={`fixed inset-y-0 right-0 z-50 w-80 max-w-full bg-[var(--color-stage-surface)] border-l border-[var(--color-stage-border)] flex flex-col shadow-2xl transition-transform duration-300 ${visible ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Panel header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--color-stage-border)] shrink-0">
           <h2 className="font-semibold text-[var(--color-stage-text)]">Settings</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none"
           >
             ✕

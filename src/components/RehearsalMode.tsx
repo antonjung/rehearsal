@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconSummary, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconSummary, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording } from '../utils/recordingStore'
@@ -167,6 +167,9 @@ export function RehearsalMode({ onExit }: Props) {
   const rate = settings.speechRate
   const [coveragePct, setCoveragePct] = useState<number | null>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchCursor, setSearchCursor] = useState(0)
   const countdownExpiredRef = useRef(false)
   const currentGroupTextRef = useRef<string>('')
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
@@ -180,6 +183,24 @@ export function RehearsalMode({ onExit }: Props) {
   abortRef.current = abort
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  // --- Search ---
+  const searchQ = searchQuery.trim().toLowerCase()
+  const searchMatches = useMemo(() => {
+    if (!searchQ) return []
+    return sceneGroups
+      .map((g, gi) => ({ gi, g }))
+      .filter(({ g }) => g.text.toLowerCase().includes(searchQ) || (g.character ?? '').toLowerCase().includes(searchQ))
+      .map(({ gi }) => gi)
+  }, [sceneGroups, searchQ])
+  const safeSearchCursor = searchMatches.length > 0 ? Math.min(searchCursor, searchMatches.length - 1) : 0
+  useEffect(() => { setSearchCursor(0) }, [searchQ])
+  useEffect(() => {
+    if (searchMatches.length === 0) return
+    const gi = searchMatches[safeSearchCursor]
+    const group = sceneGroups[gi]
+    lineRefs.current[group.startIdx]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [safeSearchCursor, searchMatches, sceneGroups])
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -800,7 +821,7 @@ export function RehearsalMode({ onExit }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Sub-header: back | scene/character label | show-lines toggle */}
+      {/* Sub-header: back | scene/character label | search | show-lines toggle */}
       <div className="flex items-center px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
         <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] shrink-0 flex items-center gap-1 text-sm">
           <IconArrowLeft className="text-base" /> Back
@@ -808,10 +829,46 @@ export function RehearsalMode({ onExit }: Props) {
         <span className="flex-1 text-sm font-semibold text-[var(--color-stage-text)] truncate text-center">
           {activeScene ? activeScene.sceneTitle || activeScene.title : settings.myCharacter}
         </span>
+        <button
+          onClick={() => { setShowSearch((v) => !v); setSearchQuery('') }}
+          className={`shrink-0 transition-colors ${showSearch ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
+          title="Search lines"
+        >
+          <IconSearch className="text-base" />
+        </button>
         <ToggleSwitch
           checked={showAllMyLines}
           onChange={(v) => { setShowAllMyLines(v); setRevealedLines({}) }}
         />
+      </div>
+
+      {/* Search bar — slides in below sub-header */}
+      <div
+        className="overflow-hidden shrink-0 transition-all duration-300"
+        style={{ maxHeight: showSearch ? '56px' : '0px' }}
+      >
+        <div className="px-3 py-2 border-b border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]">
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] focus-within:border-[var(--color-stage-accent)]">
+            <IconSearch className="text-[var(--color-stage-muted)] text-sm shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search lines…"
+              className="flex-1 bg-transparent text-sm text-[var(--color-stage-text)] placeholder:text-[var(--color-stage-muted)] focus:outline-none"
+            />
+            {searchQ && (
+              <>
+                <span className="text-xs text-[var(--color-stage-muted)] shrink-0">
+                  {searchMatches.length === 0 ? 'No matches' : `${safeSearchCursor + 1}/${searchMatches.length}`}
+                </span>
+                <button disabled={searchMatches.length === 0} onClick={() => setSearchCursor((c) => (c - 1 + searchMatches.length) % searchMatches.length)} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 text-xs px-0.5"><IconChevronUp /></button>
+                <button disabled={searchMatches.length === 0} onClick={() => setSearchCursor((c) => (c + 1) % searchMatches.length)} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 text-xs px-0.5"><IconChevronDown /></button>
+                <button onClick={() => setSearchQuery('')} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm leading-none"><IconDismiss /></button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Drag overlay: fixed line that follows the finger during clip marker drag */}
@@ -834,6 +891,9 @@ export function RehearsalMode({ onExit }: Props) {
           const acc = accuracies[group.startIdx] ?? null
 
           const isInClip = group.startIdx >= blockStart && group.startIdx <= blockEnd
+          const searchMatchGi = searchQ ? searchMatches.indexOf(gi) : -1
+          const isSearchMatch = searchMatchGi >= 0
+          const isSearchActive = isSearchMatch && searchMatchGi === safeSearchCursor
 
           return (
             <div
@@ -887,6 +947,7 @@ export function RehearsalMode({ onExit }: Props) {
                 hasRecording={recMapRef.current.has(group.startIdx)}
                 coveragePct={isCurrentGroup && isMyLine ? coveragePct : null}
                 coverageThreshold={settings.speechCoverageThreshold ?? 70}
+                searchActive={isSearchActive}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
               {group.startIdx === blockEnd && (
@@ -1119,13 +1180,14 @@ interface LineRowProps {
   hasRecording?: boolean
   coveragePct?: number | null
   coverageThreshold?: number
+  searchActive?: boolean
 }
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible,
   accuracy, threshold, highlightStyle,
   onSelect, onReveal, onRecord, isRecordingThis, anyRecording, hasRecording,
-  coveragePct, coverageThreshold = 70, ref,
+  coveragePct, coverageThreshold = 70, searchActive, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
@@ -1167,6 +1229,8 @@ const LineRow = ({
           ? 'ring-1 ring-[var(--color-stage-accent)]'
           : isActiveLine
           ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
+          : searchActive
+          ? 'bg-blue-500/10 ring-1 ring-blue-400/60'
           : isCurrent
           ? 'bg-[var(--color-stage-surface)]'
           : ''
