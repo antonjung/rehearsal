@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { IconPlay, IconRecordStop, IconRecordDot, IconDismiss, IconCheckmark } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
-import { getRecording, setRecording, deleteRecording } from '../utils/recordingStore'
+import { getRecording, setRecording, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
 import type { ScriptLine } from '../types'
 
 interface LineGroup {
@@ -91,8 +91,9 @@ export function RecordingStudio() {
   }, [recording, startRec])
 
   const handleStop = useCallback(async (group: LineGroup) => {
-    const blob = await stopRec()
+    const { blob, durationMs } = await stopRec()
     await setRecording(script!.id, group.startIdx, blob)
+    if (durationMs > 0) void setRecordingDuration(script!.id, group.startIdx, durationMs)
     setHasRec((h) => ({ ...h, [group.startIdx]: true }))
     setRecordingIdx(null)
   }, [stopRec, script])

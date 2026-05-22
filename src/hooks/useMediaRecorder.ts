@@ -10,7 +10,8 @@ export function useMediaRecorder() {
   const [error, setError] = useState<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
-  const resolveRef = useRef<((blob: Blob) => void) | null>(null)
+  const resolveRef = useRef<((result: { blob: Blob; durationMs: number }) => void) | null>(null)
+  const startTimeRef = useRef<number>(0)
 
   const start = useCallback(async (): Promise<boolean> => {
     try {
@@ -24,10 +25,12 @@ export function useMediaRecorder() {
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop())
         const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' })
-        resolveRef.current?.(blob)
+        const durationMs = Math.round(Date.now() - startTimeRef.current)
+        resolveRef.current?.({ blob, durationMs })
         resolveRef.current = null
       }
       recorderRef.current = recorder
+      startTimeRef.current = Date.now()
       recorder.start()
       setRecording(true)
       setError(null)
@@ -38,7 +41,7 @@ export function useMediaRecorder() {
     }
   }, [])
 
-  const stop = useCallback((): Promise<Blob> => {
+  const stop = useCallback((): Promise<{ blob: Blob; durationMs: number }> => {
     return new Promise((resolve) => {
       resolveRef.current = resolve
       recorderRef.current?.stop()

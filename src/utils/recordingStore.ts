@@ -67,6 +67,26 @@ export async function getAllRecordings(): Promise<Map<string, Blob>> {
   } catch { return new Map() }
 }
 
+export async function getRecordingDuration(scriptId: string, lineIdx: number): Promise<number | null> {
+  try {
+    const db = await getDb()
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(STORE).objectStore(STORE).get(`${key(scriptId, lineIdx)}:dur`)
+      req.onsuccess = () => resolve(typeof req.result === 'number' ? req.result : null)
+      req.onerror = () => reject(req.error)
+    })
+  } catch { return null }
+}
+
+export async function setRecordingDuration(scriptId: string, lineIdx: number, ms: number): Promise<void> {
+  const db = await getDb()
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(ms, `${key(scriptId, lineIdx)}:dur`)
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}
+
 export async function setRecordingRaw(k: string, blob: Blob): Promise<void> {
   const db = await getDb()
   return new Promise((resolve, reject) => {

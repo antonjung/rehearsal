@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
-import { getRecording, setRecording } from '../utils/recordingStore'
+import { getRecording, setRecording, getRecordingDuration, setRecordingDuration } from '../utils/recordingStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { estimateDuration } from '../utils/speechDuration'
@@ -312,8 +312,13 @@ export function RehearsalMode({ onExit }: Props) {
           const blob = await getRecording(script.id, i)
           if (blob) {
             map.set(i, blob)
-            const ms = await getBlobDuration(blob)
-            if (ms > 0) durMap.set(i, ms)
+            const stored = await getRecordingDuration(script.id, i)
+            if (stored && stored > 0) {
+              durMap.set(i, stored)
+            } else {
+              const ms = await getBlobDuration(blob)
+              if (ms > 0) durMap.set(i, ms)
+            }
           }
         }
       }
@@ -659,10 +664,13 @@ export function RehearsalMode({ onExit }: Props) {
 
   const handleRecordLine = async (lineIdx: number) => {
     if (recordingLineIdx !== null) {
-      const blob = await stopMic()
+      const { blob, durationMs } = await stopMic()
       await setRecording(script.id, recordingLineIdx, blob)
       recMapRef.current.set(recordingLineIdx, blob)
-      getBlobDuration(blob).then((ms) => { if (ms > 0) recDurMapRef.current.set(recordingLineIdx, ms) })
+      if (durationMs > 0) {
+        recDurMapRef.current.set(recordingLineIdx, durationMs)
+        void setRecordingDuration(script.id, recordingLineIdx, durationMs)
+      }
       setRecordingLineIdx(null)
     } else {
       if (isPlaying) {
