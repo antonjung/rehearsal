@@ -59,6 +59,12 @@ export function useSpeechRecognition() {
         if (silenceTimer) clearTimeout(silenceTimer)
         if (activityTimer) clearTimeout(activityTimer)
         if (speechActive) { speechActive = false; onSpeechActivity?.(false) }
+        // Stop the session so iOS properly releases the audio route back to TTS.
+        // This means every listen() call creates a fresh session (no session reuse),
+        // but avoids the audio-session stall that causes SR to hear nothing.
+        sessionActiveRef.current = false
+        setListening(false)
+        try { recognitionRef.current?.stop() } catch { /* ignore */ }
         resolve(finalTranscript || liveTranscript)
         if (resolveRef.current === resolve) resolveRef.current = null
       }

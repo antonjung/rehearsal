@@ -954,12 +954,23 @@ export function RehearsalMode({ onExit }: Props) {
 
         {/* DEBUG: SR transcript monitor */}
         {(listening || srError) && (
-          <div className="mb-3 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-xs font-mono">
-            <span className="text-white/40 mr-2">SR:</span>
-            {srError
-              ? <span className="text-red-400">error: {srError}</span>
-              : <span className="text-green-300 break-all">{transcript || <span className="text-white/30 italic">silence</span>}</span>
-            }
+          <div className="mb-3 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-xs font-mono space-y-0.5">
+            <div>
+              <span className="text-white/40 mr-2">SR:</span>
+              {srError
+                ? <span className="text-red-400">error: {srError}</span>
+                : <span className="text-green-300 break-all">{transcript || <span className="text-white/30 italic">silence</span>}</span>
+              }
+            </div>
+            <div>
+              <span className="text-white/40 mr-2">cov:</span>
+              <span className={coveragePct != null && coveragePct >= (settings.speechCoverageThreshold ?? 70) ? 'text-green-400' : 'text-yellow-300'}>
+                {coveragePct ?? 0}%
+              </span>
+              <span className="text-white/30 ml-2">
+                {countdownExpiredRef.current ? '(short silence)' : '(max pause)'}
+              </span>
+            </div>
           </div>
         )}
 
