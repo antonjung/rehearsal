@@ -22,6 +22,7 @@ export function useSpeechRecognition() {
   const [transcript, setTranscript] = useState('')
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(false)
+  const [srError, setSrError] = useState<string | null>(null)
   const recognitionRef = useRef<AnySR>(null)
   const resolveRef = useRef<((t: string) => void) | null>(null)
   const sessionActiveRef = useRef(false)
@@ -37,6 +38,7 @@ export function useSpeechRecognition() {
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
+    setSrError(null)
     return new Promise((resolve) => {
       resolveRef.current = resolve
 
@@ -146,7 +148,10 @@ export function useSpeechRecognition() {
       rec.onresult = onresult
       rec.onend = handleUnexpectedEnd
       rec.onerror = (e: AnySR) => {
-        if (e?.error === 'no-speech') return
+        const err: string = e?.error ?? 'unknown'
+        if (err === 'no-speech' || err === 'aborted') return
+        setSrError(err)
+        handleUnexpectedEnd()
       }
 
       rec.start()
@@ -173,5 +178,5 @@ export function useSpeechRecognition() {
 
   const reset = useCallback(() => setTranscript(''), [])
 
-  return { transcript, listening, supported, listen, stop, abort, reset }
+  return { transcript, listening, supported, srError, listen, stop, abort, reset }
 }

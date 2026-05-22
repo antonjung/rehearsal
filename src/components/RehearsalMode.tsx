@@ -75,7 +75,7 @@ interface LineGroup {
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { transcript, listening, supported, listen, abort, reset: resetTranscript } = useSpeechRecognition()
+  const { transcript, listening, supported, srError, listen, abort, reset: resetTranscript } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const settings = rehearsalSettings!
@@ -953,10 +953,13 @@ export function RehearsalMode({ onExit }: Props) {
         )}
 
         {/* DEBUG: SR transcript monitor */}
-        {listening && (
+        {(listening || srError) && (
           <div className="mb-3 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-xs font-mono">
             <span className="text-white/40 mr-2">SR:</span>
-            <span className="text-green-300 break-all">{transcript || <span className="text-white/30 italic">silence</span>}</span>
+            {srError
+              ? <span className="text-red-400">error: {srError}</span>
+              : <span className="text-green-300 break-all">{transcript || <span className="text-white/30 italic">silence</span>}</span>
+            }
           </div>
         )}
 
