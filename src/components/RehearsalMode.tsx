@@ -309,13 +309,17 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }, [phase])
 
-  // Tick at 100ms: wall-clock countdown from when the listen window opened
+  // Tick at 100ms: wall-clock countdown display; speech-accumulation based flip for silence switch
   useEffect(() => {
     const id = setInterval(() => {
       const gap = countdownGapRef.current
       if (!gap || !countdownStartMsRef.current) return
+      // Display: wall-clock so it shows immediately and ticks continuously
       const rem = Math.max(0, gap - (Date.now() - countdownStartMsRef.current))
       setCountdownMs(rem)
+      // Silence-mode switch: flip when accumulated speaking time reaches the gap
+      const totalSpoken = speechAccumMsRef.current + (speechBoutStartRef.current !== null ? Date.now() - speechBoutStartRef.current : 0)
+      if (totalSpoken >= gap && !countdownExpiredRef.current) countdownExpiredRef.current = true
     }, 100)
     return () => clearInterval(id)
   }, [])
