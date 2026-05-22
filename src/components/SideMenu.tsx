@@ -117,65 +117,70 @@ export function SideMenu({ onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto">
 
-          {/* Load script */}
+          {/* Scripts section */}
           <div className="px-5 py-4 border-b border-[var(--color-stage-border)] space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] mb-3">Scripts</p>
+
+            {/* Load */}
             <button
               disabled={importing}
               onClick={() => inputRef.current?.click()}
               className="w-full py-2.5 rounded-xl bg-[var(--color-stage-accent)] text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
             >
-              {importing && !loadingExample ? 'Importing…' : 'Load script'}
+              {importing && !loadingExample ? 'Loading…' : 'Load'}
             </button>
             <input ref={inputRef} type="file" accept=".txt,.pdf" multiple className="hidden"
               onChange={(e) => { void handleFiles(e.target.files) }} />
+
+            {/* Import */}
             <button
               onClick={() => importBundleRef.current?.click()}
               className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
             >
-              <IconImport /> Import script
+              <IconImport /> Import
             </button>
             <input ref={importBundleRef} type="file" accept=".json,application/json" className="hidden"
               onChange={handleBundleFile} />
             {importError && <p className="text-xs text-red-400 text-center">{importError}</p>}
-          </div>
 
-          {/* Example scripts */}
-          {examples.length > 0 && (
-            <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
-              <button
-                onClick={() => setExamplesOpen((v) => !v)}
-                className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors mb-1"
-              >
-                <span>Example scripts</span>
-                {examplesOpen ? <IconChevronUp /> : <IconChevronDown />}
-              </button>
-              {examplesOpen && (
-                <div className="mt-2 space-y-2">
-                  {examples.map((ex) => {
-                    const loaded = scripts.some((s) => s.name === ex.name)
-                    return (
-                      <div key={ex.file} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
-                        <div className="min-w-0 flex items-start gap-1.5">
-                          <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}><IconCheckmark /></span>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
-                            <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
+            {/* Examples */}
+            {examples.length > 0 && (
+              <>
+                <button
+                  onClick={() => setExamplesOpen((v) => !v)}
+                  className="w-full flex items-center justify-between py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors px-4"
+                >
+                  <span>Examples</span>
+                  {examplesOpen ? <IconChevronUp /> : <IconChevronDown />}
+                </button>
+                {examplesOpen && (
+                  <div className="space-y-2">
+                    {examples.map((ex) => {
+                      const loaded = scripts.some((s) => s.name === ex.name)
+                      return (
+                        <div key={ex.file} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
+                          <div className="min-w-0 flex items-start gap-1.5">
+                            <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}><IconCheckmark /></span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
+                              <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
+                            </div>
                           </div>
+                          <button
+                            disabled={importing}
+                            onClick={() => void loadExample(ex)}
+                            className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+                          >
+                            {loadingExample === ex.file ? '⏳' : 'Load'}
+                          </button>
                         </div>
-                        <button
-                          disabled={importing}
-                          onClick={() => void loadExample(ex)}
-                          className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
-                        >
-                          {loadingExample === ex.file ? '⏳' : 'Load'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           {/* Notes */}
           <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
