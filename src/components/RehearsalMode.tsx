@@ -166,6 +166,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [showSummary, setShowSummary] = useState(false)
   const rate = settings.speechRate
   const [coveragePct, setCoveragePct] = useState<number | null>(null)
+  const [showDebug, setShowDebug] = useState(false)
   const countdownExpiredRef = useRef(false)
   const currentGroupTextRef = useRef<string>('')
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
@@ -298,9 +299,14 @@ export function RehearsalMode({ onExit }: Props) {
   }, [cancel, abort])
 
   useEffect(() => {
-    if (phase !== 'my-line-silence' && phase !== 'my-line-listening') {
+    if (phase === 'my-line-silence' || phase === 'my-line-listening') {
+      setShowDebug(true)
+    } else {
       setCoveragePct(null)
       currentGroupTextRef.current = ''
+      // Linger for 4s so the last coverage/transcript is readable after line ends
+      const t = setTimeout(() => setShowDebug(false), 4000)
+      return () => clearTimeout(t)
     }
   }, [phase])
 
@@ -953,7 +959,7 @@ export function RehearsalMode({ onExit }: Props) {
         )}
 
         {/* DEBUG: SR transcript monitor */}
-        {(listening || srError) && (
+        {(showDebug || srError) && (
           <div className="mb-3 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-xs font-mono space-y-0.5">
             <div>
               <span className="text-white/40 mr-2">SR:</span>
