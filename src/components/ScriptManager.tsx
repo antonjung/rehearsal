@@ -188,7 +188,22 @@ function ScriptCard({
   onEdit: () => void
   onExport: () => void
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
+
+  if (confirmDelete) {
+    return (
+      <div className={`rounded-lg border px-4 py-3 flex items-center justify-between ${
+        selected ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10' : 'border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]'
+      }`}>
+        <p className="text-sm text-[var(--color-stage-text)]">Delete <span className="font-semibold">{script.name}</span>?</p>
+        <div className="flex items-center gap-3">
+          <button onClick={onRemove} className="text-sm font-semibold text-red-400 hover:text-red-300 transition-colors">Delete</button>
+          <button onClick={() => setConfirmDelete(false)} className="text-sm text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors">Cancel</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -223,7 +238,7 @@ function ScriptCard({
           <IconEdit />
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); onRemove() }}
+          onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
           className="text-[var(--color-stage-muted)] hover:text-red-400 transition-colors p-1 rounded"
           aria-label="Remove script"
         >

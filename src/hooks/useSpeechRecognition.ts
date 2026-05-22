@@ -36,7 +36,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity } = options
+    const { silenceMs = 1000, estimatedMs, maxPauseMs, onSpeechStart, onSpeechActivity } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -75,9 +75,7 @@ export function useSpeechRecognition() {
 
       const scheduleSilenceStop = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
-        // Use maxPauseMs until accumulated speech time reaches the gap (switchToShortSilenceRef
-        // flips in the component), then switch to the shorter silenceMs.
-        const wait = (!switchToShortSilenceRef?.current && maxPauseMs !== undefined) ? maxPauseMs : silenceMs
+        const wait = maxPauseMs !== undefined ? maxPauseMs : silenceMs
         silenceTimer = setTimeout(finish, wait)
       }
 
