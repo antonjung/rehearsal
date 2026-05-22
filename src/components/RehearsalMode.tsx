@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
-import { getRecording, setRecording, getRecordingDuration, setRecordingDuration } from '../utils/recordingStore'
+import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { estimateDuration } from '../utils/speechDuration'
@@ -685,6 +685,13 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }
 
+  const handleDeleteRecording = (lineIdx: number) => {
+    recMapRef.current.delete(lineIdx)
+    recDurMapRef.current.delete(lineIdx)
+    void deleteRecording(script.id, lineIdx)
+    setLineProgressMap((p) => { const n = { ...p }; delete n[lineIdx]; return n })
+  }
+
   const toggleReveal = (lineIdx: number) => {
     setRevealedLines((r) => {
       const next = { ...r }
@@ -914,6 +921,11 @@ export function RehearsalMode({ onExit }: Props) {
                     ? () => handleRecordLine(group.startIdx)
                     : undefined
                 }
+                onDeleteRecording={
+                  group.type === 'dialogue' && !isPlaying && phase !== 'paused'
+                    ? () => handleDeleteRecording(group.startIdx)
+                    : undefined
+                }
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
                 hasRecording={recMapRef.current.has(group.startIdx)}
@@ -1072,6 +1084,7 @@ interface LineRowProps {
   onSelect: () => void
   onReveal?: () => void
   onRecord?: () => void
+  onDeleteRecording?: () => void
   isRecordingThis?: boolean
   anyRecording?: boolean
   hasRecording?: boolean
@@ -1081,7 +1094,7 @@ interface LineRowProps {
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
-  onSelect, onReveal, onRecord, isRecordingThis, anyRecording, hasRecording,
+  onSelect, onReveal, onRecord, onDeleteRecording, isRecordingThis, anyRecording, hasRecording,
   lineProgress, searchActive, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -1185,20 +1198,32 @@ const LineRow = ({
           )}
         </div>
 
-        {/* Right column: record button */}
+        {/* Right column: delete + record buttons */}
         {onRecord ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onRecord() }}
-            disabled={!!anyRecording && !isRecordingThis}
-            title={isRecordingThis ? 'Stop recording' : 'Record this line'}
-            className={`shrink-0 transition-colors leading-none p-2 rounded-full text-2xl ${
-              isRecordingThis
-                ? 'text-red-400 animate-pulse'
-                : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
-            } disabled:opacity-10`}
-          >
-            {isRecordingThis ? <IconRecordStop /> : <IconRecordDot />}
-          </button>
+          <div className="flex items-center shrink-0 gap-0.5">
+            {hasRecording && !isRecordingThis && onDeleteRecording && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDeleteRecording() }}
+                disabled={!!anyRecording}
+                title="Delete recording"
+                className="shrink-0 transition-colors leading-none p-2 rounded-full text-base text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400 disabled:opacity-10"
+              >
+                <IconDismiss />
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onRecord() }}
+              disabled={!!anyRecording && !isRecordingThis}
+              title={isRecordingThis ? 'Stop recording' : 'Record this line'}
+              className={`shrink-0 transition-colors leading-none p-2 rounded-full text-2xl ${
+                isRecordingThis
+                  ? 'text-red-400 animate-pulse'
+                  : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
+              } disabled:opacity-10`}
+            >
+              {isRecordingThis ? <IconRecordStop /> : <IconRecordDot />}
+            </button>
+          </div>
         ) : (
           <div className="w-10 shrink-0" />
         )}
