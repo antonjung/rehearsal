@@ -293,7 +293,11 @@ export function RehearsalMode({ onExit }: Props) {
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       const cleanup = (ms: number) => { URL.revokeObjectURL(url); resolve(ms) }
-      audio.onloadedmetadata = () => cleanup(Math.round(audio.duration * 1000))
+      audio.onloadedmetadata = () => {
+        // iOS MediaRecorder sometimes sets duration = Infinity — treat as unknown
+        const dur = audio.duration
+        cleanup(isFinite(dur) && dur > 0.1 ? Math.round(dur * 1000) : 0)
+      }
       audio.onerror = () => cleanup(0)
       setTimeout(() => cleanup(0), 3000)
     })
