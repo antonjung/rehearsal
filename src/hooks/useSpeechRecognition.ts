@@ -172,10 +172,22 @@ export function useSpeechRecognition() {
         handleUnexpectedEnd()
       }
 
-      rec.start()
       sessionActiveRef.current = true
       setListening(true)
-      silenceTimer = setTimeout(finish, safetyMs)
+      // Delay rec.start() by 150ms so iOS has time to release the audio session
+      // from TTS/playback mode before we request mic access (record mode).
+      // Without this, iOS silently starts SR but delivers no audio.
+      setTimeout(() => {
+        if (recognitionRef.current !== rec || resolveRef.current !== resolve) return
+        try {
+          rec.start()
+        } catch {
+          setSrError('start-failed')
+          handleUnexpectedEnd()
+          return
+        }
+        silenceTimer = setTimeout(finish, safetyMs)
+      }, 150)
     })
   }, [])
 
