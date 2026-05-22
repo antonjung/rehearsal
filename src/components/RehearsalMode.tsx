@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconSummary, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording } from '../utils/recordingStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
-import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
-import { AccuracySummary } from './AccuracySummary'
-import { unlockAudio, playPing, playCompletion, playClipStart, getAudioContext } from '../utils/sounds'
-import type { WordDiff, VoiceCommandWords } from '../types'
+import { unlockAudio, playCompletion, playClipStart, getAudioContext } from '../utils/sounds'
+import type { VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
 interface Props {
@@ -60,7 +58,6 @@ type Phase =
   | 'playing-other'
   | 'my-line-silence'
   | 'my-line-reading'
-  | 'my-line-listening'
   | 'paused'
   | 'done'
 
@@ -75,7 +72,7 @@ interface LineGroup {
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { transcript, listening, supported, srError, listen, abort, reset: resetTranscript } = useSpeechRecognition()
+  const { transcript, listening, supported, listen, abort } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const settings = rehearsalSettings!
@@ -146,32 +143,21 @@ export function RehearsalMode({ onExit }: Props) {
     return sceneEnd
   }, [sceneGroups, settings.myCharacter, sceneEnd])
 
-  const accuracyEnabled = settings.accuracyEnabled !== false
-
   // --- State ---
   const [currentIdx, setCurrentIdx] = useState(defaultBlockStart)
   const [blockStart, setBlockStart] = useState(defaultBlockStart)
   const [blockEnd, setBlockEnd] = useState(defaultBlockEnd)
   const [phase, setPhase] = useState<Phase>('idle')
-  const [accuracies, setAccuracies] = useState<Record<number, number>>({})
-  const [transcripts, setTranscripts] = useState<Record<number, string>>({})
-  const [wordDiffs, setWordDiffs] = useState<Record<number, WordDiff[]>>({})
-  const accuraciesRef = useRef<Record<number, number>>({})
   const [showAllMyLines, setShowAllMyLines] = useState(false)
   const [revealedLines, setRevealedLines] = useState<Record<number, true>>({})
   const [recordingLineIdx, setRecordingLineIdx] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
-  const [showSummary, setShowSummary] = useState(false)
   const rate = settings.speechRate
-  const [coveragePct, setCoveragePct] = useState<number | null>(null)
-  const [showDebug, setShowDebug] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchCursor, setSearchCursor] = useState(0)
-  const countdownExpiredRef = useRef(false)
-  const currentGroupTextRef = useRef<string>('')
   const handsFreeEnabled = settings.handsFreeEnabled ?? true
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
@@ -219,6 +205,7 @@ export function RehearsalMode({ onExit }: Props) {
   const blockStartRef = useRef(defaultBlockStart)
   const blockEndRef = useRef(defaultBlockEnd)
   const pauseResolveRef = useRef<(() => void) | null>(null)
+  const myLineResolveRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
@@ -318,28 +305,6 @@ export function RehearsalMode({ onExit }: Props) {
   useEffect(() => {
     return () => { stopRef.current = true; cancel(); abort() }
   }, [cancel, abort])
-
-  useEffect(() => {
-    if (phase === 'my-line-silence' || phase === 'my-line-listening') {
-      setShowDebug(true)
-    } else {
-      setCoveragePct(null)
-      currentGroupTextRef.current = ''
-      // Linger for 4s so the last coverage/transcript is readable after line ends
-      const t = setTimeout(() => setShowDebug(false), 4000)
-      return () => clearTimeout(t)
-    }
-  }, [phase])
-
-  // Watch live transcript: compute live accuracy and flip countdownExpiredRef when threshold met
-  useEffect(() => {
-    if (phase !== 'my-line-silence' && phase !== 'my-line-listening') return
-    if (!transcript || !currentGroupTextRef.current) { setCoveragePct(0); return }
-    const pct = wordAccuracy(currentGroupTextRef.current, transcript)
-    setCoveragePct(pct)
-    const threshold = settingsRef.current.speechCoverageThreshold ?? 70
-    if (pct >= threshold && !countdownExpiredRef.current) countdownExpiredRef.current = true
-  }, [transcript, phase])
 
   // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing.
   // Uses idleListeningRef rather than a local `active` flag so handlePlay() can stop
@@ -457,7 +422,6 @@ export function RehearsalMode({ onExit }: Props) {
 
         const isMyLine = line.character === settings.myCharacter
         const gap = estimateDuration(groupText, rate) * (settingsRef.current.voiceCalibration ?? 1)
-        const silenceMs = settings.endLineSilenceMs ?? 500
 
         if (!isMyLine) {
           setPhase('playing-other')
@@ -494,56 +458,77 @@ export function RehearsalMode({ onExit }: Props) {
             await playClipStart()
           }
 
-          if (myLineMode === 'silence') {
-            if (accuracyEnabled && supported) {
-              currentGroupTextRef.current = groupText; countdownExpiredRef.current = false
-              setPhase('my-line-listening')
-              resetTranscript()
-              const heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef })
-              // iOS needs a moment to hand the audio session back from mic to speaker
-              await delay(600)
-              if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
-              if (!stopRef.current) {
-                setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
-                if (heard) {
-                  const acc = wordAccuracy(groupText, heard)
-                  const diff = buildWordDiff(groupText, heard)
-                  const next = { ...accuraciesRef.current, [lineIdx]: acc }
-                  accuraciesRef.current = next
-                  setAccuracies(next)
-                  setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
-                  setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
-                }
-              }
-            } else {
-              currentGroupTextRef.current = groupText; countdownExpiredRef.current = false
-              setPhase('my-line-silence')
-              if (supported) {
-                const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef })
-                await delay(600)
-                if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
-              } else {
-                await delay(gap)
-              }
-              if (!stopRef.current) setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
+          // ELT + SR: waits at least `elt` ms (Estimated Line Time).
+          // If SR detects speech, also waits for maxPauseMs of silence after the last word.
+          // If SR fails or actor is silent, advances at ELT — reliable fallback.
+          const waitUserLineSilence = (elt: number): Promise<void> => new Promise((resolveElt) => {
+            let resolved = false
+            let eltTimer: ReturnType<typeof setTimeout> | null = null
+            let silenceTimer: ReturnType<typeof setTimeout> | null = null
+
+            const done = () => {
+              if (resolved) return
+              resolved = true
+              if (eltTimer !== null) clearTimeout(eltTimer)
+              if (silenceTimer !== null) clearTimeout(silenceTimer)
+              myLineResolveRef.current = null
+              resolveElt()
             }
+
+            myLineResolveRef.current = done
+
+            let eltExpired = false
+            let speechDetected = false
+            let speechStopped = false
+            const maxPauseMs = settingsRef.current.maxPauseMs ?? 2000
+
+            const checkAdvance = () => {
+              if (!eltExpired) return
+              if (!speechDetected || speechStopped) {
+                abortRef.current()
+                done()
+              }
+            }
+
+            eltTimer = setTimeout(() => {
+              eltExpired = true
+              checkAdvance()
+            }, elt)
+
+            if (supported) {
+              listen({
+                noAutoFinish: true,
+                onSpeechActivity: (active) => {
+                  if (active) {
+                    speechDetected = true
+                    speechStopped = false
+                    if (silenceTimer !== null) { clearTimeout(silenceTimer); silenceTimer = null }
+                  } else {
+                    silenceTimer = setTimeout(() => {
+                      speechStopped = true
+                      checkAdvance()
+                    }, maxPauseMs)
+                  }
+                },
+              }).then(() => done())
+            }
+          })
+
+          if (myLineMode === 'silence') {
+            setPhase('my-line-silence')
+            await waitUserLineSilence(gap)
+            if (!stopRef.current) await delay(300)
+            if (!stopRef.current) setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
           } else if (myLineMode === 'read') {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
           } else if (myLineMode === 'gap-before') {
-            currentGroupTextRef.current = groupText; countdownExpiredRef.current = false
             setPhase('my-line-silence')
-            if (supported) {
-              const _heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef })
-              await delay(600)
-              if (handsFreeRef.current && _heard) { const _c = matchHandsFreeCommand(_heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
-            } else {
-              await delay(gap)
-            }
+            await waitUserLineSilence(gap)
             if (!stopRef.current) {
+              await delay(300)
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
               const rec = recMapRef.current.get(lineIdx)
@@ -556,25 +541,9 @@ export function RehearsalMode({ onExit }: Props) {
             const rec = recMapRef.current.get(lineIdx)
             if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
             if (!stopRef.current) {
-              currentGroupTextRef.current = groupText; countdownExpiredRef.current = false
-              setPhase('my-line-listening')
-              if (supported) {
-                const heard = await listen({ silenceMs, estimatedMs: gap, maxPauseMs: settings.maxPauseMs ?? 2000, switchToShortSilenceRef: countdownExpiredRef })
-                await delay(600)
-                if (handsFreeRef.current && heard) { const _c = matchHandsFreeCommand(heard, voiceCmdWordsRef.current); if (_c) { execHandsFreeCommand(_c, lineIdx); return } }
-                if (!stopRef.current && heard && accuracyEnabled) {
-                  const acc = wordAccuracy(groupText, heard)
-                  const diff = buildWordDiff(groupText, heard)
-                  const next = { ...accuraciesRef.current, [lineIdx]: acc }
-                  accuraciesRef.current = next
-                  setAccuracies(next)
-                  setTranscripts((t) => ({ ...t, [lineIdx]: heard }))
-                  setWordDiffs((d) => ({ ...d, [lineIdx]: diff }))
-                  if (settingsRef.current.linePingEnabled === true) await playPing(acc, settingsRef.current.accuracyWarningThreshold)
-                }
-              } else {
-                await delay(gap)
-              }
+              setPhase('my-line-silence')
+              await waitUserLineSilence(gap)
+              if (!stopRef.current) await delay(300)
             }
           }
         }
@@ -594,10 +563,6 @@ export function RehearsalMode({ onExit }: Props) {
             stopRef.current = false
             setCurrentIdx(blockStartRef.current)
             setRevealedLines({})
-            setAccuracies({})
-            setTranscripts({})
-            setWordDiffs({})
-            accuraciesRef.current = {}
             runPlayback(blockStartRef.current, blockEndRef.current)
           }, 600)
         } else {
@@ -608,7 +573,7 @@ export function RehearsalMode({ onExit }: Props) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lines, settings, speak, rate, accuracyEnabled, supported, listen, resetTranscript],
+    [lines, settings, speak, rate, supported, listen],
   )
 
   const interruptPlayback = (cb?: () => void) => {
@@ -619,6 +584,8 @@ export function RehearsalMode({ onExit }: Props) {
     cancelRecording()
     abort()
     pauseResolveRef.current?.()
+    myLineResolveRef.current?.()
+    myLineResolveRef.current = null
     if (cb) setTimeout(cb, 50)
   }
 
@@ -632,7 +599,6 @@ export function RehearsalMode({ onExit }: Props) {
   }
 
   const handlePlay = () => {
-    setShowSummary(false)
     // Stop the idle command listener immediately so its pending listen() doesn't
     // compete with runPlayback's own listen() calls (would block user-line detection).
     idleListeningRef.current = false
@@ -661,6 +627,8 @@ export function RehearsalMode({ onExit }: Props) {
     cancel()
     cancelRecording()
     abort()
+    myLineResolveRef.current?.()
+    myLineResolveRef.current = null
     setPhase('paused')
   }
 
@@ -817,7 +785,7 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }
 
-  const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence', 'my-line-listening'].includes(phase)
+  const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence'].includes(phase)
 
   return (
     <div className="flex flex-col h-full">
@@ -888,7 +856,6 @@ export function RehearsalMode({ onExit }: Props) {
           const isCurrentGroup = group.startIdx <= currentIdx && currentIdx <= group.endIdx
           const isMyLine = group.character === settings.myCharacter
           const lineVisible = !isMyLine || showAllMyLines || revealedLines[group.startIdx] === true
-          const acc = accuracies[group.startIdx] ?? null
 
           const isInClip = group.startIdx >= blockStart && group.startIdx <= blockEnd
           const searchMatchGi = searchQ ? searchMatches.indexOf(gi) : -1
@@ -930,10 +897,6 @@ export function RehearsalMode({ onExit }: Props) {
                 phase={phase}
                 isMyLine={isMyLine}
                 lineVisible={lineVisible}
-                accuracy={accuracyEnabled ? acc : null}
-                transcript={transcripts[group.startIdx] ?? ''}
-                wordDiff={wordDiffs[group.startIdx] ?? []}
-                threshold={settings.accuracyWarningThreshold}
                 highlightStyle={isMyLine ? HIGHLIGHTER_COLORS[settings.highlighterColor ?? 'yellow'] : undefined}
                 onSelect={() => handleLineSelect(group.startIdx)}
                 onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
@@ -945,8 +908,6 @@ export function RehearsalMode({ onExit }: Props) {
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
                 hasRecording={recMapRef.current.has(group.startIdx)}
-                coveragePct={isCurrentGroup && isMyLine ? coveragePct : null}
-                coverageThreshold={settings.speechCoverageThreshold ?? 70}
                 searchActive={isSearchActive}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
@@ -991,55 +952,8 @@ export function RehearsalMode({ onExit }: Props) {
         </>
       )}
 
-      {/* Summary modal */}
-      {showSummary && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setShowSummary(false)} />
-          <div className="fixed inset-x-4 top-16 bottom-16 z-50 flex flex-col rounded-2xl bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0">
-              <span className="font-semibold text-[var(--color-stage-text)]">Summary</span>
-              <button onClick={() => setShowSummary(false)} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none"><IconDismiss /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              <AccuracySummary script={script} settings={settings} accuracies={accuracies} transcripts={transcripts} />
-            </div>
-          </div>
-        </>
-      )}
-
       {/* Controls */}
       <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
-
-        {/* Listening indicator — only shown when mic is active */}
-        {phase === 'my-line-listening' && (
-          <div className="flex items-center gap-2 rounded-lg px-4 py-2.5 mb-3 bg-[var(--color-stage-accent)]/20 border border-[var(--color-stage-accent)]/40">
-            <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-stage-accent-light)]">
-              <IconMic /> Listening…
-            </span>
-          </div>
-        )}
-
-        {/* DEBUG: SR transcript monitor */}
-        {(showDebug || srError) && (
-          <div className="mb-3 rounded-lg px-3 py-2 bg-black/40 border border-white/10 text-xs font-mono space-y-0.5">
-            <div>
-              <span className="text-white/40 mr-2">SR:</span>
-              {srError
-                ? <span className="text-red-400">error: {srError}</span>
-                : <span className="text-green-300 break-all">{transcript || <span className="text-white/30 italic">silence</span>}</span>
-              }
-            </div>
-            <div>
-              <span className="text-white/40 mr-2">cov:</span>
-              <span className={coveragePct != null && coveragePct >= (settings.speechCoverageThreshold ?? 70) ? 'text-green-400' : 'text-yellow-300'}>
-                {coveragePct ?? 0}%
-              </span>
-              <span className="text-white/30 ml-2">
-                {countdownExpiredRef.current ? '(short silence)' : '(max pause)'}
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Transport row — always visible, all same large size */}
         <div className="flex items-center justify-center gap-3 mb-2">
@@ -1051,7 +965,7 @@ export function RehearsalMode({ onExit }: Props) {
           <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} large title="Skip beat"><IconSkipForward /></CtrlBtn>
         </div>
 
-        {/* Repeat + Summary pills */}
+        {/* Repeat pill */}
         <div className="flex justify-center gap-2 mb-1">
           <button
             onClick={() => setLoopEnabled((v) => !v)}
@@ -1063,22 +977,11 @@ export function RehearsalMode({ onExit }: Props) {
           >
             <IconRepeat /> Repeat
           </button>
-          {Object.keys(accuracies).length > 0 && (
-            <button
-              onClick={() => setShowSummary((v) => !v)}
-              className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
-                showSummary
-                  ? 'bg-[var(--color-stage-accent)] text-white'
-                  : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
-              }`}
-            >
-              <IconSummary /> Summary
-            </button>
-          )}
         </div>
 
         {/* Status line */}
         <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-4 flex items-center justify-center">
+          {phase === 'my-line-silence' && 'Your line…'}
           {phase === 'my-line-reading' && 'Reading your line…'}
           {phase === 'playing-other' && 'Playing…'}
           {phase === 'paused' && 'Paused — tap a line to restart from it'}
@@ -1149,28 +1052,12 @@ function CtrlBtn({
   )
 }
 
-// Colored accuracy dot
-function AccuracyDot({ accuracy, threshold }: { accuracy: number; threshold: number }) {
-  const color =
-    accuracy >= 100 ? 'bg-green-400' : accuracy >= threshold ? 'bg-yellow-400' : 'bg-red-400'
-  return (
-    <span
-      title={`${accuracy}% accuracy`}
-      className={`inline-block w-2.5 h-2.5 rounded-full ml-2 shrink-0 ${color}`}
-    />
-  )
-}
-
 interface LineRowProps {
   group: LineGroup
   isCurrent: boolean
   phase: Phase
   isMyLine: boolean
   lineVisible: boolean
-  accuracy: number | null
-  transcript: string
-  wordDiff: WordDiff[]
-  threshold: number
   highlightStyle?: React.CSSProperties
   onSelect: () => void
   onReveal?: () => void
@@ -1178,16 +1065,13 @@ interface LineRowProps {
   isRecordingThis?: boolean
   anyRecording?: boolean
   hasRecording?: boolean
-  coveragePct?: number | null
-  coverageThreshold?: number
   searchActive?: boolean
 }
 
 const LineRow = ({
-  group, isCurrent, phase, isMyLine, lineVisible,
-  accuracy, threshold, highlightStyle,
+  group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
   onSelect, onReveal, onRecord, isRecordingThis, anyRecording, hasRecording,
-  coveragePct, coverageThreshold = 70, searchActive, ref,
+  searchActive, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
@@ -1217,7 +1101,7 @@ const LineRow = ({
   }
 
   const isActiveMyLine = isCurrent && isMyLine &&
-    ['my-line-silence', 'my-line-listening', 'my-line-reading'].includes(phase)
+    ['my-line-silence', 'my-line-reading'].includes(phase)
   const isActiveLine = isCurrent && !isMyLine && phase === 'playing-other'
 
   return (
@@ -1263,7 +1147,6 @@ const LineRow = ({
             {hasRecording && !isRecordingThis && (
               <span className="w-1.5 h-1.5 rounded-full bg-red-400/70 shrink-0 self-center" title="Has recording" />
             )}
-            {accuracy !== null && <AccuracyDot accuracy={accuracy} threshold={threshold} />}
           </div>
           {lineVisible ? (
             <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
@@ -1280,24 +1163,6 @@ const LineRow = ({
                 <span key={idx} className="block" style={highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
               ))}
             </span>
-          )}
-          {accuracy !== null && lineVisible && (
-            <p className="text-[10px] text-[var(--color-stage-muted)] mt-0.5 italic">
-              {accuracy}%{accuracy < threshold && ' — below threshold'}
-            </p>
-          )}
-          {coveragePct != null && isCurrent && (phase === 'my-line-silence' || phase === 'my-line-listening') && (
-            <div className="mt-1.5 flex items-center gap-2">
-              <div className="flex-1 h-1.5 rounded-full bg-[var(--color-stage-border)] overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${coveragePct >= coverageThreshold ? 'bg-green-400' : 'bg-[var(--color-stage-accent)]'}`}
-                  style={{ width: `${Math.min(100, coveragePct)}%` }}
-                />
-              </div>
-              <span className={`text-xs font-mono font-bold tabular-nums w-8 text-right ${coveragePct >= coverageThreshold ? 'text-green-400' : 'text-[var(--color-stage-accent-light)]'}`}>
-                {coveragePct}%
-              </span>
-            </div>
           )}
         </div>
 

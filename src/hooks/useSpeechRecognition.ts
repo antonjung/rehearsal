@@ -16,6 +16,8 @@ export interface ListenOptions {
   onSpeechStart?: () => void
   /** Called with true when speech activity starts/resumes, false when it pauses/ends */
   onSpeechActivity?: (active: boolean) => void
+  /** If true, no internal silence/safety timers fire — caller drives advancement via onSpeechActivity and calls abort() when done */
+  noAutoFinish?: boolean
 }
 
 export function useSpeechRecognition() {
@@ -34,7 +36,7 @@ export function useSpeechRecognition() {
   }, [])
 
   const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
-    const { silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity } = options
+    const { silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity, noAutoFinish } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     if (!SR) return Promise.resolve('')
 
@@ -69,18 +71,8 @@ export function useSpeechRecognition() {
         if (resolveRef.current === resolve) resolveRef.current = null
       }
 
-      // Two-mode silence detection:
-      //
-      // BEFORE threshold (switchToShortSilenceRef false):
-      //   scheduleSilenceStop fires maxPauseMs after each onresult.
-      //   Keeps getting reset while speech comes in → fires only on genuine silence.
-      //
-      // AFTER threshold (switchToShortSilenceRef true):
-      //   scheduleSilenceStop is a no-op. notifyActivity(false) fires after
-      //   PAUSE_DETECT_MS of no results, then starts the short silenceMs timer.
-      //   This means: last word → SR quiet → 300ms → silenceMs → finish.
-      //   The line can never be cut while onresult events are still arriving.
       const scheduleSilenceStop = () => {
+        if (noAutoFinish) return  // caller manages advancement via onSpeechActivity + abort()
         if (switchToShortSilenceRef?.current) return  // handled by notifyActivity
         if (silenceTimer) clearTimeout(silenceTimer)
         const wait = maxPauseMs !== undefined ? maxPauseMs : silenceMs
@@ -91,12 +83,11 @@ export function useSpeechRecognition() {
         if (active === speechActive) return
         speechActive = active
         onSpeechActivity?.(active)
+        if (noAutoFinish) return  // no internal silence timers in this mode
         if (!active && switchToShortSilenceRef?.current) {
-          // Speech stopped after threshold — start short silence countdown
           if (silenceTimer) clearTimeout(silenceTimer)
           silenceTimer = setTimeout(finish, silenceMs)
         } else if (active && switchToShortSilenceRef?.current) {
-          // Speech resumed after threshold — cancel any pending short silence
           if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
         }
       }
@@ -133,12 +124,9 @@ export function useSpeechRecognition() {
         }
       }
 
-      // Safety: advances if actor never speaks at all
-      const safetyMs = Math.max(10000, (estimatedMs ?? 0) * 2.5 + (maxPauseMs ?? silenceMs))
+      const safetyMs = noAutoFinish ? 0 : Math.max(10000, (estimatedMs ?? 0) * 2.5 + (maxPauseMs ?? silenceMs))
 
       if (recognitionRef.current && sessionActiveRef.current) {
-        // Reuse the existing session — capture the current instance so the onend
-        // guard below can reject events fired by a stale (already-aborted) session.
         const sessionRec = recognitionRef.current
         setTranscript('')
         recognitionRef.current.onresult = onresult
@@ -146,7 +134,7 @@ export function useSpeechRecognition() {
           if (recognitionRef.current !== sessionRec) return
           handleUnexpectedEnd()
         }
-        silenceTimer = setTimeout(finish, safetyMs)
+        if (!noAutoFinish) silenceTimer = setTimeout(finish, safetyMs)
         return
       }
 
@@ -186,7 +174,7 @@ export function useSpeechRecognition() {
           handleUnexpectedEnd()
           return
         }
-        silenceTimer = setTimeout(finish, safetyMs)
+        if (!noAutoFinish) silenceTimer = setTimeout(finish, safetyMs)
       }, 150)
     })
   }, [])
