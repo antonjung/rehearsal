@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react'
-import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark } from './Icons'
+import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
+import { parseImportFile, countRecordingConflicts, importBundle } from '../utils/exportImport'
 import { Notes } from './Notes'
 import type { Script } from '../types'
 
@@ -11,14 +12,45 @@ interface ExampleMeta { name: string; file: string; description: string }
 interface Props { onClose: () => void }
 
 export function SideMenu({ onClose }: Props) {
-  const { scripts, notes, addScript, removeScript, selectScript } = useAppStore()
+  const { scripts, notes, addScript, removeScript, selectScript, updateScript } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
+  const importBundleRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
+  const [importState, setImportState] = useState<{
+    bundle: Awaited<ReturnType<typeof parseImportFile>>
+    conflicts: number
+  } | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+
+  async function handleBundleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    try {
+      const bundle = await parseImportFile(file)
+      const conflicts = await countRecordingConflicts(bundle)
+      setImportState({ bundle, conflicts })
+      setImportError(null)
+    } catch {
+      setImportError('Invalid file — please choose a CueLine export (.json)')
+    }
+  }
+
+  async function confirmImport(keepExisting: boolean) {
+    if (!importState) return
+    setImporting(true)
+    try {
+      await importBundle(importState.bundle, keepExisting, addScript, updateScript, scripts)
+    } finally {
+      setImporting(false)
+      setImportState(null)
+    }
+  }
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}examples/index.json`)
@@ -86,7 +118,7 @@ export function SideMenu({ onClose }: Props) {
         <div className="flex-1 overflow-y-auto">
 
           {/* Load script */}
-          <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
+          <div className="px-5 py-4 border-b border-[var(--color-stage-border)] space-y-2">
             <button
               disabled={importing}
               onClick={() => inputRef.current?.click()}
@@ -96,6 +128,15 @@ export function SideMenu({ onClose }: Props) {
             </button>
             <input ref={inputRef} type="file" accept=".txt,.pdf" multiple className="hidden"
               onChange={(e) => { void handleFiles(e.target.files) }} />
+            <button
+              onClick={() => importBundleRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+            >
+              <IconImport /> Import script
+            </button>
+            <input ref={importBundleRef} type="file" accept=".json,application/json" className="hidden"
+              onChange={handleBundleFile} />
+            {importError && <p className="text-xs text-red-400 text-center">{importError}</p>}
           </div>
 
           {/* Example scripts */}
@@ -189,6 +230,42 @@ export function SideMenu({ onClose }: Props) {
 
         </div>
       </div>
+
+      {importState && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl p-5 w-full max-w-sm space-y-4">
+            <p className="font-semibold text-[var(--color-stage-text)]">Import</p>
+            <p className="text-sm text-[var(--color-stage-muted)]">
+              {importState.bundle.scripts.length} script{importState.bundle.scripts.length !== 1 ? 's' : ''} ·{' '}
+              {Object.keys(importState.bundle.recordings).length} recording{Object.keys(importState.bundle.recordings).length !== 1 ? 's' : ''}
+            </p>
+            {importState.conflicts > 0 && (
+              <p className="text-sm text-amber-400">
+                {importState.conflicts} recording{importState.conflicts !== 1 ? 's' : ''} already exist locally.
+              </p>
+            )}
+            <p className="text-sm text-[var(--color-stage-text)]">
+              {importState.conflicts > 0 ? 'What should happen to conflicting recordings?' : 'Import these scripts and recordings?'}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => confirmImport(true)} disabled={importing}
+                className="py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+                {importState.conflicts > 0 ? 'Keep my recordings' : 'Import'}
+              </button>
+              {importState.conflicts > 0 && (
+                <button onClick={() => confirmImport(false)} disabled={importing}
+                  className="py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-50 transition-colors">
+                  Overwrite with imported
+                </button>
+              )}
+              <button onClick={() => setImportState(null)} disabled={importing}
+                className="py-2 rounded-lg text-sm font-medium text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-50 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
