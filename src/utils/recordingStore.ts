@@ -50,3 +50,28 @@ export async function deleteRecording(scriptId: string, lineIdx: number): Promis
     req.onerror = () => reject(req.error)
   })
 }
+
+export async function getAllRecordings(): Promise<Map<string, Blob>> {
+  try {
+    const db = await getDb()
+    return new Promise((resolve, reject) => {
+      const map = new Map<string, Blob>()
+      const req = db.transaction(STORE).objectStore(STORE).openCursor()
+      req.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursorWithValue | null>).result
+        if (cursor) { map.set(cursor.key as string, cursor.value as Blob); cursor.continue() }
+        else resolve(map)
+      }
+      req.onerror = () => reject(req.error)
+    })
+  } catch { return new Map() }
+}
+
+export async function setRecordingRaw(k: string, blob: Blob): Promise<void> {
+  const db = await getDb()
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(blob, k)
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}

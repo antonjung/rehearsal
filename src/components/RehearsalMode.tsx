@@ -1240,7 +1240,7 @@ const LineRow = ({
             onClick={(e) => { e.stopPropagation(); onRecord() }}
             disabled={!!anyRecording && !isRecordingThis}
             title={isRecordingThis ? 'Stop recording' : 'Record this line'}
-            className={`shrink-0 text-sm mt-0.5 transition-colors leading-none min-w-[20px] p-0.5 ${
+            className={`shrink-0 transition-colors leading-none p-2 rounded-full text-2xl ${
               isRecordingThis
                 ? 'text-red-400 animate-pulse'
                 : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
@@ -1249,7 +1249,7 @@ const LineRow = ({
             {isRecordingThis ? <IconRecordStop /> : <IconRecordDot />}
           </button>
         ) : (
-          <div className="w-5 shrink-0" />
+          <div className="w-10 shrink-0" />
         )}
       </div>
     </div>

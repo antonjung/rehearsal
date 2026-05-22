@@ -6,6 +6,7 @@ export function Notes({ listOpen = true }: { listOpen?: boolean }) {
   const [text, setText] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const handleAdd = () => {
     const trimmed = text.trim()
@@ -17,6 +18,7 @@ export function Notes({ listOpen = true }: { listOpen?: boolean }) {
   const startEdit = (id: string, current: string) => {
     setEditingId(id)
     setEditText(current)
+    setConfirmDeleteId(null)
   }
 
   const commitEdit = () => {
@@ -95,6 +97,22 @@ export function Notes({ listOpen = true }: { listOpen?: boolean }) {
                         <button onClick={() => setEditingId(null)} className="text-xs text-[var(--color-stage-muted)]">Cancel</button>
                       </div>
                     </div>
+                  ) : confirmDeleteId === note.id ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-[var(--color-stage-muted)]">Delete this note?</span>
+                      <button
+                        onClick={() => { deleteNote(note.id); setConfirmDeleteId(null) }}
+                        className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : (
                     <span className={`text-sm leading-snug ${note.done ? 'line-through text-[var(--color-stage-muted)]' : 'text-[var(--color-stage-text)]'}`}>
                       {note.text}
@@ -102,10 +120,28 @@ export function Notes({ listOpen = true }: { listOpen?: boolean }) {
                   )}
                 </div>
 
-                {editingId !== note.id && (
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => startEdit(note.id, note.text)} className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors">✏️</button>
-                    <button onClick={() => deleteNote(note.id)} className="text-xs text-[var(--color-stage-muted)] hover:text-red-400 transition-colors">✕</button>
+                {editingId !== note.id && confirmDeleteId !== note.id && (
+                  <div className="flex gap-3 shrink-0">
+                    <button
+                      onClick={() => startEdit(note.id, note.text)}
+                      className="p-1 text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+                      aria-label="Edit note"
+                      title="Edit"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
+                        <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(note.id)}
+                      className="p-1 text-[var(--color-stage-muted)] hover:text-red-400 transition-colors"
+                      aria-label="Delete note"
+                      title="Delete"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5L11 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
                   </div>
                 )}
               </li>

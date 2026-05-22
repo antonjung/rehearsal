@@ -1,18 +1,75 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { IconEdit, IconDismiss } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
+import {
+  buildExportBundle,
+  downloadBundle,
+  parseImportFile,
+  countRecordingConflicts,
+  importBundle,
+} from '../utils/exportImport'
 
 export function ScriptManager() {
-  const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
+  const { scripts, selectedScriptId, removeScript, selectScript, addScript, updateScript } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importState, setImportState] = useState<{
+    bundle: Awaited<ReturnType<typeof parseImportFile>>
+    conflicts: number
+  } | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleExport() {
+    const bundle = await buildExportBundle(scripts)
+    downloadBundle(bundle)
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    try {
+      const bundle = await parseImportFile(file)
+      const conflicts = await countRecordingConflicts(bundle)
+      setImportState({ bundle, conflicts })
+      setImportError(null)
+    } catch {
+      setImportError('Invalid file — please choose a CueLine export (.json)')
+    }
+  }
+
+  async function confirmImport(keepExisting: boolean) {
+    if (!importState) return
+    setImporting(true)
+    try {
+      await importBundle(importState.bundle, keepExisting, addScript, updateScript, scripts)
+    } finally {
+      setImporting(false)
+      setImportState(null)
+    }
+  }
 
   if (scripts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-[var(--color-stage-text)] font-medium mb-1">No scripts loaded</p>
         <p className="text-[var(--color-stage-muted)] text-sm">Use ☰ to load a script</p>
+        <div className="mt-6">
+          <ImportButton fileInputRef={fileInputRef} onFile={handleImportFile} error={importError} />
+        </div>
+        {importState && (
+          <ImportDialog
+            bundle={importState.bundle}
+            conflicts={importState.conflicts}
+            importing={importing}
+            onKeepExisting={() => confirmImport(true)}
+            onOverwrite={() => confirmImport(false)}
+            onCancel={() => setImportState(null)}
+          />
+        )}
       </div>
     )
   }
@@ -29,9 +86,123 @@ export function ScriptManager() {
           onEdit={() => setEditingScript(script)}
         />
       ))}
+
+      <div className="flex gap-2 pt-2">
+        <button
+          onClick={handleExport}
+          className="flex-1 py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+        >
+          Export all
+        </button>
+        <ImportButton fileInputRef={fileInputRef} onFile={handleImportFile} error={importError} className="flex-1" />
+      </div>
+
       {editingScript && (
         <ScriptEditor script={editingScript} onClose={() => setEditingScript(null)} />
       )}
+
+      {importState && (
+        <ImportDialog
+          bundle={importState.bundle}
+          conflicts={importState.conflicts}
+          importing={importing}
+          onKeepExisting={() => confirmImport(true)}
+          onOverwrite={() => confirmImport(false)}
+          onCancel={() => setImportState(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ImportButton({
+  fileInputRef,
+  onFile,
+  error,
+  className = '',
+}: {
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  onFile: (e: React.ChangeEvent<HTMLInputElement>) => void
+  error: string | null
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={onFile}
+      />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        className="w-full py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+      >
+        Import
+      </button>
+      {error && <p className="text-xs text-red-400 mt-1 text-center">{error}</p>}
+    </div>
+  )
+}
+
+function ImportDialog({
+  bundle,
+  conflicts,
+  importing,
+  onKeepExisting,
+  onOverwrite,
+  onCancel,
+}: {
+  bundle: Awaited<ReturnType<typeof parseImportFile>>
+  conflicts: number
+  importing: boolean
+  onKeepExisting: () => void
+  onOverwrite: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl p-5 w-full max-w-sm space-y-4">
+        <p className="font-semibold text-[var(--color-stage-text)]">Import</p>
+        <p className="text-sm text-[var(--color-stage-muted)]">
+          {bundle.scripts.length} script{bundle.scripts.length !== 1 ? 's' : ''} ·{' '}
+          {Object.keys(bundle.recordings).length} recording{Object.keys(bundle.recordings).length !== 1 ? 's' : ''}
+        </p>
+        {conflicts > 0 && (
+          <p className="text-sm text-amber-400">
+            {conflicts} recording{conflicts !== 1 ? 's' : ''} already exist locally.
+          </p>
+        )}
+        <p className="text-sm text-[var(--color-stage-text)]">
+          {conflicts > 0 ? 'What should happen to conflicting recordings?' : 'Import these scripts and recordings?'}
+        </p>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={onKeepExisting}
+            disabled={importing}
+            className="py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {conflicts > 0 ? 'Keep my recordings' : 'Import'}
+          </button>
+          {conflicts > 0 && (
+            <button
+              onClick={onOverwrite}
+              disabled={importing}
+              className="py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-50 transition-colors"
+            >
+              Overwrite with imported
+            </button>
+          )}
+          <button
+            onClick={onCancel}
+            disabled={importing}
+            className="py-2 rounded-lg text-sm font-medium text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-50 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
