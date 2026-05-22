@@ -119,25 +119,18 @@ export function RehearsalSetup({ onStart }: Props) {
       </Field>
 
       {/* Condensed mode */}
-      <Field label="Condensed mode">
-        <div className="flex items-center gap-3">
-          <select
-            value={condensedLines}
-            onChange={(e) => setCondensedLines(Number(e.target.value))}
-            className="select-field"
-          >
-            <option value={0}>Off</option>
-            <option value={5}>5 lines</option>
-            <option value={10}>10 lines</option>
-            <option value={15}>15 lines</option>
-            <option value={20}>20 lines</option>
-          </select>
-          <p className="text-xs text-[var(--color-stage-muted)]">
-            {condensedLines > 0
-              ? `Skip middle of long gaps — play only the cue line before your next line`
-              : 'Play every line'}
-          </p>
-        </div>
+      <Field label="Condensed mode" hint={condensedLines > 0 ? `Skip to cue line when gap > ${condensedLines} lines` : 'Play every line'}>
+        <select
+          value={condensedLines}
+          onChange={(e) => setCondensedLines(Number(e.target.value))}
+          className="w-full select-field"
+        >
+          <option value={0}>Off — play every line</option>
+          <option value={5}>5 lines</option>
+          <option value={10}>10 lines</option>
+          <option value={15}>15 lines</option>
+          <option value={20}>20 lines</option>
+        </select>
       </Field>
 
       <button
@@ -151,13 +144,14 @@ export function RehearsalSetup({ onStart }: Props) {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] mb-2">
         {label}
       </label>
       {children}
+      {hint && <p className="text-xs text-[var(--color-stage-muted)] mt-1.5">{hint}</p>}
     </div>
   )
 }
