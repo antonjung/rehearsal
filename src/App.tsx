@@ -38,6 +38,7 @@ export default function App() {
   const [rehearsing, setRehearsing] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [updateReady, setUpdateReady] = useState(false)
   const { theme, scripts, selectedScriptId } = useAppStore()
   const selectedScript = scripts.find((s) => s.id === selectedScriptId)
 
@@ -46,8 +47,25 @@ export default function App() {
     applyTheme(theme)
   }, [theme])
 
+  // Detect when a new service worker has taken control (new version available)
+  useEffect(() => {
+    const sw = navigator.serviceWorker
+    if (!sw) return
+    const handler = () => setUpdateReady(true)
+    sw.addEventListener('controllerchange', handler)
+    return () => sw.removeEventListener('controllerchange', handler)
+  }, [])
+
   return (
     <div className="h-full flex flex-col max-w-2xl mx-auto">
+      {updateReady && (
+        <button
+          onClick={() => window.location.reload()}
+          className="w-full py-2 text-xs font-semibold bg-[var(--color-stage-accent)] text-white text-center shrink-0 hover:opacity-90 transition-opacity"
+        >
+          Update available — tap to reload
+        </button>
+      )}
       {/* App header — always visible */}
       <header className="relative flex items-center px-4 pt-4 pb-3 shrink-0">
         <button

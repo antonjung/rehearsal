@@ -194,6 +194,16 @@ export function SideMenu({ onClose }: Props) {
             <Notes listOpen={notesOpen} />
           </div>
 
+          {/* Reload */}
+          <div className="px-5 py-3 border-b border-[var(--color-stage-border)]">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+            >
+              Reload app
+            </button>
+          </div>
+
           {/* About */}
           <div className="px-5 py-4">
             <button
