@@ -568,9 +568,14 @@ export function RehearsalMode({ onExit }: Props) {
             if (nextUserGi > myGi + 1) {
               const linesBetween = groups[nextUserGi].startIdx - (groupEnd + 1)
               if (linesBetween > condensedThreshold) {
-                const precedingGroup = groups[nextUserGi - 1]
-                // only skip if there's actually a gap (preceding group is not the current group)
-                if (precedingGroup.startIdx > groupEnd + 1) {
+                // Find the last dialogue group before the next user line (skip directions/headings)
+                let precedingGi = nextUserGi - 1
+                while (precedingGi > myGi && groups[precedingGi].type !== 'dialogue') {
+                  precedingGi--
+                }
+                const precedingGroup = groups[precedingGi]
+                // only skip if there's actually a gap (preceding group is after the current group)
+                if (precedingGroup.type === 'dialogue' && precedingGroup.startIdx > groupEnd + 1) {
                   const skippedCount = precedingGroup.startIdx - (groupEnd + 1)
                   await playCompletion()
                   if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) {
