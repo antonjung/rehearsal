@@ -5,7 +5,7 @@ import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording } from '../utils/recordingStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
-import { wordAccuracy, buildWordDiff, wordCoverage } from '../utils/textDiff'
+import { wordAccuracy, buildWordDiff } from '../utils/textDiff'
 import { estimateDuration } from '../utils/speechDuration'
 import { AccuracySummary } from './AccuracySummary'
 import { unlockAudio, playPing, playCompletion, playClipStart, getAudioContext } from '../utils/sounds'
@@ -304,15 +304,14 @@ export function RehearsalMode({ onExit }: Props) {
     }
   }, [phase])
 
-  // Watch live transcript: compute word coverage and flip countdownExpiredRef when threshold met
+  // Watch live transcript: compute live accuracy and flip countdownExpiredRef when threshold met
   useEffect(() => {
     if (phase !== 'my-line-silence' && phase !== 'my-line-listening') return
     if (!transcript || !currentGroupTextRef.current) { setCoveragePct(0); return }
-    const cov = wordCoverage(currentGroupTextRef.current, transcript)
-    const pct = Math.round(cov * 100)
+    const pct = wordAccuracy(currentGroupTextRef.current, transcript)
     setCoveragePct(pct)
-    const threshold = (settingsRef.current.speechCoverageThreshold ?? 70) / 100
-    if (cov >= threshold && !countdownExpiredRef.current) countdownExpiredRef.current = true
+    const threshold = settingsRef.current.speechCoverageThreshold ?? 70
+    if (pct >= threshold && !countdownExpiredRef.current) countdownExpiredRef.current = true
   }, [transcript, phase])
 
   // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing.
