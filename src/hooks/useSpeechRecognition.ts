@@ -8,9 +8,9 @@ export interface ListenOptions {
   silenceMs?: number
   /** Estimated ms the line should take to say — drives the safety timeout */
   estimatedMs?: number
-  /** Silence wait used until accumulated speaking time has reached the gap */
+  /** Silence wait used until switchToShortSilenceRef flips */
   maxPauseMs?: number
-  /** When set true externally, always use silenceMs regardless of elapsed time */
+  /** When set true externally, switch to silenceMs */
   switchToShortSilenceRef?: { current: boolean }
   /** Called once when the first speech result arrives */
   onSpeechStart?: () => void
@@ -18,16 +18,13 @@ export interface ListenOptions {
   onSpeechActivity?: (active: boolean) => void
 }
 
-
 export function useSpeechRecognition() {
   const [transcript, setTranscript] = useState('')
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(false)
   const recognitionRef = useRef<AnySR>(null)
   const resolveRef = useRef<((t: string) => void) | null>(null)
-  // true while the SR session is alive (between rec.start() and rec.abort()/rec.stop())
   const sessionActiveRef = useRef(false)
-  // e.results.length at the end of the last listen() window — used as baseIdx for next window
   const lastResultCountRef = useRef(0)
 
   useEffect(() => {
@@ -51,15 +48,8 @@ export function useSpeechRecognition() {
       let speechStartTime: number | null = null
       let speechActive = false
 
-      // How long after speech stops before we call finish().
-      // Uses maxPauseMs until the component flips switchToShortSilenceRef, then silenceMs.
-      const pauseWait = () =>
-        (!switchToShortSilenceRef?.current && maxPauseMs !== undefined) ? maxPauseMs : silenceMs
-
-      // Speech recognition typically lags ~500ms behind actual speech onset
-      const DETECTION_LAG_MS = 500
-      // Time without new results before declaring speech paused
       const PAUSE_DETECT_MS = 300
+      const DETECTION_LAG_MS = 500
 
       const finish = () => {
         if (done) return
@@ -71,18 +61,20 @@ export function useSpeechRecognition() {
         if (resolveRef.current === resolve) resolveRef.current = null
       }
 
-      // Called only when speech has genuinely stopped (PAUSE_DETECT_MS of no new results).
-      // This guarantees finish() is never scheduled while the actor is mid-word.
-      const onSpeechStopped = () => {
-        if (speechActive) {
-          speechActive = false
-          onSpeechActivity?.(false)
-        }
+      // Scheduled after every onresult — fires when the actor has been silent for pauseWait ms.
+      // onresult keeps resetting it, so it can only fire during genuine silence.
+      const scheduleSilenceStop = () => {
         if (silenceTimer) clearTimeout(silenceTimer)
-        silenceTimer = setTimeout(finish, pauseWait())
+        const wait = (!switchToShortSilenceRef?.current && maxPauseMs !== undefined) ? maxPauseMs : silenceMs
+        silenceTimer = setTimeout(finish, wait)
       }
 
-      // Results from earlier windows remain in e.results — skip them by starting at baseIdx.
+      const notifyActivity = (active: boolean) => {
+        if (active === speechActive) return
+        speechActive = active
+        onSpeechActivity?.(active)
+      }
+
       const baseIdx = lastResultCountRef.current
 
       const onresult = (e: AnySR) => {
@@ -95,24 +87,13 @@ export function useSpeechRecognition() {
         }
         liveTranscript = combined
         setTranscript(combined)
-
-        // Speech is coming in — cancel any pending silence countdown
-        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null }
-
-        if (!speechActive) {
-          speechActive = true
-          onSpeechActivity?.(true)
-        }
-
-        // Reset the pause detector: onSpeechStopped fires PAUSE_DETECT_MS after the last result
+        notifyActivity(true)
         if (activityTimer) clearTimeout(activityTimer)
-        activityTimer = setTimeout(onSpeechStopped, PAUSE_DETECT_MS)
+        activityTimer = setTimeout(() => notifyActivity(false), PAUSE_DETECT_MS)
+        // Reset silence countdown — fires only when actor has genuinely stopped speaking
+        scheduleSilenceStop()
       }
 
-      // Fires when the session ends. If sessionActiveRef is still true, the end was
-      // unexpected (iOS ~60s limit). Finish the current window and let the next
-      // listen() call start a fresh session.
-      // If sessionActiveRef is false, abort()/stop() already handled cleanup — do nothing.
       const handleUnexpectedEnd = () => {
         if (!sessionActiveRef.current) return
         sessionActiveRef.current = false
@@ -127,12 +108,9 @@ export function useSpeechRecognition() {
         }
       }
 
-      // Safety timeout: advances the line if the actor never speaks at all.
-      // Large enough that it never fires during normal use.
-      const safetyMs = Math.max(20000, (estimatedMs ?? 0) * 4 + (maxPauseMs ?? silenceMs) * 2)
+      // Safety: advances if actor never speaks at all
+      const safetyMs = Math.max(10000, (estimatedMs ?? 0) * 2.5 + (maxPauseMs ?? silenceMs))
 
-      // If a session is already live, reuse it — just swap in new per-window handlers.
-      // No rec.start(), so no iOS mic-activation sound.
       if (recognitionRef.current && sessionActiveRef.current) {
         setTranscript('')
         recognitionRef.current.onresult = onresult
@@ -141,7 +119,6 @@ export function useSpeechRecognition() {
         return
       }
 
-      // No live session — start a fresh one.
       lastResultCountRef.current = 0
       const rec: AnySR = new SR()
       recognitionRef.current = rec
@@ -152,8 +129,6 @@ export function useSpeechRecognition() {
       rec.onresult = onresult
       rec.onend = handleUnexpectedEnd
       rec.onerror = (e: AnySR) => {
-        // 'no-speech' is expected on continuous recognition — ignore
-        // Other errors: onend fires next and handleUnexpectedEnd cleans up
         if (e?.error === 'no-speech') return
       }
 
