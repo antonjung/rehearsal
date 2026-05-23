@@ -8,33 +8,13 @@ function bestMimeType(): string {
 export function useMediaRecorder() {
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [needsPermissionPrompt, setNeedsPermissionPrompt] = useState(false)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const resolveRef = useRef<((result: { blob: Blob; durationMs: number }) => void) | null>(null)
   const startTimeRef = useRef<number>(0)
-  const permResolveRef = useRef<((allowed: boolean) => void) | null>(null)
-
-  const resolvePermissionPrompt = useCallback((allowed: boolean) => {
-    setNeedsPermissionPrompt(false)
-    permResolveRef.current?.(allowed)
-    permResolveRef.current = null
-  }, [])
 
   const start = useCallback(async (): Promise<boolean> => {
     try {
-      if (navigator.permissions) {
-        try {
-          const result = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-          if (result.state === 'prompt') {
-            const allowed = await new Promise<boolean>((resolve) => {
-              permResolveRef.current = resolve
-              setNeedsPermissionPrompt(true)
-            })
-            if (!allowed) return false
-          }
-        } catch { /* permissions API unavailable */ }
-      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = bestMimeType()
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
@@ -70,5 +50,5 @@ export function useMediaRecorder() {
     })
   }, [])
 
-  return { recording, error, start, stop, needsPermissionPrompt, resolvePermissionPrompt }
+  return { recording, error, start, stop }
 }

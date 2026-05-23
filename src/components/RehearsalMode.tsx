@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
-import { MicPermissionModal } from './MicPermissionModal'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
@@ -73,8 +72,8 @@ interface LineGroup {
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { transcript, listening, supported, listen, abort, needsPermissionPrompt: srNeedsPerm, resolvePermissionPrompt: srResolvePerm } = useSpeechRecognition()
-  const { recording: micRecording, start: startMic, stop: stopMic, needsPermissionPrompt: recNeedsPerm, resolvePermissionPrompt: recResolvePerm } = useMediaRecorder()
+  const { transcript, listening, supported, listen, abort } = useSpeechRecognition()
+  const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const settings = rehearsalSettings!
   const script = scripts.find((s) => s.id === settings.scriptId)!
@@ -847,13 +846,6 @@ export function RehearsalMode({ onExit }: Props) {
   const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence'].includes(phase)
 
   return (
-    <>
-    {(recNeedsPerm || srNeedsPerm) && (
-      <MicPermissionModal
-        onAllow={() => recNeedsPerm ? recResolvePerm(true) : srResolvePerm(true)}
-        onDeny={() => recNeedsPerm ? recResolvePerm(false) : srResolvePerm(false)}
-      />
-    )}
     <div className="flex flex-col h-full">
       {/* Sub-header: back | scene/character label | search | show-lines toggle */}
       <div className="flex items-center px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
@@ -1074,7 +1066,6 @@ export function RehearsalMode({ onExit }: Props) {
         </div>
       </div>
     </div>
-    </>
   )
 }
 
