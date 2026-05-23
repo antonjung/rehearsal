@@ -1120,9 +1120,6 @@ export function RehearsalMode() {
           onClick={() => setControlsExpanded((v) => !v)}
         >
           <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
-          <span className="text-[var(--color-stage-muted)] text-xs leading-none ml-2">
-            {controlsExpanded ? <IconChevronDown /> : <IconChevronUp />}
-          </span>
         </div>
 
         {/* Collapsible content */}
