@@ -155,7 +155,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
-  const [condensedLines, setCondensedLines] = useState(settings.condensedLines ?? 0)
+  const [condensedLines, setCondensedLines] = useState(0)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
