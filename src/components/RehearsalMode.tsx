@@ -546,7 +546,8 @@ export function RehearsalMode() {
           const elt = recDurMapRef.current.get(lineIdx) ?? gap
 
           // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef; resettable via myLineResetRef.
-          const waitWithProgress = (): Promise<void> => new Promise((resolve) => {
+          // startImmediately=false: timer only begins when myLineResetRef.current() is first called.
+          const waitWithProgress = (startImmediately = true): Promise<void> => new Promise((resolve) => {
             let resolved = false
             let rafId: number | null = null
             let timer: ReturnType<typeof setTimeout> | null = null
@@ -587,7 +588,7 @@ export function RehearsalMode() {
 
             myLineResolveRef.current = done
             myLineResetRef.current = () => { if (!resolved) startTimer() }
-            startTimer()
+            if (startImmediately) startTimer()
           })
 
           if (myLineMode === 'silence') {
@@ -596,11 +597,12 @@ export function RehearsalMode() {
             if (handsFreeRef.current && supported) {
               let myLineDone = false
               let exitCmd: HandsFreeCmd | null = null
-              const waitPromise = waitWithProgress().then(() => { myLineDone = true })
+              // Timer starts only when actor's voice is first detected
+              const waitPromise = waitWithProgress(false).then(() => { myLineDone = true })
 
               while (!myLineDone && !stopRef.current) {
                 const heard = await Promise.race([
-                  listen({ silenceMs: 1500 }),
+                  listen({ silenceMs: 1500, onSpeechStart: () => myLineResetRef.current?.() }),
                   waitPromise.then(() => ''),
                 ])
                 abort()
@@ -609,7 +611,7 @@ export function RehearsalMode() {
                 if (heard) {
                   const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
                   if (cmd?.type === 'line') {
-                    // Read the line as a prompt; stop TTS as soon as actor starts speaking and reset timer
+                    // Read the line as a prompt; if actor speaks during reading, stop TTS and start timer
                     let speakDone = false
                     const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }).then(() => { speakDone = true })
                     await Promise.race([
@@ -617,12 +619,13 @@ export function RehearsalMode() {
                       listen({ silenceMs: 500, onSpeechStart: () => { cancel(); myLineResetRef.current?.() } }).then(() => {}),
                     ])
                     abort()
-                    if (!speakDone) myLineResetRef.current?.() // actor spoke — timer already reset in onSpeechStart, ensure reset
+                    if (!speakDone) myLineResetRef.current?.()
                   } else if (cmd) {
                     exitCmd = cmd
                     myLineResolveRef.current?.()
                     break
                   }
+                  // non-command speech → timer was started by onSpeechStart; keep looping until it expires
                 }
               }
 
