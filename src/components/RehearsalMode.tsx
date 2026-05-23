@@ -91,7 +91,7 @@ interface LineGroup {
 export function RehearsalMode() {
   const { scripts, rehearsalSettings, saveRehearsalSettings, selectedScriptId, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { transcript, supported, listen, abort } = useSpeechRecognition()
+  const { transcript, listening, supported, listen, abort } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const script = scripts.find((s) => s.id === selectedScriptId) ?? null
@@ -239,6 +239,7 @@ export function RehearsalMode() {
   const pauseResolveRef = useRef<(() => void) | null>(null)
   const myLineResolveRef = useRef<(() => void) | null>(null)
   const myLineResetRef = useRef<(() => void) | null>(null)
+  const myLinePauseTimerRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
@@ -564,6 +565,7 @@ export function RehearsalMode() {
               clearTimers()
               myLineResolveRef.current = null
               myLineResetRef.current = null
+              myLinePauseTimerRef.current = null
               setLineProgressMap(prev => ({
                 ...prev,
                 [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
@@ -588,6 +590,7 @@ export function RehearsalMode() {
 
             myLineResolveRef.current = done
             myLineResetRef.current = () => { if (!resolved) startTimer() }
+            myLinePauseTimerRef.current = () => { if (!resolved) clearTimers() }
             if (startImmediately) startTimer()
           })
 
@@ -611,15 +614,18 @@ export function RehearsalMode() {
                 if (heard) {
                   const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
                   if (cmd?.type === 'line') {
-                    // Read the line as a prompt; if actor speaks during reading, stop TTS and start timer
-                    let speakDone = false
-                    const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }).then(() => { speakDone = true })
+                    // Pause timer so it can't expire while TTS reads
+                    myLinePauseTimerRef.current?.()
+                    let actorSpoke = false
+                    const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
                     await Promise.race([
                       speakPromise,
-                      listen({ silenceMs: 500, onSpeechStart: () => { cancel(); myLineResetRef.current?.() } }).then(() => {}),
+                      // onSpeechStart: actor interrupted → cancel TTS and start fresh gap from that moment
+                      listen({ silenceMs: 500, onSpeechStart: () => { cancel(); actorSpoke = true; myLineResetRef.current?.() } }).then(() => {}),
                     ])
                     abort()
-                    if (!speakDone) myLineResetRef.current?.()
+                    // TTS completed with no interruption → start gap now
+                    if (!actorSpoke) myLineResetRef.current?.()
                   } else if (cmd) {
                     exitCmd = cmd
                     myLineResolveRef.current?.()
@@ -745,6 +751,7 @@ export function RehearsalMode() {
     myLineResolveRef.current?.()
     myLineResolveRef.current = null
     myLineResetRef.current = null
+    myLinePauseTimerRef.current = null
     if (cb) setTimeout(cb, 50)
   }
 
@@ -789,6 +796,7 @@ export function RehearsalMode() {
     myLineResolveRef.current?.()
     myLineResolveRef.current = null
     myLineResetRef.current = null
+    myLinePauseTimerRef.current = null
     setPhase('paused')
   }
 
@@ -1167,6 +1175,18 @@ export function RehearsalMode() {
             )}
           </div>
         </>
+      )}
+
+      {/* SR transcript — shown during hands-free silence gap */}
+      {phase === 'my-line-silence' && handsFreeEnabled && supported && (
+        <div className="px-4 py-1 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/80 shrink-0">
+          <div className="flex items-center gap-2 min-h-[18px]">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${listening ? 'bg-green-400 animate-pulse' : 'bg-[var(--color-stage-border)]'}`} />
+            <span className="text-xs text-[var(--color-stage-muted)] truncate flex-1 italic">
+              {transcript || (listening ? 'Listening…' : '')}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Controls — single row */}
