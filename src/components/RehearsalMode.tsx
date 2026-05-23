@@ -181,7 +181,6 @@ export function RehearsalMode() {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
   const [controlsExpanded, setControlsExpanded] = useState(true)
-  const handleSwipeStartYRef = useRef<number | null>(null)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -1115,20 +1114,25 @@ export function RehearsalMode() {
       {/* Controls */}
       <div className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
 
-        {/* Handle bar — swipe up to expand, swipe down to collapse */}
-        <div
-          className="flex items-center justify-center px-4 py-3 select-none"
-          style={{ touchAction: 'none' }}
-          onTouchStart={(e) => { handleSwipeStartYRef.current = e.touches[0].clientY }}
-          onTouchEnd={(e) => {
-            if (handleSwipeStartYRef.current === null) return
-            const delta = e.changedTouches[0].clientY - handleSwipeStartYRef.current
-            handleSwipeStartYRef.current = null
-            if (delta < -20 && !controlsExpanded) setControlsExpanded(true)
-            if (delta > 20 && controlsExpanded) setControlsExpanded(false)
-          }}
-        >
-          <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
+        {/* Handle bar — tap pill to expand; when collapsed, shows play/pause for quick access */}
+        <div className="flex items-center px-4 py-1.5 gap-3">
+          <div
+            className="flex-1 flex justify-center cursor-pointer select-none py-1"
+            onClick={() => setControlsExpanded((v) => !v)}
+          >
+            <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
+          </div>
+          {!controlsExpanded && (
+            <button
+              onClick={isPlaying ? handlePause : handlePlay}
+              disabled={!isPlaying && !myCharacter}
+              className="w-11 h-11 rounded-full flex items-center justify-center text-xl transition-colors disabled:opacity-30
+                bg-[var(--color-stage-accent)] text-white hover:opacity-90"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? <IconPause /> : <IconPlay />}
+            </button>
+          )}
         </div>
 
         {/* Collapsible content */}
