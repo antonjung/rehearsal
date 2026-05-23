@@ -180,6 +180,7 @@ export function RehearsalMode() {
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
+  const [showCondensedMenu, setShowCondensedMenu] = useState(false)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -1112,32 +1113,49 @@ export function RehearsalMode() {
 
       {/* Controls — single row */}
       <div className="px-4 py-3 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between">
+          {/* Repeat — left */}
+          <CtrlBtn onClick={() => setLoopEnabled((v) => !v)} active={loopEnabled} title="Repeat"><IconRepeat /></CtrlBtn>
+
+          {/* Transport */}
           <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} title="Previous"><IconSkipBack /></CtrlBtn>
           <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : 'Play'}>
             {isPlaying ? <IconPause /> : <IconPlay />}
           </CtrlBtn>
           <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} title="Stop"><IconStop /></CtrlBtn>
-          <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} title="Skip"><IconSkipForward /></CtrlBtn>
-          <button
-            onClick={() => setLoopEnabled((v) => !v)}
-            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-semibold transition-colors shrink-0 ${
-              loopEnabled ? 'bg-[var(--color-stage-accent)] text-white' : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
-            }`}
-          >
-            <IconRepeat /> Repeat
-          </button>
-          <select
-            value={condensedLines}
-            onChange={(e) => setCondensedLines(Number(e.target.value))}
-            className="text-xs px-2 py-1.5 rounded-full bg-[var(--color-stage-border)] text-[var(--color-stage-muted)] border-none outline-none appearance-none cursor-pointer font-semibold shrink-0"
-          >
-            <option value={0}>Full</option>
-            <option value={5}>Skip &gt;5</option>
-            <option value={10}>Skip &gt;10</option>
-            <option value={15}>Skip &gt;15</option>
-            <option value={20}>Skip &gt;20</option>
-          </select>
+          <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} title="Next"><IconSkipForward /></CtrlBtn>
+
+          {/* Condensed — right, opens menu */}
+          <div className="relative">
+            <CtrlBtn onClick={() => setShowCondensedMenu((v) => !v)} active={condensedLines > 0} title="Skip lines">
+              <span className="text-sm font-bold leading-none">{condensedLines === 0 ? '*' : String(condensedLines)}</span>
+            </CtrlBtn>
+            {showCondensedMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowCondensedMenu(false)} />
+                <div className="absolute bottom-full right-0 mb-2 z-50 bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl shadow-2xl overflow-hidden min-w-[140px]">
+                  {([
+                    { v: 0, label: 'Full' },
+                    { v: 5, label: 'Skip >5' },
+                    { v: 10, label: 'Skip >10' },
+                    { v: 15, label: 'Skip >15' },
+                    { v: 20, label: 'Skip >20' },
+                  ] as { v: number; label: string }[]).map(({ v, label }) => (
+                    <button
+                      key={v}
+                      onClick={() => { setCondensedLines(v); setShowCondensedMenu(false) }}
+                      className={`w-full px-4 py-3 text-sm text-left flex items-center justify-between hover:bg-[var(--color-stage-accent)]/20 transition-colors ${
+                        v === condensedLines ? 'text-[var(--color-stage-accent-light)] font-semibold' : 'text-[var(--color-stage-text)]'
+                      }`}
+                    >
+                      {label}
+                      {v === condensedLines && <span className="text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
