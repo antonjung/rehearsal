@@ -150,15 +150,15 @@ export function CharacterTable() {
                 >
                   <td className="px-4 py-2.5">
                     {sceneMode === 'all' ? (
-                      <div>
-                        <span className="font-medium text-[var(--color-stage-text)]">{char}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-[var(--color-stage-text)] shrink-0">{char}</span>
                         <select
                           value={charHighlight?.char === char ? (charHighlight.sceneId ?? '') : ''}
                           onChange={(e) => {
                             if (e.target.value) setCharHighlight({ char, sceneId: e.target.value })
                             else setCharHighlight(null)
                           }}
-                          className="mt-1.5 w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
+                          className="min-w-0 flex-1 text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
                         >
                           <option value="">— scene —</option>
                           {script.scenes.filter((s) => s.characters.includes(char)).map((s) => (
