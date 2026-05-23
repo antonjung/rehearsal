@@ -138,12 +138,15 @@ export function CharacterTable() {
           </thead>
           <tbody>
             {sorted.map((char, i) => {
+              const isActive = charHighlight?.char === char
+              const clickable = sceneMode !== 'all'
               return (
                 <tr
                   key={char}
-                  className={`border-t border-[var(--color-stage-border)] ${
+                  onClick={clickable ? () => toggleChip(char, sceneMode === '' ? '__all__' : sceneMode) : undefined}
+                  className={`border-t border-[var(--color-stage-border)] transition-colors ${
                     i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
-                  }`}
+                  } ${clickable ? 'cursor-pointer hover:bg-[var(--color-stage-accent)]/10' : ''}`}
                 >
                   <td className="px-4 py-2.5">
                     {sceneMode === 'all' ? (
@@ -164,16 +167,11 @@ export function CharacterTable() {
                         </select>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => toggleChip(char, sceneMode === '' ? '__all__' : sceneMode)}
-                        className={`font-medium text-left transition-colors ${
-                          charHighlight?.char === char
-                            ? 'text-[var(--color-stage-accent-light)]'
-                            : 'text-[var(--color-stage-text)] hover:text-[var(--color-stage-accent-light)]'
-                        }`}
-                      >
+                      <span className={`font-medium transition-colors ${
+                        isActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-text)]'
+                      }`}>
                         {char}
-                      </button>
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)] align-top">
