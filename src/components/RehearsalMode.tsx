@@ -181,6 +181,7 @@ export function RehearsalMode() {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
   const [controlsExpanded, setControlsExpanded] = useState(true)
+  const handleSwipeStartYRef = useRef<number | null>(null)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -1114,10 +1115,18 @@ export function RehearsalMode() {
       {/* Controls */}
       <div className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
 
-        {/* Handle bar — always visible */}
+        {/* Handle bar — swipe up to expand, swipe down to collapse */}
         <div
-          className="flex items-center justify-center px-4 py-1.5 cursor-pointer select-none"
-          onClick={() => setControlsExpanded((v) => !v)}
+          className="flex items-center justify-center px-4 py-3 select-none"
+          style={{ touchAction: 'none' }}
+          onTouchStart={(e) => { handleSwipeStartYRef.current = e.touches[0].clientY }}
+          onTouchEnd={(e) => {
+            if (handleSwipeStartYRef.current === null) return
+            const delta = e.changedTouches[0].clientY - handleSwipeStartYRef.current
+            handleSwipeStartYRef.current = null
+            if (delta < -20 && !controlsExpanded) setControlsExpanded(true)
+            if (delta > 20 && controlsExpanded) setControlsExpanded(false)
+          }}
         >
           <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
         </div>
