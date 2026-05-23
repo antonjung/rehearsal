@@ -120,7 +120,7 @@ export function CharacterTable() {
             className="w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1.5 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
           >
             <option value="">Full script</option>
-            <option value="all">All scenes</option>
+            <option value="all">Scene breakdown</option>
             {script.scenes.map((s) => (
               <option key={s.id} value={s.id}>{s.title}</option>
             ))}
