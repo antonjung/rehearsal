@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown, IconPin, IconPinFilled } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
@@ -181,7 +181,6 @@ export function RehearsalMode() {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
   const [controlsExpanded, setControlsExpanded] = useState(true)
-  const [controlsPinned, setControlsPinned] = useState(true)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -1117,35 +1116,19 @@ export function RehearsalMode() {
 
         {/* Handle bar — always visible */}
         <div
-          className={`flex items-center px-4 py-1.5 gap-2 ${!controlsPinned ? 'cursor-pointer select-none' : ''}`}
-          onClick={() => { if (!controlsPinned) setControlsExpanded((v) => !v) }}
+          className="flex items-center justify-center px-4 py-1.5 cursor-pointer select-none"
+          onClick={() => setControlsExpanded((v) => !v)}
         >
-          <div className="flex-1 flex justify-center">
-            <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
-          </div>
-          {!controlsPinned && (
-            <span className="text-[var(--color-stage-muted)] text-xs leading-none pointer-events-none">
-              {controlsExpanded ? <IconChevronDown /> : <IconChevronUp />}
-            </span>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              const next = !controlsPinned
-              setControlsPinned(next)
-              if (next) setControlsExpanded(true)
-            }}
-            title={controlsPinned ? 'Unpin controls' : 'Pin controls open'}
-            className={`transition-colors leading-none p-0.5 rounded ${controlsPinned ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
-          >
-            {controlsPinned ? <IconPinFilled className="text-sm" /> : <IconPin className="text-sm" />}
-          </button>
+          <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
+          <span className="text-[var(--color-stage-muted)] text-xs leading-none ml-2">
+            {controlsExpanded ? <IconChevronDown /> : <IconChevronUp />}
+          </span>
         </div>
 
         {/* Collapsible content */}
         <div
           className="overflow-hidden transition-all duration-300 ease-in-out"
-          style={{ maxHeight: controlsExpanded || controlsPinned ? '200px' : '0px' }}
+          style={{ maxHeight: controlsExpanded ? '200px' : '0px' }}
         >
           <div className="px-4 pb-4">
             {/* Transport row */}

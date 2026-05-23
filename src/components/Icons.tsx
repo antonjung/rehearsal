@@ -27,6 +27,4 @@ export {
   PersonVoiceRegular as IconPersonVoice,
   ArrowExportRegular as IconExport,
   ArrowUploadRegular as IconImport,
-  PinRegular as IconPin,
-  PinFilled as IconPinFilled,
 } from '@fluentui/react-icons'
