@@ -9,9 +9,9 @@ import type { Script } from '../types'
 
 interface ExampleMeta { name: string; file: string; description: string }
 
-interface Props { onClose: () => void }
+interface Props { open: boolean; onClose: () => void }
 
-export function SideMenu({ onClose }: Props) {
+export function SideMenu({ open, onClose }: Props) {
   const { scripts, notes, addScript, removeScript, selectScript, updateScript } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const importBundleRef = useRef<HTMLInputElement>(null)
@@ -105,9 +105,12 @@ export function SideMenu({ onClose }: Props) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+      <div
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
 
-      <div className="fixed inset-y-0 left-0 z-50 w-80 max-w-full bg-[var(--color-stage-surface)] border-r border-[var(--color-stage-border)] flex flex-col shadow-2xl">
+      <div className={`fixed inset-y-0 left-0 z-50 w-80 max-w-full bg-[var(--color-stage-surface)] border-r border-[var(--color-stage-border)] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : '-translate-x-full'}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-stage-border)] shrink-0">

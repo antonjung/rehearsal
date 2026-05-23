@@ -45,22 +45,25 @@ export function CharacterTable() {
   // '' = no scene info | 'all' = all scene chips | scene ID = one chip per character
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
+  const [charHighlightGroupIdx, setCharHighlightGroupIdx] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
   const panelScrollRef = useRef<HTMLDivElement>(null)
 
   // Clear panel when scene mode changes
   useEffect(() => { setCharHighlight(null) }, [sceneMode])
 
+  // Reset group index when highlight changes
+  useEffect(() => { setCharHighlightGroupIdx(0) }, [charHighlight])
+
   useEffect(() => {
     if (!charHighlight) return
     panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    // After the panel renders, scroll its content to the first highlighted line
     const t = setTimeout(() => {
-      const el = panelScrollRef.current?.querySelector<HTMLElement>('[data-char-highlight]')
-      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }, 120)
+      const els = panelScrollRef.current?.querySelectorAll<HTMLElement>('[data-char-highlight]')
+      els?.[charHighlightGroupIdx]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 200)
     return () => clearTimeout(t)
-  }, [charHighlight])
+  }, [charHighlight, charHighlightGroupIdx])
 
   if (!script) {
     return (
@@ -103,6 +106,9 @@ export function CharacterTable() {
   const panelGroups = panelScene
     ? groupSceneLines(script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1))
     : []
+  const highlightedGroupCount = charHighlight
+    ? panelGroups.filter((g) => g.character === charHighlight.char).length
+    : 0
 
   const highlightStyle = HIGHLIGHTER_COLORS[rehearsalSettings?.highlighterColor ?? 'yellow']
 
@@ -121,8 +127,8 @@ export function CharacterTable() {
             onChange={(e) => setSceneMode(e.target.value)}
             className="w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1.5 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
           >
-            <option value="">— scene —</option>
-            <option value="all">All scenes</option>
+            <option value="">Full script</option>
+            <option value="all">Scenes breakdown</option>
             {script.scenes.map((s) => (
               <option key={s.id} value={s.id}>{s.title}</option>
             ))}
@@ -196,14 +202,35 @@ export function CharacterTable() {
       {panelScene && charHighlight && (
         <div ref={panelRef} className="rounded-xl border border-[var(--color-stage-accent)]/40 bg-[var(--color-stage-surface)] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] sticky top-0 bg-[var(--color-stage-surface)]">
-            <div className="text-sm">
+            <div className="text-sm min-w-0 mr-2">
               <span className="font-semibold text-[var(--color-stage-accent-light)]">{charHighlight.char}</span>
               <span className="text-[var(--color-stage-muted)]"> in </span>
               <span className="text-[var(--color-stage-gold)]">{panelScene.title}</span>
             </div>
+            {highlightedGroupCount > 1 && (
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setCharHighlightGroupIdx((i) => Math.max(0, i - 1))}
+                  disabled={charHighlightGroupIdx === 0}
+                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 transition-colors"
+                >
+                  ‹
+                </button>
+                <span className="text-xs text-[var(--color-stage-muted)] tabular-nums">
+                  {charHighlightGroupIdx + 1}/{highlightedGroupCount}
+                </span>
+                <button
+                  onClick={() => setCharHighlightGroupIdx((i) => Math.min(highlightedGroupCount - 1, i + 1))}
+                  disabled={charHighlightGroupIdx === highlightedGroupCount - 1}
+                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 transition-colors"
+                >
+                  ›
+                </button>
+              </div>
+            )}
             <button
               onClick={() => setCharHighlight(null)}
-              className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm px-1"
+              className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-sm px-1 shrink-0"
             >
               ✕
             </button>

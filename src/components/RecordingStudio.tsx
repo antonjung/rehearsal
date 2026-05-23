@@ -3,6 +3,7 @@ import { IconPlay, IconRecordStop, IconRecordDot, IconDismiss, IconCheckmark } f
 import { useAppStore } from '../store/useAppStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { getRecording, setRecording, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
+import { MicPermissionModal } from './MicPermissionModal'
 import type { ScriptLine } from '../types'
 
 interface LineGroup {
@@ -58,7 +59,7 @@ export function RecordingStudio() {
   const [recordingIdx, setRecordingIdx] = useState<number | null>(null)
   const [playingIdx, setPlayingIdx] = useState<number | null>(null)
 
-  const { recording, error: recError, start: startRec, stop: stopRec } = useMediaRecorder()
+  const { recording, error: recError, start: startRec, stop: stopRec, needsPermissionPrompt, resolvePermissionPrompt } = useMediaRecorder()
 
   const scene = sceneId ? script?.scenes.find((s) => s.id === sceneId) : null
   const startLine = scene?.startLineIndex ?? 0
@@ -124,6 +125,13 @@ export function RecordingStudio() {
   }
 
   return (
+    <>
+    {needsPermissionPrompt && (
+      <MicPermissionModal
+        onAllow={() => resolvePermissionPrompt(true)}
+        onDeny={() => resolvePermissionPrompt(false)}
+      />
+    )}
     <div className="space-y-5">
       <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Record</h2>
 
@@ -245,5 +253,6 @@ export function RecordingStudio() {
         </div>
       )}
     </div>
+    </>
   )
 }

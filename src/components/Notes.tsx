@@ -81,16 +81,15 @@ export function Notes({ listOpen = true }: { listOpen?: boolean }) {
                 <div className="flex-1 min-w-0">
                   {editingId === note.id ? (
                     <div className="space-y-1.5">
-                      <input
+                      <textarea
                         autoFocus
-                        type="text"
+                        rows={3}
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitEdit()
                           if (e.key === 'Escape') setEditingId(null)
                         }}
-                        className="w-full text-sm px-2 py-1 rounded bg-[var(--color-stage-bg)] border border-[var(--color-stage-accent)] text-[var(--color-stage-text)] focus:outline-none"
+                        className="w-full text-sm px-2 py-1 rounded bg-[var(--color-stage-bg)] border border-[var(--color-stage-accent)] text-[var(--color-stage-text)] focus:outline-none resize-none"
                       />
                       <div className="flex gap-3">
                         <button onClick={commitEdit} className="text-xs text-[var(--color-stage-accent-light)]">Save</button>

@@ -21,7 +21,7 @@ const TAB_ICONS: Record<string, React.ReactNode> = {
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'scripts',    label: 'Home' },
-  { id: 'characters', label: 'Characters' },
+  { id: 'characters', label: 'Script' },
   { id: 'record',     label: 'Record' },
   { id: 'rehearse',   label: 'Run through' },
 ]
@@ -139,7 +139,7 @@ export default function App() {
       {showSettings && <GlobalSettings onClose={() => setShowSettings(false)} />}
 
       {/* Side menu */}
-      {showMenu && <SideMenu onClose={() => setShowMenu(false)} />}
+      <SideMenu open={showMenu} onClose={() => setShowMenu(false)} />
     </div>
   )
 }
