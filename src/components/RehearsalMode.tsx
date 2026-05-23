@@ -600,12 +600,12 @@ export function RehearsalMode() {
             if (handsFreeRef.current && supported) {
               let myLineDone = false
               let exitCmd: HandsFreeCmd | null = null
-              // Timer starts only when actor's voice is first detected
               const waitPromise = waitWithProgress(false).then(() => { myLineDone = true })
 
               while (!myLineDone && !stopRef.current) {
+                // No onSpeechStart here: timer must not start on command words (elt can be < silenceMs)
                 const heard = await Promise.race([
-                  listen({ silenceMs: 1500, onSpeechStart: () => myLineResetRef.current?.() }),
+                  listen({ silenceMs: 1500 }),
                   waitPromise.then(() => ''),
                 ])
                 abort()
@@ -614,24 +614,22 @@ export function RehearsalMode() {
                 if (heard) {
                   const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
                   if (cmd?.type === 'line') {
-                    // Pause timer so it can't expire while TTS reads
-                    myLinePauseTimerRef.current?.()
                     let actorSpoke = false
                     const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
                     await Promise.race([
                       speakPromise,
-                      // onSpeechStart: actor interrupted → cancel TTS and start fresh gap from that moment
                       listen({ silenceMs: 500, onSpeechStart: () => { cancel(); actorSpoke = true; myLineResetRef.current?.() } }).then(() => {}),
                     ])
                     abort()
-                    // TTS completed with no interruption → start gap now
                     if (!actorSpoke) myLineResetRef.current?.()
                   } else if (cmd) {
                     exitCmd = cmd
                     myLineResolveRef.current?.()
                     break
+                  } else {
+                    // Non-command speech detected → start timer now
+                    myLineResetRef.current?.()
                   }
-                  // non-command speech → timer was started by onSpeechStart; keep looping until it expires
                 }
               }
 
@@ -779,6 +777,8 @@ export function RehearsalMode() {
     } catch { /* ignore */ }
     speechSynthesis.cancel()
     unlockAudio()
+    setLineProgressMap({})
+    setRevealedLines({})
     if (phase === 'paused') {
       interruptPlayback(() => { stopRef.current = false; runPlayback(currentIdx, blockEnd) })
     } else {
