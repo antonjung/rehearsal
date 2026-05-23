@@ -614,14 +614,14 @@ export function RehearsalMode() {
                 if (heard) {
                   const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
                   if (cmd?.type === 'line') {
-                    let actorSpoke = false
                     const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
                     await Promise.race([
                       speakPromise,
-                      listen({ silenceMs: 500, onSpeechStart: () => { cancel(); actorSpoke = true; myLineResetRef.current?.() } }).then(() => {}),
+                      listen({ silenceMs: 500, onSpeechStart: () => cancel() }).then(() => {}),
                     ])
                     abort()
-                    if (!actorSpoke) myLineResetRef.current?.()
+                    if (!stopRef.current) await delay(2000)
+                    myLineResetRef.current?.()
                   } else if (cmd) {
                     exitCmd = cmd
                     myLineResolveRef.current?.()
