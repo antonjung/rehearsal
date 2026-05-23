@@ -27,4 +27,5 @@ export {
   PersonVoiceRegular as IconPersonVoice,
   ArrowExportRegular as IconExport,
   ArrowUploadRegular as IconImport,
+  TextCollapseRegular as IconTextCollapse,
 } from '@fluentui/react-icons'

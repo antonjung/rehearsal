@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown, IconTextCollapse } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
@@ -1112,14 +1112,14 @@ export function RehearsalMode() {
       )}
 
       {/* Controls — single row */}
-      <div className="px-4 py-3 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+      <div className="px-4 py-1.5 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
         <div className="flex items-center justify-between">
           {/* Repeat — left */}
           <CtrlBtn onClick={() => setLoopEnabled((v) => !v)} active={loopEnabled} title="Repeat"><IconRepeat /></CtrlBtn>
 
           {/* Transport */}
           <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} title="Previous"><IconSkipBack /></CtrlBtn>
-          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : 'Play'}>
+          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} title={isPlaying ? 'Pause' : 'Play'}>
             {isPlaying ? <IconPause /> : <IconPlay />}
           </CtrlBtn>
           <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} title="Stop"><IconStop /></CtrlBtn>
@@ -1128,7 +1128,7 @@ export function RehearsalMode() {
           {/* Condensed — right, opens menu */}
           <div className="relative">
             <CtrlBtn onClick={() => setShowCondensedMenu((v) => !v)} active={condensedLines > 0} title="Skip lines">
-              <span className="text-sm font-bold leading-none">{condensedLines === 0 ? '*' : String(condensedLines)}</span>
+              <IconTextCollapse />
             </CtrlBtn>
             {showCondensedMenu && (
               <>
