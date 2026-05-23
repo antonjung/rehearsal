@@ -206,6 +206,7 @@ export function GlobalSettings({ onClose }: Props) {
                 { key: 'loop',   label: '🔁 Loop on/off' },
                 { key: 'back',   label: '⏮ Back' },
                 { key: 'skip',   label: '⏭ Skip' },
+                { key: 'line',   label: '💬 Prompt line' },
               ] as { key: keyof VoiceCommandWords; label: string }[]
             ).map(({ key, label }) => (
               <div key={key} className="space-y-1">

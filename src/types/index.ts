@@ -36,6 +36,7 @@ export interface VoiceCommandWords {
   skip:   string[]
   repeat: string[]
   loop:   string[]
+  line:   string[]
 }
 
 export const DEFAULT_VOICE_COMMANDS: VoiceCommandWords = {
@@ -45,6 +46,7 @@ export const DEFAULT_VOICE_COMMANDS: VoiceCommandWords = {
   skip:   ['skip', 'next'],
   repeat: ['repeat', 'restart'],
   loop:   ['loop', 'cycle'],
+  line:   ['line'],
 }
 
 export interface RehearsalSettings {

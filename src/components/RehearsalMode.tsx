@@ -44,6 +44,7 @@ type HandsFreeCmd =
   | { type: 'skip' }
   | { type: 'repeat' }
   | { type: 'loop' }
+  | { type: 'line' }
 
 // Short utterance → command detection (≤3 words so dialogue doesn't false-trigger).
 // "back N" (digit or word) goes back N line groups; bare "back" defaults to 1.
@@ -55,6 +56,7 @@ function matchHandsFreeCommand(text: string, words: VoiceCommandWords): HandsFre
   if (parts.some(w => words.repeat.includes(w))) return { type: 'repeat' }
   if (parts.some(w => words.loop.includes(w)))   return { type: 'loop' }
   if (parts.some(w => words.skip.includes(w)))   return { type: 'skip' }
+  if (parts.some(w => words.line.includes(w)))   return { type: 'line' }
   const backIdx = parts.findIndex(w => words.back.includes(w))
   if (backIdx >= 0) {
     const rest = parts.filter((_, i) => i !== backIdx)
@@ -236,6 +238,7 @@ export function RehearsalMode() {
   const blockEndRef = useRef(defaultBlockEnd)
   const pauseResolveRef = useRef<(() => void) | null>(null)
   const myLineResolveRef = useRef<(() => void) | null>(null)
+  const myLineResetRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
@@ -542,19 +545,24 @@ export function RehearsalMode() {
           // ELT: use actual recording duration when available, otherwise calibrated estimate
           const elt = recDurMapRef.current.get(lineIdx) ?? gap
 
-          // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef.
+          // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef; resettable via myLineResetRef.
           const waitWithProgress = (): Promise<void> => new Promise((resolve) => {
             let resolved = false
             let rafId: number | null = null
-            let timer: ReturnType<typeof setTimeout>
-            const startTime = Date.now()
+            let timer: ReturnType<typeof setTimeout> | null = null
+            let startTime = Date.now()
+
+            const clearTimers = () => {
+              if (timer !== null) { clearTimeout(timer); timer = null }
+              if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null }
+            }
 
             const done = () => {
               if (resolved) return
               resolved = true
-              clearTimeout(timer)
-              if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null }
+              clearTimers()
               myLineResolveRef.current = null
+              myLineResetRef.current = null
               setLineProgressMap(prev => ({
                 ...prev,
                 [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
@@ -562,23 +570,68 @@ export function RehearsalMode() {
               resolve()
             }
 
-            myLineResolveRef.current = done
-            timer = setTimeout(done, elt)
-
-            const tick = () => {
-              if (resolved) return
-              setLineProgressMap(prev => ({
-                ...prev,
-                [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
-              }))
+            const startTimer = () => {
+              clearTimers()
+              startTime = Date.now()
+              timer = setTimeout(done, elt)
+              const tick = () => {
+                if (resolved) return
+                setLineProgressMap(prev => ({
+                  ...prev,
+                  [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
+                }))
+                rafId = requestAnimationFrame(tick)
+              }
               rafId = requestAnimationFrame(tick)
             }
-            rafId = requestAnimationFrame(tick)
+
+            myLineResolveRef.current = done
+            myLineResetRef.current = () => { if (!resolved) startTimer() }
+            startTimer()
           })
 
           if (myLineMode === 'silence') {
             setPhase('my-line-silence')
-            await waitWithProgress()
+
+            if (handsFreeRef.current && supported) {
+              let myLineDone = false
+              let exitCmd: HandsFreeCmd | null = null
+              const waitPromise = waitWithProgress().then(() => { myLineDone = true })
+
+              while (!myLineDone && !stopRef.current) {
+                const heard = await Promise.race([
+                  listen({ silenceMs: 1500 }),
+                  waitPromise.then(() => ''),
+                ])
+                abort()
+                if (myLineDone || stopRef.current) break
+
+                if (heard) {
+                  const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
+                  if (cmd?.type === 'line') {
+                    // Read the line as a prompt; stop TTS as soon as actor starts speaking and reset timer
+                    let speakDone = false
+                    const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }).then(() => { speakDone = true })
+                    await Promise.race([
+                      speakPromise,
+                      listen({ silenceMs: 500, onSpeechStart: () => { cancel(); myLineResetRef.current?.() } }).then(() => {}),
+                    ])
+                    abort()
+                    if (!speakDone) myLineResetRef.current?.() // actor spoke — timer already reset in onSpeechStart, ensure reset
+                  } else if (cmd) {
+                    exitCmd = cmd
+                    myLineResolveRef.current?.()
+                    break
+                  }
+                }
+              }
+
+              await waitPromise
+              if (exitCmd && !stopRef.current) { execHandsFreeCommand(exitCmd, lineIdx); return }
+            } else {
+              await waitWithProgress()
+            }
+
             if (!stopRef.current) setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
           } else if (myLineMode === 'read') {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
@@ -688,6 +741,7 @@ export function RehearsalMode() {
     pauseResolveRef.current?.()
     myLineResolveRef.current?.()
     myLineResolveRef.current = null
+    myLineResetRef.current = null
     if (cb) setTimeout(cb, 50)
   }
 
@@ -731,6 +785,7 @@ export function RehearsalMode() {
     abort()
     myLineResolveRef.current?.()
     myLineResolveRef.current = null
+    myLineResetRef.current = null
     setPhase('paused')
   }
 
