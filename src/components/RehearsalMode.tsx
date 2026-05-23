@@ -139,10 +139,10 @@ export function RehearsalMode() {
     return groups
   }, [lines])
 
-  // Visible groups (within scene boundaries)
+  // Visible groups (within scene boundaries). Headings are suppressed when a scene is selected.
   const sceneGroups = useMemo(
-    () => allGroups.filter((g) => g.startIdx >= firstLine && g.startIdx <= sceneEnd),
-    [allGroups, firstLine, sceneEnd],
+    () => allGroups.filter((g) => g.startIdx >= firstLine && g.startIdx <= sceneEnd && !(sceneId && g.type === 'heading')),
+    [allGroups, firstLine, sceneEnd, sceneId],
   )
 
   // Default block start = group before user's first line
