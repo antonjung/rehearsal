@@ -1128,7 +1128,7 @@ export function RehearsalMode() {
           {/* Condensed — right, opens menu */}
           <div className="relative">
             <CtrlBtn onClick={() => setShowCondensedMenu((v) => !v)} active={condensedLines > 0} title="Skip lines">
-              <IconTextCollapse />
+              {condensedLines === 0 ? <IconTextCollapse /> : <span className="text-sm font-bold leading-none">{condensedLines}</span>}
             </CtrlBtn>
             {showCondensedMenu && (
               <>
