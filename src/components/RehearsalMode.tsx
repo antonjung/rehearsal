@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
@@ -89,7 +89,7 @@ interface LineGroup {
 export function RehearsalMode() {
   const { scripts, rehearsalSettings, saveRehearsalSettings, selectedScriptId, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { transcript, listening, supported, listen, abort } = useSpeechRecognition()
+  const { transcript, supported, listen, abort } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
   const script = scripts.find((s) => s.id === selectedScriptId) ?? null
@@ -180,7 +180,6 @@ export function RehearsalMode() {
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
-  const [controlsExpanded, setControlsExpanded] = useState(true)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -1111,82 +1110,34 @@ export function RehearsalMode() {
         </>
       )}
 
-      {/* Controls */}
-      <div className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
-
-        {/* Handle bar — tap pill to expand; when collapsed, shows play/pause for quick access */}
-        <div className="flex items-center px-4 py-1.5 gap-3">
-          <div
-            className="flex-1 flex justify-center cursor-pointer select-none py-1"
-            onClick={() => setControlsExpanded((v) => !v)}
+      {/* Controls — single row */}
+      <div className="px-4 py-3 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} title="Previous"><IconSkipBack /></CtrlBtn>
+          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : 'Play'}>
+            {isPlaying ? <IconPause /> : <IconPlay />}
+          </CtrlBtn>
+          <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} title="Stop"><IconStop /></CtrlBtn>
+          <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} title="Skip"><IconSkipForward /></CtrlBtn>
+          <button
+            onClick={() => setLoopEnabled((v) => !v)}
+            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-semibold transition-colors shrink-0 ${
+              loopEnabled ? 'bg-[var(--color-stage-accent)] text-white' : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
+            }`}
           >
-            <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
-          </div>
-          {!controlsExpanded && (
-            <button
-              onClick={isPlaying ? handlePause : handlePlay}
-              disabled={!isPlaying && !myCharacter}
-              className="w-11 h-11 rounded-full flex items-center justify-center text-xl transition-colors disabled:opacity-30
-                bg-[var(--color-stage-accent)] text-white hover:opacity-90"
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? <IconPause /> : <IconPlay />}
-            </button>
-          )}
-        </div>
-
-        {/* Collapsible content */}
-        <div
-          className="overflow-hidden transition-all duration-300 ease-in-out"
-          style={{ maxHeight: controlsExpanded ? '200px' : '0px' }}
-        >
-          <div className="px-4 pb-4">
-            {/* Transport row */}
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
-              <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}>
-                {isPlaying ? <IconPause /> : <IconPlay />}
-              </CtrlBtn>
-              <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} large title="Stop"><IconStop /></CtrlBtn>
-              <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} large title="Skip beat"><IconSkipForward /></CtrlBtn>
-            </div>
-
-            {/* Repeat pill + condensed mode */}
-            <div className="flex justify-center items-center gap-2 mb-1">
-              <button
-                onClick={() => setLoopEnabled((v) => !v)}
-                className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
-                  loopEnabled
-                    ? 'bg-[var(--color-stage-accent)] text-white'
-                    : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
-                }`}
-              >
-                <IconRepeat /> Repeat
-              </button>
-              <select
-                value={condensedLines}
-                onChange={(e) => setCondensedLines(Number(e.target.value))}
-                className="text-xs px-2 py-1 rounded-full bg-[var(--color-stage-border)] text-[var(--color-stage-muted)] border-none outline-none appearance-none cursor-pointer font-semibold"
-              >
-                <option value={0}>Full</option>
-                <option value={5}>Skip &gt;5</option>
-                <option value={10}>Skip &gt;10</option>
-                <option value={15}>Skip &gt;15</option>
-                <option value={20}>Skip &gt;20</option>
-              </select>
-            </div>
-
-            {/* Status line */}
-            <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-4 flex items-center justify-center">
-              {phase === 'my-line-silence' && 'Your line…'}
-              {phase === 'my-line-reading' && 'Reading your line…'}
-              {phase === 'playing-other' && 'Playing…'}
-              {phase === 'paused' && 'Paused — tap a line to restart from it'}
-              {phase === 'done' && 'Scene complete'}
-              {phase === 'idle' && !handsFreeEnabled && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
-              {phase === 'idle' && handsFreeEnabled && (listening ? <span className="flex items-center gap-1"><IconMic className="text-sm" /> Listening for command…</span> : <span className="flex items-center gap-1"><IconMic className="text-sm" /> Say "start" to begin</span>)}
-            </div>
-          </div>
+            <IconRepeat /> Repeat
+          </button>
+          <select
+            value={condensedLines}
+            onChange={(e) => setCondensedLines(Number(e.target.value))}
+            className="text-xs px-2 py-1.5 rounded-full bg-[var(--color-stage-border)] text-[var(--color-stage-muted)] border-none outline-none appearance-none cursor-pointer font-semibold shrink-0"
+          >
+            <option value={0}>Full</option>
+            <option value={5}>Skip &gt;5</option>
+            <option value={10}>Skip &gt;10</option>
+            <option value={15}>Skip &gt;15</option>
+            <option value={20}>Skip &gt;20</option>
+          </select>
         </div>
       </div>
     </div>
