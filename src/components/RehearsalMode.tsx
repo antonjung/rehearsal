@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconArrowLeft, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
@@ -10,8 +10,25 @@ import { unlockAudio, playCompletion, playClipStart, getAudioContext } from '../
 import type { VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
-interface Props {
-  onExit: () => void
+const DEFAULT_SETTINGS = {
+  myLineMode: 'silence' as const,
+  readStageDirections: false,
+  speechRate: 1,
+  accuracyEnabled: true,
+  accuracyWarningThreshold: 70,
+  endLineSilenceMs: 400,
+  errorPromptEnabled: false,
+  errorPromptPhrase: 'The correct line is',
+  handsFreeEnabled: true,
+  linePingEnabled: true,
+  scenePingEnabled: true,
+  clipStartPingEnabled: true,
+  maxPauseMs: 1000,
+  highlighterColor: 'yellow' as const,
+  voiceCalibration: 0.6,
+  speechCoverageThreshold: 70,
+  voiceURI: undefined as string | undefined,
+  voiceCommands: undefined as import('../types').VoiceCommandWords | undefined,
 }
 
 const HIGHLIGHTER_COLORS: Record<string, React.CSSProperties> = {
@@ -69,21 +86,29 @@ interface LineGroup {
   text: string
 }
 
-export function RehearsalMode({ onExit }: Props) {
-  const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
+export function RehearsalMode() {
+  const { scripts, rehearsalSettings, saveRehearsalSettings, selectedScriptId, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
   const { transcript, listening, supported, listen, abort } = useSpeechRecognition()
   const { recording: micRecording, start: startMic, stop: stopMic } = useMediaRecorder()
 
-  const settings = rehearsalSettings!
-  const script = scripts.find((s) => s.id === settings.scriptId)!
-  const lines = script.lines
+  const script = scripts.find((s) => s.id === selectedScriptId) ?? null
+  const lines = script?.lines ?? []
+  const sameScript = rehearsalSettings?.scriptId === selectedScriptId
+  const [sceneId, setSceneId] = useState<string | null>(sameScript ? (rehearsalSettings?.sceneId ?? null) : null)
+  const [myCharacter, setMyCharacter] = useState(sameScript ? (rehearsalSettings?.myCharacter ?? '') : '')
+  const settings = useMemo(() => ({
+    ...(rehearsalSettings ?? DEFAULT_SETTINGS),
+    scriptId: selectedScriptId ?? '',
+    sceneId,
+    myCharacter,
+  }), [rehearsalSettings, selectedScriptId, sceneId, myCharacter])
 
-  const activeScene = settings.sceneId
-    ? script.scenes.find((s) => s.id === settings.sceneId) ?? null
+  const activeScene = sceneId && script
+    ? script.scenes.find((s) => s.id === sceneId) ?? null
     : null
   const firstLine = activeScene?.startLineIndex ?? 0
-  const sceneEnd = activeScene?.endLineIndex ?? lines.length - 1
+  const sceneEnd = activeScene?.endLineIndex ?? (lines.length > 0 ? lines.length - 1 : 0)
 
   // Build line groups
   const allGroups = useMemo((): LineGroup[] => {
@@ -308,6 +333,7 @@ export function RehearsalMode({ onExit }: Props) {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      if (!script) return
       const map = new Map<number, Blob>()
       const durMap = new Map<number, number>()
       for (let i = firstLine; i <= sceneEnd; i++) {
@@ -329,11 +355,36 @@ export function RehearsalMode({ onExit }: Props) {
     }
     load()
     return () => { cancelled = true }
-  }, [script.id, firstLine, sceneEnd, lines])
+  }, [script?.id, firstLine, sceneEnd, lines])
 
   useEffect(() => {
     return () => { stopRef.current = true; cancel(); abort() }
   }, [cancel, abort])
+
+  // Reset scene/character when selected script changes while on rehearse tab
+  const prevScriptIdRef = useRef(selectedScriptId)
+  useEffect(() => {
+    if (prevScriptIdRef.current === selectedScriptId) return
+    prevScriptIdRef.current = selectedScriptId
+    setSceneId(null)
+    setMyCharacter('')
+    stopRef.current = true
+    cancel()
+    abort()
+  }, [selectedScriptId, cancel, abort])
+
+  // Reset clip markers and position when scene/character changes
+  useEffect(() => {
+    setBlockStart(defaultBlockStart)
+    setBlockEnd(defaultBlockEnd)
+    setCurrentIdx(defaultBlockStart)
+    blockStartRef.current = defaultBlockStart
+    blockEndRef.current = defaultBlockEnd
+    setRevealedLines({})
+    setLineProgressMap({})
+    setPhase('idle')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myCharacter, sceneId])
 
   // Idle hands-free command listener — waits for "start"/"play"/"go" when not playing.
   // Uses idleListeningRef rather than a local `active` flag so handlePlay() can stop
@@ -707,11 +758,11 @@ export function RehearsalMode({ onExit }: Props) {
   const handleRecordLine = async (lineIdx: number) => {
     if (recordingLineIdx !== null) {
       const { blob, durationMs } = await stopMic()
-      await setRecording(script.id, recordingLineIdx, blob)
+      await setRecording(script!.id, recordingLineIdx, blob)
       recMapRef.current.set(recordingLineIdx, blob)
       if (durationMs > 0) {
         recDurMapRef.current.set(recordingLineIdx, durationMs)
-        void setRecordingDuration(script.id, recordingLineIdx, durationMs)
+        void setRecordingDuration(script!.id, recordingLineIdx, durationMs)
       }
       setRecordingLineIdx(null)
     } else {
@@ -730,7 +781,7 @@ export function RehearsalMode({ onExit }: Props) {
   const handleDeleteRecording = (lineIdx: number) => {
     recMapRef.current.delete(lineIdx)
     recDurMapRef.current.delete(lineIdx)
-    void deleteRecording(script.id, lineIdx)
+    void deleteRecording(script!.id, lineIdx)
     setLineProgressMap((p) => { const n = { ...p }; delete n[lineIdx]; return n })
   }
 
@@ -845,16 +896,59 @@ export function RehearsalMode({ onExit }: Props) {
 
   const isPlaying = ['playing-other', 'my-line-reading', 'my-line-silence'].includes(phase)
 
+  if (!script) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-6">
+        <p className="text-sm text-[var(--color-stage-muted)] text-center">Select a script on the Home tab first.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full">
-      {/* Sub-header: back | scene/character label | search | show-lines toggle */}
-      <div className="flex items-center px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-3">
-        <button onClick={onExit} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] shrink-0 flex items-center gap-1 text-sm">
-          <IconArrowLeft className="text-base" /> Back
-        </button>
-        <span className="flex-1 text-sm font-semibold text-[var(--color-stage-text)] truncate text-center">
-          {activeScene ? activeScene.sceneTitle || activeScene.title : settings.myCharacter}
-        </span>
+      {/* Sub-header: character | scene | search | show-lines toggle */}
+      <div className="flex items-center px-4 py-2 border-b border-[var(--color-stage-border)] shrink-0 gap-2">
+        <select
+          value={myCharacter}
+          onChange={(e) => {
+            const c = e.target.value
+            setMyCharacter(c)
+            let newScene = sceneId
+            if (sceneId && c) {
+              const sc = script.scenes.find((s) => s.id === sceneId)
+              if (sc && !sc.characters.includes(c)) { newScene = null; setSceneId(null) }
+            }
+            interruptPlayback()
+            if (selectedScriptId) saveRehearsalSettings({ ...(rehearsalSettings ?? DEFAULT_SETTINGS), scriptId: selectedScriptId, myCharacter: c, sceneId: newScene })
+          }}
+          className="flex-1 min-w-0 select-field text-sm py-1"
+        >
+          <option value="">Select character…</option>
+          {script.characters.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {script.scenes.length > 0 && (
+          <select
+            value={sceneId ?? ''}
+            onChange={(e) => {
+              const id = e.target.value || null
+              setSceneId(id)
+              let newChar = myCharacter
+              if (id && myCharacter) {
+                const sc = script.scenes.find((s) => s.id === id)
+                if (sc && !sc.characters.includes(myCharacter)) { newChar = ''; setMyCharacter('') }
+              }
+              interruptPlayback()
+              if (selectedScriptId) saveRehearsalSettings({ ...(rehearsalSettings ?? DEFAULT_SETTINGS), scriptId: selectedScriptId, myCharacter: newChar, sceneId: id })
+            }}
+            className="flex-1 min-w-0 select-field text-sm py-1"
+          >
+            <option value="">Whole script</option>
+            {(myCharacter
+              ? script.scenes.filter((s) => s.characters.includes(myCharacter))
+              : script.scenes
+            ).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+          </select>
+        )}
         <button
           onClick={() => { setShowSearch((v) => !v); setSearchQuery('') }}
           className={`shrink-0 transition-colors ${showSearch ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
@@ -1022,7 +1116,7 @@ export function RehearsalMode({ onExit }: Props) {
         {/* Transport row — always visible, all same large size */}
         <div className="flex items-center justify-center gap-3 mb-2">
           <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
-          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} large title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}>
+          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}>
             {isPlaying ? <IconPause /> : <IconPlay />}
           </CtrlBtn>
           <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} large title="Stop"><IconStop /></CtrlBtn>
