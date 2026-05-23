@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown } from './Icons'
+import { IconPlay, IconPause, IconStop, IconSkipBack, IconSkipForward, IconRepeat, IconEye, IconEyeOff, IconDismiss, IconMic, IconRecordStop, IconRecordDot, IconSearch, IconChevronUp, IconChevronDown, IconPin, IconPinFilled } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import { getRecording, setRecording, getRecordingDuration, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
@@ -180,6 +180,8 @@ export function RehearsalMode() {
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
+  const [controlsExpanded, setControlsExpanded] = useState(true)
+  const [controlsPinned, setControlsPinned] = useState(true)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -1111,52 +1113,87 @@ export function RehearsalMode() {
       )}
 
       {/* Controls */}
-      <div className="px-4 pt-3 pb-4 border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
+      <div className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shrink-0">
 
-        {/* Transport row — always visible, all same large size */}
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
-          <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}>
-            {isPlaying ? <IconPause /> : <IconPlay />}
-          </CtrlBtn>
-          <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} large title="Stop"><IconStop /></CtrlBtn>
-          <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} large title="Skip beat"><IconSkipForward /></CtrlBtn>
-        </div>
-
-        {/* Repeat pill + condensed mode */}
-        <div className="flex justify-center items-center gap-2 mb-1">
+        {/* Handle bar — always visible */}
+        <div
+          className={`flex items-center px-4 py-1.5 gap-2 ${!controlsPinned ? 'cursor-pointer select-none' : ''}`}
+          onClick={() => { if (!controlsPinned) setControlsExpanded((v) => !v) }}
+        >
+          <div className="flex-1 flex justify-center">
+            <div className="w-8 h-1 rounded-full bg-[var(--color-stage-border)]" />
+          </div>
+          {!controlsPinned && (
+            <span className="text-[var(--color-stage-muted)] text-xs leading-none pointer-events-none">
+              {controlsExpanded ? <IconChevronDown /> : <IconChevronUp />}
+            </span>
+          )}
           <button
-            onClick={() => setLoopEnabled((v) => !v)}
-            className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
-              loopEnabled
-                ? 'bg-[var(--color-stage-accent)] text-white'
-                : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
-            }`}
+            onClick={(e) => {
+              e.stopPropagation()
+              const next = !controlsPinned
+              setControlsPinned(next)
+              if (next) setControlsExpanded(true)
+            }}
+            title={controlsPinned ? 'Unpin controls' : 'Pin controls open'}
+            className={`transition-colors leading-none p-0.5 rounded ${controlsPinned ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
           >
-            <IconRepeat /> Repeat
+            {controlsPinned ? <IconPinFilled className="text-sm" /> : <IconPin className="text-sm" />}
           </button>
-          <select
-            value={condensedLines}
-            onChange={(e) => setCondensedLines(Number(e.target.value))}
-            className="text-xs px-2 py-1 rounded-full bg-[var(--color-stage-border)] text-[var(--color-stage-muted)] border-none outline-none appearance-none cursor-pointer font-semibold"
-          >
-            <option value={0}>Full</option>
-            <option value={5}>Skip &gt;5</option>
-            <option value={10}>Skip &gt;10</option>
-            <option value={15}>Skip &gt;15</option>
-            <option value={20}>Skip &gt;20</option>
-          </select>
         </div>
 
-        {/* Status line */}
-        <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-4 flex items-center justify-center">
-          {phase === 'my-line-silence' && 'Your line…'}
-          {phase === 'my-line-reading' && 'Reading your line…'}
-          {phase === 'playing-other' && 'Playing…'}
-          {phase === 'paused' && 'Paused — tap a line to restart from it'}
-          {phase === 'done' && 'Scene complete'}
-          {phase === 'idle' && !handsFreeEnabled && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
-          {phase === 'idle' && handsFreeEnabled && (listening ? <span className="flex items-center gap-1"><IconMic className="text-sm" /> Listening for command…</span> : <span className="flex items-center gap-1"><IconMic className="text-sm" /> Say "start" to begin</span>)}
+        {/* Collapsible content */}
+        <div
+          className="overflow-hidden transition-all duration-300 ease-in-out"
+          style={{ maxHeight: controlsExpanded || controlsPinned ? '200px' : '0px' }}
+        >
+          <div className="px-4 pb-4">
+            {/* Transport row */}
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} large title="Previous beat"><IconSkipBack /></CtrlBtn>
+              <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} large title={isPlaying ? 'Pause' : phase === 'paused' ? 'Resume' : 'Play'}>
+                {isPlaying ? <IconPause /> : <IconPlay />}
+              </CtrlBtn>
+              <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} large title="Stop"><IconStop /></CtrlBtn>
+              <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} large title="Skip beat"><IconSkipForward /></CtrlBtn>
+            </div>
+
+            {/* Repeat pill + condensed mode */}
+            <div className="flex justify-center items-center gap-2 mb-1">
+              <button
+                onClick={() => setLoopEnabled((v) => !v)}
+                className={`flex items-center gap-1 text-xs px-4 py-1 rounded-full font-semibold transition-colors ${
+                  loopEnabled
+                    ? 'bg-[var(--color-stage-accent)] text-white'
+                    : 'bg-[var(--color-stage-border)] text-[var(--color-stage-muted)]'
+                }`}
+              >
+                <IconRepeat /> Repeat
+              </button>
+              <select
+                value={condensedLines}
+                onChange={(e) => setCondensedLines(Number(e.target.value))}
+                className="text-xs px-2 py-1 rounded-full bg-[var(--color-stage-border)] text-[var(--color-stage-muted)] border-none outline-none appearance-none cursor-pointer font-semibold"
+              >
+                <option value={0}>Full</option>
+                <option value={5}>Skip &gt;5</option>
+                <option value={10}>Skip &gt;10</option>
+                <option value={15}>Skip &gt;15</option>
+                <option value={20}>Skip &gt;20</option>
+              </select>
+            </div>
+
+            {/* Status line */}
+            <div className="text-center text-xs text-[var(--color-stage-muted)] min-h-4 flex items-center justify-center">
+              {phase === 'my-line-silence' && 'Your line…'}
+              {phase === 'my-line-reading' && 'Reading your line…'}
+              {phase === 'playing-other' && 'Playing…'}
+              {phase === 'paused' && 'Paused — tap a line to restart from it'}
+              {phase === 'done' && 'Scene complete'}
+              {phase === 'idle' && !handsFreeEnabled && 'Tap ▶ to play · tap a line to select · drag red lines to set clip'}
+              {phase === 'idle' && handsFreeEnabled && (listening ? <span className="flex items-center gap-1"><IconMic className="text-sm" /> Listening for command…</span> : <span className="flex items-center gap-1"><IconMic className="text-sm" /> Say "start" to begin</span>)}
+            </div>
+          </div>
         </div>
       </div>
     </div>
