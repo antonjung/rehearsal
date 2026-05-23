@@ -25,20 +25,41 @@ export function useSpeechRecognition() {
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(false)
   const [srError, setSrError] = useState<string | null>(null)
+  const [needsPermissionPrompt, setNeedsPermissionPrompt] = useState(false)
   const recognitionRef = useRef<AnySR>(null)
   const resolveRef = useRef<((t: string) => void) | null>(null)
   const sessionActiveRef = useRef(false)
   const lastResultCountRef = useRef(0)
+  const permResolveRef = useRef<((allowed: boolean) => void) | null>(null)
+
+  const resolvePermissionPrompt = useCallback((allowed: boolean) => {
+    setNeedsPermissionPrompt(false)
+    permResolveRef.current?.(allowed)
+    permResolveRef.current = null
+  }, [])
 
   useEffect(() => {
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
     setSupported(!!SR)
   }, [])
 
-  const listen = useCallback((options: ListenOptions = {}): Promise<string> => {
+  const listen = useCallback(async (options: ListenOptions = {}): Promise<string> => {
+    if (!sessionActiveRef.current && navigator.permissions) {
+      try {
+        const result = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+        if (result.state === 'prompt') {
+          const allowed = await new Promise<boolean>((resolve) => {
+            permResolveRef.current = resolve
+            setNeedsPermissionPrompt(true)
+          })
+          if (!allowed) return ''
+        }
+      } catch { /* permissions API unavailable */ }
+    }
+
     const { silenceMs = 1000, estimatedMs, maxPauseMs, switchToShortSilenceRef, onSpeechStart, onSpeechActivity, noAutoFinish } = options
     const SR = (window as AnySR).SpeechRecognition ?? (window as AnySR).webkitSpeechRecognition
-    if (!SR) return Promise.resolve('')
+    if (!SR) return ''
 
     setSrError(null)
     return new Promise((resolve) => {
@@ -197,5 +218,5 @@ export function useSpeechRecognition() {
 
   const reset = useCallback(() => setTranscript(''), [])
 
-  return { transcript, listening, supported, srError, listen, stop, abort, reset }
+  return { transcript, listening, supported, srError, listen, stop, abort, reset, needsPermissionPrompt, resolvePermissionPrompt }
 }

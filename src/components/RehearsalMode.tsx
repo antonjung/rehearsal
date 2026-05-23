@@ -73,8 +73,8 @@ interface LineGroup {
 export function RehearsalMode({ onExit }: Props) {
   const { scripts, rehearsalSettings, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
-  const { transcript, listening, supported, listen, abort } = useSpeechRecognition()
-  const { recording: micRecording, start: startMic, stop: stopMic, needsPermissionPrompt, resolvePermissionPrompt } = useMediaRecorder()
+  const { transcript, listening, supported, listen, abort, needsPermissionPrompt: srNeedsPerm, resolvePermissionPrompt: srResolvePerm } = useSpeechRecognition()
+  const { recording: micRecording, start: startMic, stop: stopMic, needsPermissionPrompt: recNeedsPerm, resolvePermissionPrompt: recResolvePerm } = useMediaRecorder()
 
   const settings = rehearsalSettings!
   const script = scripts.find((s) => s.id === settings.scriptId)!
@@ -155,7 +155,7 @@ export function RehearsalMode({ onExit }: Props) {
   const [isDragging, setIsDragging] = useState(false)
   const [clipMenu, setClipMenu] = useState<{ startIdx: number; y: number } | null>(null)
   const [loopEnabled, setLoopEnabled] = useState(false)
-  const [condensedLines, setCondensedLines] = useState(settings.condensedLines ?? 10)
+  const [condensedLines, setCondensedLines] = useState(settings.condensedLines ?? 0)
   const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
@@ -851,10 +851,10 @@ export function RehearsalMode({ onExit }: Props) {
 
   return (
     <>
-    {needsPermissionPrompt && (
+    {(recNeedsPerm || srNeedsPerm) && (
       <MicPermissionModal
-        onAllow={() => resolvePermissionPrompt(true)}
-        onDeny={() => resolvePermissionPrompt(false)}
+        onAllow={() => recNeedsPerm ? recResolvePerm(true) : srResolvePerm(true)}
+        onDeny={() => recNeedsPerm ? recResolvePerm(false) : srResolvePerm(false)}
       />
     )}
     <div className="flex flex-col h-full">

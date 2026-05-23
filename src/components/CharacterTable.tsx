@@ -42,7 +42,6 @@ function groupSceneLines(lines: ScriptLine[]): LineGroup[] {
 export function CharacterTable() {
   const { scripts, selectedScriptId, rehearsalSettings } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
-  // '' = no scene info | 'all' = all scene chips | scene ID = one chip per character
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
   const [charHighlightGroupIdx, setCharHighlightGroupIdx] = useState(0)
@@ -91,13 +90,6 @@ export function CharacterTable() {
   const characters = specificScene ? specificScene.characters : script.characters
   const sorted = characters.slice().sort((a, b) => (lineCounts[b] ?? 0) - (lineCounts[a] ?? 0))
 
-  // Which chips to show per character row
-  const getChips = (char: string) => {
-    if (sceneMode === '') return []
-    if (sceneMode === 'all') return script.scenes.filter((s) => s.characters.includes(char))
-    return specificScene?.characters.includes(char) ? [specificScene] : []
-  }
-
   const panelScene = charHighlight
     ? charHighlight.sceneId === '__all__'
       ? { startLineIndex: 0, endLineIndex: script.lines.length - 1, title: 'All lines' }
@@ -120,7 +112,7 @@ export function CharacterTable() {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Characters</h2>
+        <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Script</h2>
         {hasScenes && (
           <select
             value={sceneMode}
@@ -146,7 +138,6 @@ export function CharacterTable() {
           </thead>
           <tbody>
             {sorted.map((char, i) => {
-              const chips = getChips(char)
               return (
                 <tr
                   key={char}
@@ -155,38 +146,34 @@ export function CharacterTable() {
                   }`}
                 >
                   <td className="px-4 py-2.5">
-                    <span className="font-medium text-[var(--color-stage-text)]">{char}</span>
-                    {chips.length === 0 && (
+                    {sceneMode === 'all' ? (
+                      <div>
+                        <span className="font-medium text-[var(--color-stage-text)]">{char}</span>
+                        <select
+                          value={charHighlight?.char === char ? (charHighlight.sceneId ?? '') : ''}
+                          onChange={(e) => {
+                            if (e.target.value) setCharHighlight({ char, sceneId: e.target.value })
+                            else setCharHighlight(null)
+                          }}
+                          className="mt-1.5 w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
+                        >
+                          <option value="">— scene —</option>
+                          {script.scenes.filter((s) => s.characters.includes(char)).map((s) => (
+                            <option key={s.id} value={s.id}>{s.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
                       <button
-                        onClick={() => toggleChip(char, '__all__')}
-                        className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                          charHighlight?.char === char && charHighlight?.sceneId === '__all__'
-                            ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)]'
-                            : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)]/50'
+                        onClick={() => toggleChip(char, sceneMode === '' ? '__all__' : sceneMode)}
+                        className={`font-medium text-left transition-colors ${
+                          charHighlight?.char === char
+                            ? 'text-[var(--color-stage-accent-light)]'
+                            : 'text-[var(--color-stage-text)] hover:text-[var(--color-stage-accent-light)]'
                         }`}
                       >
-                        View
+                        {char}
                       </button>
-                    )}
-                    {chips.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {chips.map((s) => {
-                          const active = charHighlight?.char === char && charHighlight?.sceneId === s.id
-                          return (
-                            <button
-                              key={s.id}
-                              onClick={() => toggleChip(char, s.id)}
-                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                                active
-                                  ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/20 text-[var(--color-stage-accent-light)]'
-                                  : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent)]/50'
-                              }`}
-                            >
-                              {s.title}
-                            </button>
-                          )
-                        })}
-                      </div>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)] align-top">
