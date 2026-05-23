@@ -119,7 +119,7 @@ export function CharacterTable() {
             onChange={(e) => setSceneMode(e.target.value)}
             className="w-full text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1.5 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
           >
-            <option value="">Select scene</option>
+            <option value="">Full script</option>
             <option value="all">All scenes</option>
             {script.scenes.map((s) => (
               <option key={s.id} value={s.id}>{s.title}</option>
@@ -161,7 +161,6 @@ export function CharacterTable() {
                           className="w-28 shrink-0 text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
                         >
                           <option value="">—</option>
-                          <option value="__all__">All scenes</option>
                           {script.scenes.filter((s) => s.characters.includes(char)).map((s) => (
                             <option key={s.id} value={s.id}>{s.title}</option>
                           ))}
