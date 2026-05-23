@@ -698,10 +698,7 @@ export function RehearsalMode({ onExit }: Props) {
     })
 
   const handleLineSelect = (idx: number) => {
-    if (isPlaying) {
-      handlePause()
-      setCurrentIdx(idx)
-    } else if (phase === 'paused') {
+    if (isPlaying || phase === 'paused') {
       interruptPlayback(() => { stopRef.current = false; setCurrentIdx(idx); runPlayback(idx, blockEnd) })
     } else {
       setCurrentIdx(idx)

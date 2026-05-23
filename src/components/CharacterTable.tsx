@@ -45,15 +45,17 @@ export function CharacterTable() {
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
   const [charHighlightGroupIdx, setCharHighlightGroupIdx] = useState(0)
+  const [visibleHighlightIdx, setVisibleHighlightIdx] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
   const panelScrollRef = useRef<HTMLDivElement>(null)
 
   // Clear panel when scene mode changes
   useEffect(() => { setCharHighlight(null) }, [sceneMode])
 
-  // Reset group index when highlight changes
-  useEffect(() => { setCharHighlightGroupIdx(0) }, [charHighlight])
+  // Reset indices when highlight changes
+  useEffect(() => { setCharHighlightGroupIdx(0); setVisibleHighlightIdx(0) }, [charHighlight])
 
+  // Scroll to target group
   useEffect(() => {
     if (!charHighlight) return
     panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -63,6 +65,23 @@ export function CharacterTable() {
     }, 200)
     return () => clearTimeout(t)
   }, [charHighlight, charHighlightGroupIdx])
+
+  // Track which highlighted group is visible in the scroll window
+  useEffect(() => {
+    const container = panelScrollRef.current
+    if (!container || !charHighlight) return
+    const update = () => {
+      const els = Array.from(container.querySelectorAll<HTMLElement>('[data-char-highlight]'))
+      const cr = container.getBoundingClientRect()
+      for (let i = 0; i < els.length; i++) {
+        const er = els[i].getBoundingClientRect()
+        if (er.bottom > cr.top && er.top < cr.bottom) { setVisibleHighlightIdx(i); return }
+      }
+    }
+    container.addEventListener('scroll', update, { passive: true })
+    const t = setTimeout(update, 250)
+    return () => { container.removeEventListener('scroll', update); clearTimeout(t) }
+  }, [charHighlight])
 
   if (!script) {
     return (
@@ -195,18 +214,18 @@ export function CharacterTable() {
             {highlightedGroupCount > 1 && (
               <div className="flex items-center gap-1 shrink-0">
                 <button
-                  onClick={() => setCharHighlightGroupIdx((i) => Math.max(0, i - 1))}
-                  disabled={charHighlightGroupIdx === 0}
+                  onClick={() => setCharHighlightGroupIdx(Math.max(0, visibleHighlightIdx - 1))}
+                  disabled={visibleHighlightIdx === 0}
                   className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 transition-colors"
                 >
                   ‹
                 </button>
                 <span className="text-xs text-[var(--color-stage-muted)] tabular-nums">
-                  {charHighlightGroupIdx + 1}/{highlightedGroupCount}
+                  {visibleHighlightIdx + 1}/{highlightedGroupCount}
                 </span>
                 <button
-                  onClick={() => setCharHighlightGroupIdx((i) => Math.min(highlightedGroupCount - 1, i + 1))}
-                  disabled={charHighlightGroupIdx === highlightedGroupCount - 1}
+                  onClick={() => setCharHighlightGroupIdx(Math.min(highlightedGroupCount - 1, visibleHighlightIdx + 1))}
+                  disabled={visibleHighlightIdx === highlightedGroupCount - 1}
                   className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-30 transition-colors"
                 >
                   ›
