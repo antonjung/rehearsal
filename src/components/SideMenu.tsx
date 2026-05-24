@@ -3,7 +3,7 @@ import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport 
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
-import { parseImportFile, countRecordingConflicts, importBundle } from '../utils/exportImport'
+import { parseImportFile, countRecordingConflicts, countTrackConflicts, importBundle } from '../utils/exportImport'
 import { Notes } from './Notes'
 import type { Script } from '../types'
 
@@ -18,8 +18,11 @@ export function SideMenu({ open, onClose }: Props) {
   const [importing, setImporting] = useState(false)
   const [importState, setImportState] = useState<{
     bundle: Awaited<ReturnType<typeof parseImportFile>>
-    conflicts: number
+    recConflicts: number
+    trackConflicts: number
   } | null>(null)
+  const [keepRecordings, setKeepRecordings] = useState(true)
+  const [keepTracks, setKeepTracks] = useState(true)
   const [importError, setImportError] = useState<string | null>(null)
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
@@ -33,19 +36,22 @@ export function SideMenu({ open, onClose }: Props) {
     e.target.value = ''
     try {
       const bundle = await parseImportFile(file)
-      const conflicts = await countRecordingConflicts(bundle)
-      setImportState({ bundle, conflicts })
+      const recConflicts = await countRecordingConflicts(bundle)
+      const trackConflicts = countTrackConflicts(bundle, scripts)
+      setKeepRecordings(true)
+      setKeepTracks(true)
+      setImportState({ bundle, recConflicts, trackConflicts })
       setImportError(null)
     } catch {
       setImportError('Invalid file — please choose a CueLine export (.json)')
     }
   }
 
-  async function confirmImport(keepExisting: boolean) {
+  async function confirmImport() {
     if (!importState) return
     setImporting(true)
     try {
-      await importBundle(importState.bundle, keepExisting, addScript, updateScript, scripts)
+      await importBundle(importState.bundle, keepRecordings, keepTracks, addScript, updateScript, scripts)
     } finally {
       setImporting(false)
       setImportState(null)
@@ -289,27 +295,50 @@ export function SideMenu({ open, onClose }: Props) {
             <p className="font-semibold text-[var(--color-stage-text)]">Import</p>
             <p className="text-sm text-[var(--color-stage-muted)]">
               {importState.bundle.scripts.length} script{importState.bundle.scripts.length !== 1 ? 's' : ''} ·{' '}
-              {Object.keys(importState.bundle.recordings).length} recording{Object.keys(importState.bundle.recordings).length !== 1 ? 's' : ''}
+              {Object.keys(importState.bundle.recordings).filter(k => !k.endsWith(':dur')).length} recording{Object.keys(importState.bundle.recordings).filter(k => !k.endsWith(':dur')).length !== 1 ? 's' : ''}
             </p>
-            {importState.conflicts > 0 && (
-              <p className="text-sm text-amber-400">
-                {importState.conflicts} recording{importState.conflicts !== 1 ? 's' : ''} already exist locally.
-              </p>
+
+            {importState.recConflicts > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-sm text-amber-400">
+                  {importState.recConflicts} recording{importState.recConflicts !== 1 ? 's' : ''} already exist locally.
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setKeepRecordings(true)} disabled={importing}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${keepRecordings ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
+                    Keep mine
+                  </button>
+                  <button onClick={() => setKeepRecordings(false)} disabled={importing}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!keepRecordings ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
+                    Use imported
+                  </button>
+                </div>
+              </div>
             )}
-            <p className="text-sm text-[var(--color-stage-text)]">
-              {importState.conflicts > 0 ? 'What should happen to conflicting recordings?' : 'Import these scripts and recordings?'}
-            </p>
+
+            {importState.trackConflicts > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-sm text-amber-400">
+                  {importState.trackConflicts} script{importState.trackConflicts !== 1 ? 's have' : ' has'} existing tracks.
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setKeepTracks(true)} disabled={importing}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${keepTracks ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
+                    Keep mine
+                  </button>
+                  <button onClick={() => setKeepTracks(false)} disabled={importing}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!keepTracks ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
+                    Use imported
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
-              <button onClick={() => confirmImport(true)} disabled={importing}
+              <button onClick={confirmImport} disabled={importing}
                 className="py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                {importState.conflicts > 0 ? 'Keep my recordings' : 'Import'}
+                {importing ? 'Importing…' : 'Import'}
               </button>
-              {importState.conflicts > 0 && (
-                <button onClick={() => confirmImport(false)} disabled={importing}
-                  className="py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-50 transition-colors">
-                  Overwrite with imported
-                </button>
-              )}
               <button onClick={() => setImportState(null)} disabled={importing}
                 className="py-2 rounded-lg text-sm font-medium text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-50 transition-colors">
                 Cancel

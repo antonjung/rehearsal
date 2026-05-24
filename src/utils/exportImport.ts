@@ -67,20 +67,37 @@ export async function parseImportFile(file: File): Promise<ExportBundle> {
 
 export async function countRecordingConflicts(bundle: ExportBundle): Promise<number> {
   const existing = await getAllRecordings()
-  return Object.keys(bundle.recordings).filter(k => existing.has(k)).length
+  return Object.keys(bundle.recordings).filter(k => !k.endsWith(':dur') && existing.has(k)).length
+}
+
+export function countTrackConflicts(bundle: ExportBundle, existingScripts: Script[]): number {
+  const existingMap = new Map(existingScripts.map(s => [s.id, s]))
+  return bundle.scripts.filter(s => {
+    const ex = existingMap.get(s.id)
+    return ex && ex.tracks && ex.tracks.length > 0
+  }).length
 }
 
 export async function importBundle(
   bundle: ExportBundle,
   keepExistingRecordings: boolean,
+  keepExistingTracks: boolean,
   addScript: (s: Script) => void,
   updateScript: (s: Script) => void,
   existingScripts: Script[],
 ): Promise<{ scripts: number; recordings: number }> {
+  const existingMap = new Map(existingScripts.map(s => [s.id, s]))
   const existingIds = new Set(existingScripts.map(s => s.id))
   for (const script of bundle.scripts) {
-    if (existingIds.has(script.id)) updateScript(script)
-    else addScript(script)
+    if (existingIds.has(script.id)) {
+      const ex = existingMap.get(script.id)!
+      const merged = keepExistingTracks && ex.tracks?.length
+        ? { ...script, tracks: ex.tracks }
+        : script
+      updateScript(merged)
+    } else {
+      addScript(script)
+    }
   }
 
   const existingRecs = keepExistingRecordings ? await getAllRecordings() : new Map<string, Blob>()
