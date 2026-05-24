@@ -47,7 +47,7 @@ interface TrackForm {
 }
 
 export function CharacterTable() {
-  const { scripts, selectedScriptId, rehearsalSettings, updateScript } = useAppStore()
+  const { scripts, selectedScriptId, rehearsalSettings, updateScript, scriptFontSize } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ chars: string[]; label: string; sceneId: string } | null>(null)
@@ -432,7 +432,7 @@ export function CharacterTable() {
           </div>
           <div ref={panelScrollRef} className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
             {panelGroups.map((group, idx) => (
-              <SceneLineGroup key={idx} group={group} highlightChars={charHighlight.chars} highlightStyle={highlightStyle} />
+              <SceneLineGroup key={idx} group={group} highlightChars={charHighlight.chars} highlightStyle={highlightStyle} fontSize={scriptFontSize} />
             ))}
           </div>
         </div>
@@ -474,10 +474,12 @@ function SceneLineGroup({
   group,
   highlightChars,
   highlightStyle,
+  fontSize,
 }: {
   group: LineGroup
   highlightChars: string[]
   highlightStyle: { background: string; color: string }
+  fontSize: number
 }) {
   if (group.type === 'heading') {
     return (
@@ -506,10 +508,10 @@ function SceneLineGroup({
       {group.lines.map((line, i) => (
         <span
           key={i}
-          className="block text-sm"
+          className="block"
           style={isHighlighted
-            ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px', display: 'inline-block' }
-            : {}}
+            ? { ...highlightStyle, fontSize: `${fontSize}px`, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px', display: 'inline-block' }
+            : { fontSize: `${fontSize}px` }}
         >
           {line.text}
         </span>
