@@ -75,6 +75,21 @@ export const THEMES: ThemeDef[] = [
       '--color-stage-muted': '#92764a',
     },
   },
+  {
+    id: 'dyslexic',
+    name: 'Dyslexic',
+    swatch: '#1d4ed8',
+    vars: {
+      '--color-stage-bg': '#fdf7e3',
+      '--color-stage-surface': '#fffbf0',
+      '--color-stage-border': '#e3d5b0',
+      '--color-stage-accent': '#1d4ed8',
+      '--color-stage-accent-light': '#2563eb',
+      '--color-stage-gold': '#92400e',
+      '--color-stage-text': '#1c1917',
+      '--color-stage-muted': '#78716c',
+    },
+  },
 ]
 
 export function applyTheme(themeId: string): void {
@@ -83,4 +98,5 @@ export function applyTheme(themeId: string): void {
   for (const [key, value] of Object.entries(theme.vars)) {
     root.style.setProperty(key, value)
   }
+  root.classList.toggle('theme-dyslexic', themeId === 'dyslexic')
 }

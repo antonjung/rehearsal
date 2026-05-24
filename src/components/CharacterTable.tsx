@@ -60,7 +60,7 @@ export function CharacterTable() {
   // Track management
   const [showTrackPanel, setShowTrackPanel] = useState(false)
   const [trackForm, setTrackForm] = useState<TrackForm | null>(null)
-  const tracks = script?.tracks ?? []
+  const tracks = (script?.tracks ?? []).slice().sort((a, b) => a.name.localeCompare(b.name))
 
   // Clear panel when scene mode changes
   useEffect(() => { setCharHighlight(null) }, [sceneMode])

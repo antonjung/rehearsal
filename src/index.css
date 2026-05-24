@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import '@fontsource/opendyslexic/400.css';
+@import '@fontsource/opendyslexic/700.css';
 
 @theme {
   --color-stage-bg: #0f0e17;
@@ -38,6 +40,14 @@ html, body, #root {
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--color-stage-gold);
+}
+
+html.theme-dyslexic,
+html.theme-dyslexic * {
+  font-family: 'OpenDyslexic', sans-serif !important;
+  letter-spacing: 0.05em;
+  word-spacing: 0.15em;
+  line-height: 1.6;
 }
 
 .select-field {

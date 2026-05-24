@@ -106,7 +106,7 @@ export function RehearsalMode() {
     myCharacter,
   }), [rehearsalSettings, selectedScriptId, sceneId, myCharacter])
 
-  const tracks = script?.tracks ?? []
+  const tracks = (script?.tracks ?? []).slice().sort((a, b) => a.name.localeCompare(b.name))
 
   // Expand track selection to its member characters; single character otherwise
   const myCharacters = useMemo(() => {
