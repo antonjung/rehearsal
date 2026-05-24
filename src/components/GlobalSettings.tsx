@@ -116,7 +116,14 @@ export function GlobalSettings({ onClose }: Props) {
                   <input
                     type="radio" name="lineMode" value={m.value}
                     checked={prefs.myLineMode === m.value}
-                    onChange={() => update('myLineMode', m.value)}
+                    onChange={() => {
+                      const cueOnModes: MyLineMode[] = ['read', 'gap-after', 'line-silence-line']
+                      saveRehearsalSettings({
+                        ...prefs,
+                        myLineMode: m.value,
+                        ...(cueOnModes.includes(m.value) && { clipStartPingEnabled: true }),
+                      })
+                    }}
                     className="mt-0.5"
                   />
                   <div>
