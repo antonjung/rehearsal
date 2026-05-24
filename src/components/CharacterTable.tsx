@@ -50,7 +50,7 @@ export function CharacterTable() {
   const { scripts, selectedScriptId, rehearsalSettings, updateScript } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
   const [sceneMode, setSceneMode] = useState<string>('')
-  const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
+  const [charHighlight, setCharHighlight] = useState<{ chars: string[]; label: string; sceneId: string } | null>(null)
   const [charHighlightGroupIdx, setCharHighlightGroupIdx] = useState(0)
   const [firstVisibleIdx, setFirstVisibleIdx] = useState(0)
   const [lastVisibleIdx, setLastVisibleIdx] = useState(0)
@@ -136,14 +136,14 @@ export function CharacterTable() {
     ? groupSceneLines(script.lines.slice(panelScene.startLineIndex, panelScene.endLineIndex + 1))
     : []
   const highlightedGroupCount = charHighlight
-    ? panelGroups.filter((g) => g.character === charHighlight.char).length
+    ? panelGroups.filter((g) => g.character != null && charHighlight.chars.includes(g.character)).length
     : 0
 
   const highlightStyle = HIGHLIGHTER_COLORS[rehearsalSettings?.highlighterColor ?? 'yellow']
 
-  const toggleChip = (char: string, sceneId: string) =>
+  const toggleChip = (chars: string[], label: string, sceneId: string) =>
     setCharHighlight((prev) =>
-      prev?.char === char && prev?.sceneId === sceneId ? null : { char, sceneId },
+      prev?.label === label && prev?.sceneId === sceneId ? null : { chars, label, sceneId },
     )
 
   // Track management handlers
@@ -307,12 +307,12 @@ export function CharacterTable() {
           </thead>
           <tbody>
             {sorted.map((char, i) => {
-              const isActive = charHighlight?.char === char
+              const isActive = charHighlight?.label === char
               const clickable = sceneMode !== 'all'
               return (
                 <tr
                   key={char}
-                  onClick={clickable ? () => toggleChip(char, sceneMode === '' ? '__all__' : sceneMode) : undefined}
+                  onClick={clickable ? () => toggleChip([char], char, sceneMode === '' ? '__all__' : sceneMode) : undefined}
                   className={`border-t border-[var(--color-stage-border)] transition-colors ${
                     i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
                   } ${clickable ? 'cursor-pointer hover:bg-[var(--color-stage-accent)]/10' : ''}`}
@@ -322,9 +322,9 @@ export function CharacterTable() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-[var(--color-stage-text)] shrink-0">{char}</span>
                         <select
-                          value={charHighlight?.char === char ? (charHighlight.sceneId ?? '') : ''}
+                          value={charHighlight?.label === char ? (charHighlight.sceneId ?? '') : ''}
                           onChange={(e) => {
-                            if (e.target.value) setCharHighlight({ char, sceneId: e.target.value })
+                            if (e.target.value) setCharHighlight({ chars: [char], label: char, sceneId: e.target.value })
                             else setCharHighlight(null)
                           }}
                           className="w-28 shrink-0 text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
@@ -352,12 +352,20 @@ export function CharacterTable() {
             {/* Track rows */}
             {tracks.map(t => {
               const trackLineCount = t.characters.reduce((sum, c) => sum + (lineCounts[c] ?? 0), 0)
+              const isTrackActive = charHighlight?.label === t.name
+              const trackClickable = sceneMode !== 'all' && t.characters.length > 0
               return (
-                <tr key={t.id} className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50">
+                <tr
+                  key={t.id}
+                  onClick={trackClickable ? () => toggleChip(t.characters, t.name, sceneMode === '' ? '__all__' : sceneMode) : undefined}
+                  className={`border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50 transition-colors ${
+                    trackClickable ? 'cursor-pointer hover:bg-[var(--color-stage-accent)]/10' : ''
+                  }`}
+                >
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <IconTrack className="text-xs text-[var(--color-stage-accent-light)] shrink-0" />
-                      <span className="font-medium text-[var(--color-stage-accent-light)]">{t.name}</span>
+                      <IconTrack className={`text-xs shrink-0 ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-accent-light)]/60'}`} />
+                      <span className={`font-medium transition-colors ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'}`}>{t.name}</span>
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">{trackLineCount}</td>
@@ -372,7 +380,7 @@ export function CharacterTable() {
         <div ref={panelRef} className="rounded-xl border border-[var(--color-stage-accent)]/40 bg-[var(--color-stage-surface)] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-stage-border)] sticky top-0 bg-[var(--color-stage-surface)]">
             <div className="text-sm min-w-0 mr-2">
-              <span className="font-semibold text-[var(--color-stage-accent-light)]">{charHighlight.char}</span>
+              <span className="font-semibold text-[var(--color-stage-accent-light)]">{charHighlight.label}</span>
               <span className="text-[var(--color-stage-muted)]"> in </span>
               <span className="text-[var(--color-stage-gold)]">{panelScene.title}</span>
             </div>
@@ -406,7 +414,7 @@ export function CharacterTable() {
           </div>
           <div ref={panelScrollRef} className="px-4 py-3 space-y-0.5 max-h-[28rem] overflow-y-auto">
             {panelGroups.map((group, idx) => (
-              <SceneLineGroup key={idx} group={group} highlightChar={charHighlight.char} highlightStyle={highlightStyle} />
+              <SceneLineGroup key={idx} group={group} highlightChars={charHighlight.chars} highlightStyle={highlightStyle} />
             ))}
           </div>
         </div>
@@ -417,11 +425,11 @@ export function CharacterTable() {
 
 function SceneLineGroup({
   group,
-  highlightChar,
+  highlightChars,
   highlightStyle,
 }: {
   group: LineGroup
-  highlightChar: string
+  highlightChars: string[]
   highlightStyle: { background: string; color: string }
 }) {
   if (group.type === 'heading') {
@@ -439,7 +447,7 @@ function SceneLineGroup({
     )
   }
 
-  const isHighlighted = group.character === highlightChar
+  const isHighlighted = group.character != null && highlightChars.includes(group.character)
 
   return (
     <div className="rounded px-2 py-1.5" data-char-highlight={isHighlighted ? '' : undefined}>
