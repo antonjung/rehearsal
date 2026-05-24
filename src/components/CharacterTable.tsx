@@ -352,6 +352,7 @@ export function CharacterTable() {
             {/* Track rows */}
             {tracks.map(t => {
               const trackLineCount = t.characters.reduce((sum, c) => sum + (lineCounts[c] ?? 0), 0)
+              if (trackLineCount === 0) return null
               const isTrackActive = charHighlight?.label === t.name
               const trackClickable = sceneMode !== 'all' && t.characters.length > 0
               return (
