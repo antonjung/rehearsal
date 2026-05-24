@@ -60,11 +60,10 @@ export function CharacterTable() {
   // Track management
   const [showTrackPanel, setShowTrackPanel] = useState(false)
   const [trackForm, setTrackForm] = useState<TrackForm | null>(null)
-  const [openScenePicker, setOpenScenePicker] = useState<string | null>(null)
   const tracks = (script?.tracks ?? []).slice().sort((a, b) => a.name.localeCompare(b.name))
 
   // Clear panel when scene mode changes
-  useEffect(() => { setCharHighlight(null); setOpenScenePicker(null) }, [sceneMode])
+  useEffect(() => { setCharHighlight(null) }, [sceneMode])
 
   // Reset indices when highlight changes
   useEffect(() => { setCharHighlightGroupIdx(0); setFirstVisibleIdx(0); setLastVisibleIdx(0) }, [charHighlight])
@@ -312,36 +311,19 @@ export function CharacterTable() {
               const stripe = i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
               if (sceneMode === 'all') {
                 const charScenes = script.scenes.filter((s) => s.characters.includes(char))
-                const isOpen = openScenePicker === char
+                const selectedSceneId = charHighlight?.label === char ? charHighlight.sceneId : undefined
                 return (
                   <tr key={char} className={`border-t border-[var(--color-stage-border)] ${stripe}`}>
-                    <td colSpan={2} className="px-4 py-0">
-                      <div className="flex items-center justify-between py-2.5">
+                    <td colSpan={2} className="px-4 py-2.5">
+                      <div className="flex items-center justify-between">
                         <span className={`font-medium transition-colors ${isActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-text)]'}`}>{char}</span>
-                        <button
-                          onClick={() => setOpenScenePicker((p) => p === char ? null : char)}
-                          className={`p-1 rounded transition-colors ${isOpen ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
-                        >
-                          <IconSearch style={{ fontSize: '0.875rem' }} />
-                        </button>
+                        <ScenePickerButton
+                          scenes={charScenes}
+                          selectedSceneId={selectedSceneId}
+                          active={isActive}
+                          onSelect={(id) => id ? setCharHighlight({ chars: [char], label: char, sceneId: id }) : setCharHighlight(null)}
+                        />
                       </div>
-                      {isOpen && (
-                        <div className="pb-2.5 flex flex-wrap gap-1.5">
-                          {charScenes.map((s) => (
-                            <button
-                              key={s.id}
-                              onClick={() => { setCharHighlight({ chars: [char], label: char, sceneId: s.id }); setOpenScenePicker(null) }}
-                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                                charHighlight?.label === char && charHighlight.sceneId === s.id
-                                  ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
-                                  : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
-                              }`}
-                            >
-                              {s.title}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </td>
                   </tr>
                 )
@@ -372,39 +354,22 @@ export function CharacterTable() {
               const nameCls = `font-medium transition-colors ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'}`
               if (sceneMode === 'all') {
                 const trackScenes = script.scenes.filter((s) => t.characters.some((c) => s.characters.includes(c)))
-                const isOpen = openScenePicker === t.name
+                const selectedSceneId = charHighlight?.label === t.name ? charHighlight.sceneId : undefined
                 return (
                   <tr key={t.id} className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50">
-                    <td colSpan={2} className="px-4 py-0">
-                      <div className="flex items-center justify-between py-2.5">
+                    <td colSpan={2} className="px-4 py-2.5">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <IconTrack className={iconCls} />
                           <span className={nameCls}>{t.name}</span>
                         </div>
-                        <button
-                          onClick={() => setOpenScenePicker((p) => p === t.name ? null : t.name)}
-                          className={`p-1 rounded transition-colors ${isOpen ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
-                        >
-                          <IconSearch style={{ fontSize: '0.875rem' }} />
-                        </button>
+                        <ScenePickerButton
+                          scenes={trackScenes}
+                          selectedSceneId={selectedSceneId}
+                          active={isTrackActive}
+                          onSelect={(id) => id ? setCharHighlight({ chars: t.characters, label: t.name, sceneId: id }) : setCharHighlight(null)}
+                        />
                       </div>
-                      {isOpen && (
-                        <div className="pb-2.5 flex flex-wrap gap-1.5">
-                          {trackScenes.map((s) => (
-                            <button
-                              key={s.id}
-                              onClick={() => { setCharHighlight({ chars: t.characters, label: t.name, sceneId: s.id }); setOpenScenePicker(null) }}
-                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                                charHighlight?.label === t.name && charHighlight.sceneId === s.id
-                                  ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
-                                  : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
-                              }`}
-                            >
-                              {s.title}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </td>
                   </tr>
                 )
@@ -472,6 +437,35 @@ export function CharacterTable() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ScenePickerButton({
+  scenes,
+  selectedSceneId,
+  active,
+  onSelect,
+}: {
+  scenes: { id: string; title: string }[]
+  selectedSceneId: string | undefined
+  active: boolean
+  onSelect: (sceneId: string | null) => void
+}) {
+  return (
+    <div className="relative w-8 h-8 shrink-0">
+      <div className={`w-full h-full flex items-center justify-center pointer-events-none ${active ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'}`}>
+        <IconSearch style={{ fontSize: '0.875rem' }} />
+      </div>
+      <select
+        value={selectedSceneId ?? ''}
+        onChange={(e) => onSelect(e.target.value || null)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        style={{ fontSize: '16px' }}
+      >
+        <option value="">— scene —</option>
+        {scenes.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+      </select>
     </div>
   )
 }
