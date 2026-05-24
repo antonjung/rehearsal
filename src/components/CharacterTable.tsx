@@ -359,7 +359,6 @@ export function CharacterTable() {
                     <div className="flex items-center gap-1.5 min-w-0">
                       <IconTrack className="text-xs text-[var(--color-stage-accent-light)] shrink-0" />
                       <span className="font-medium text-[var(--color-stage-accent-light)]">{t.name}</span>
-                      <span className="text-[10px] text-[var(--color-stage-muted)] truncate">({t.characters.join(', ')})</span>
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">{trackLineCount}</td>
