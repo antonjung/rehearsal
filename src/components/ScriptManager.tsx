@@ -9,14 +9,20 @@ export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
-  const [exportProgress, setExportProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
 
   async function handleExport(script: Script) {
     setExportingId(script.id)
-    setExportProgress({ done: 0, total: 0 })
-    const bundle = await buildExportBundle([script], (done, total) => setExportProgress({ done, total }))
-    downloadBundle(bundle, script.name)
-    setExportingId(null)
+    setExportProgress(null)
+    try {
+      const bundle = await buildExportBundle([script], (done, total) => setExportProgress({ done, total }))
+      downloadBundle(bundle, script.name)
+    } catch (err) {
+      console.error('Export failed', err)
+    } finally {
+      setExportingId(null)
+      setExportProgress(null)
+    }
   }
 
   return (
@@ -34,7 +40,7 @@ export function ScriptManager() {
               script={script}
               selected={script.id === selectedScriptId}
               exporting={exportingId === script.id}
-              exportProgress={exportingId === script.id ? exportProgress : null}
+              exportProgress={exportingId === script.id ? exportProgress : undefined}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
               onEdit={() => setEditingScript(script)}
@@ -64,7 +70,7 @@ function ScriptCard({
   script: Script
   selected: boolean
   exporting: boolean
-  exportProgress: { done: number; total: number } | null
+  exportProgress?: { done: number; total: number } | null
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
@@ -72,9 +78,9 @@ function ScriptCard({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
-  const progressPct = exportProgress
-    ? exportProgress.total === 0 ? 100 : Math.round(exportProgress.done / exportProgress.total * 100)
-    : 0
+  const progressPct = exportProgress == null
+    ? null  // indeterminate
+    : exportProgress.total === 0 ? 100 : Math.round(exportProgress.done / exportProgress.total * 100)
 
   if (confirmDelete) {
     return (
@@ -135,10 +141,14 @@ function ScriptCard({
       </div>
       {exporting && (
         <div className="h-1 bg-[var(--color-stage-border)]">
-          <div
-            className="h-full bg-[var(--color-stage-accent)] transition-all duration-300 ease-out"
-            style={{ width: `${progressPct}%` }}
-          />
+          {progressPct == null ? (
+            <div className="h-full bg-[var(--color-stage-accent)] w-1/3 animate-pulse" />
+          ) : (
+            <div
+              className="h-full bg-[var(--color-stage-accent)] transition-all duration-300 ease-out"
+              style={{ width: `${progressPct}%` }}
+            />
+          )}
         </div>
       )}
     </div>

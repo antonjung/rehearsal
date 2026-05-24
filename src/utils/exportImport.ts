@@ -30,7 +30,9 @@ export async function buildExportBundle(
 ): Promise<ExportBundle> {
   const allRecs = await getAllRecordings()
   const scriptIds = new Set(scripts.map(s => s.id))
-  const entries = Array.from(allRecs.entries()).filter(([k]) => scriptIds.has(k.split(':')[0]))
+  const entries = Array.from(allRecs.entries()).filter(
+    ([k, v]) => scriptIds.has(k.split(':')[0]) && !k.endsWith(':dur') && v instanceof Blob,
+  )
   const total = entries.length
   onProgress?.(0, total)
   const recordings: Record<string, string> = {}
