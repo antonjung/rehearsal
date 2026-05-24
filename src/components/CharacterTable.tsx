@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type { ScriptLine, Track } from '../types'
-import { IconTrack } from './Icons'
+import { IconTrack, IconSearch } from './Icons'
 
 const HIGHLIGHTER_COLORS: Record<string, { background: string; color: string }> = {
   yellow: { background: 'rgba(255,255,0,0.65)',  color: '#111' },
@@ -60,10 +60,11 @@ export function CharacterTable() {
   // Track management
   const [showTrackPanel, setShowTrackPanel] = useState(false)
   const [trackForm, setTrackForm] = useState<TrackForm | null>(null)
+  const [openScenePicker, setOpenScenePicker] = useState<string | null>(null)
   const tracks = (script?.tracks ?? []).slice().sort((a, b) => a.name.localeCompare(b.name))
 
   // Clear panel when scene mode changes
-  useEffect(() => { setCharHighlight(null) }, [sceneMode])
+  useEffect(() => { setCharHighlight(null); setOpenScenePicker(null) }, [sceneMode])
 
   // Reset indices when highlight changes
   useEffect(() => { setCharHighlightGroupIdx(0); setFirstVisibleIdx(0); setLastVisibleIdx(0) }, [charHighlight])
@@ -302,48 +303,61 @@ export function CharacterTable() {
           <thead>
             <tr className="bg-[var(--color-stage-surface)] text-[var(--color-stage-muted)] uppercase text-xs tracking-wider">
               <th className="text-left px-4 py-3">Character</th>
-              <th className="text-right px-4 py-3">Lines</th>
+              {sceneMode !== 'all' && <th className="text-right px-4 py-3">Lines</th>}
             </tr>
           </thead>
           <tbody>
             {sorted.map((char, i) => {
               const isActive = charHighlight?.label === char
-              const clickable = sceneMode !== 'all'
+              const stripe = i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
+              if (sceneMode === 'all') {
+                const charScenes = script.scenes.filter((s) => s.characters.includes(char))
+                const isOpen = openScenePicker === char
+                return (
+                  <tr key={char} className={`border-t border-[var(--color-stage-border)] ${stripe}`}>
+                    <td colSpan={2} className="px-4 py-0">
+                      <div className="flex items-center justify-between py-2.5">
+                        <span className={`font-medium transition-colors ${isActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-text)]'}`}>{char}</span>
+                        <button
+                          onClick={() => setOpenScenePicker((p) => p === char ? null : char)}
+                          className={`p-1 rounded transition-colors ${isOpen ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
+                        >
+                          <IconSearch style={{ fontSize: '0.875rem' }} />
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <div className="pb-2.5 flex flex-wrap gap-1.5">
+                          {charScenes.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => { setCharHighlight({ chars: [char], label: char, sceneId: s.id }); setOpenScenePicker(null) }}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                charHighlight?.label === char && charHighlight.sceneId === s.id
+                                  ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
+                                  : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+                              }`}
+                            >
+                              {s.title}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              }
               return (
                 <tr
                   key={char}
-                  onClick={clickable ? () => toggleChip([char], char, sceneMode === '' ? '__all__' : sceneMode) : undefined}
-                  className={`border-t border-[var(--color-stage-border)] transition-colors ${
-                    i % 2 === 0 ? 'bg-[var(--color-stage-bg)]' : 'bg-[var(--color-stage-surface)]'
-                  } ${clickable ? 'cursor-pointer hover:bg-[var(--color-stage-accent)]/10' : ''}`}
+                  onClick={() => toggleChip([char], char, sceneMode === '' ? '__all__' : sceneMode)}
+                  className={`border-t border-[var(--color-stage-border)] cursor-pointer hover:bg-[var(--color-stage-accent)]/10 transition-colors ${stripe}`}
                 >
                   <td className="px-4 py-2.5">
-                    {sceneMode === 'all' ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-[var(--color-stage-text)] shrink-0">{char}</span>
-                        <select
-                          value={charHighlight?.label === char ? (charHighlight.sceneId ?? '') : ''}
-                          onChange={(e) => {
-                            if (e.target.value) setCharHighlight({ chars: [char], label: char, sceneId: e.target.value })
-                            else setCharHighlight(null)
-                          }}
-                          className="w-28 shrink-0 text-xs bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] rounded-md px-2 py-1 text-[var(--color-stage-text)] focus:outline-none focus:border-[var(--color-stage-accent)]"
-                        >
-                          <option value="">—</option>
-                          {script.scenes.filter((s) => s.characters.includes(char)).map((s) => (
-                            <option key={s.id} value={s.id}>{s.title}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <span className={`font-medium transition-colors ${
-                        isActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-text)]'
-                      }`}>
-                        {char}
-                      </span>
-                    )}
+                    <span className={`font-medium transition-colors ${isActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-text)]'}`}>
+                      {char}
+                    </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)] align-top">
+                  <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">
                     {lineCounts[char] ?? 0}
                   </td>
                 </tr>
@@ -354,19 +368,57 @@ export function CharacterTable() {
               const trackLineCount = t.characters.reduce((sum, c) => sum + (lineCounts[c] ?? 0), 0)
               if (trackLineCount === 0) return null
               const isTrackActive = charHighlight?.label === t.name
-              const trackClickable = sceneMode !== 'all' && t.characters.length > 0
+              const iconCls = `text-xs shrink-0 ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-accent-light)]/60'}`
+              const nameCls = `font-medium transition-colors ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'}`
+              if (sceneMode === 'all') {
+                const trackScenes = script.scenes.filter((s) => t.characters.some((c) => s.characters.includes(c)))
+                const isOpen = openScenePicker === t.name
+                return (
+                  <tr key={t.id} className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50">
+                    <td colSpan={2} className="px-4 py-0">
+                      <div className="flex items-center justify-between py-2.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <IconTrack className={iconCls} />
+                          <span className={nameCls}>{t.name}</span>
+                        </div>
+                        <button
+                          onClick={() => setOpenScenePicker((p) => p === t.name ? null : t.name)}
+                          className={`p-1 rounded transition-colors ${isOpen ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}
+                        >
+                          <IconSearch style={{ fontSize: '0.875rem' }} />
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <div className="pb-2.5 flex flex-wrap gap-1.5">
+                          {trackScenes.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => { setCharHighlight({ chars: t.characters, label: t.name, sceneId: s.id }); setOpenScenePicker(null) }}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                charHighlight?.label === t.name && charHighlight.sceneId === s.id
+                                  ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
+                                  : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+                              }`}
+                            >
+                              {s.title}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              }
               return (
                 <tr
                   key={t.id}
-                  onClick={trackClickable ? () => toggleChip(t.characters, t.name, sceneMode === '' ? '__all__' : sceneMode) : undefined}
-                  className={`border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50 transition-colors ${
-                    trackClickable ? 'cursor-pointer hover:bg-[var(--color-stage-accent)]/10' : ''
-                  }`}
+                  onClick={t.characters.length > 0 ? () => toggleChip(t.characters, t.name, sceneMode === '' ? '__all__' : sceneMode) : undefined}
+                  className={`border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50 transition-colors ${t.characters.length > 0 ? 'cursor-pointer hover:bg-[var(--color-stage-accent)]/10' : ''}`}
                 >
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <IconTrack className={`text-xs shrink-0 ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-accent-light)]/60'}`} />
-                      <span className={`font-medium transition-colors ${isTrackActive ? 'text-[var(--color-stage-accent-light)]' : 'text-[var(--color-stage-muted)]'}`}>{t.name}</span>
+                      <IconTrack className={iconCls} />
+                      <span className={nameCls}>{t.name}</span>
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">{trackLineCount}</td>
