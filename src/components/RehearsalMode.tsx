@@ -657,8 +657,8 @@ export function RehearsalMode() {
               const rec = recMapRef.current.get(lineIdx)
               if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
             }
-          } else {
-            // gap-after: read the line, then wait for user to repeat
+          } else if (myLineMode === 'gap-after') {
+            // read the line, then wait for user to repeat
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
             const rec = recMapRef.current.get(lineIdx)
@@ -666,6 +666,35 @@ export function RehearsalMode() {
             if (!stopRef.current) {
               setPhase('my-line-silence')
               await waitWithProgress()
+            }
+          } else if (myLineMode === 'silence-line-silence') {
+            // wait → read → wait again
+            setPhase('my-line-silence')
+            await waitWithProgress()
+            if (!stopRef.current) {
+              setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
+              setPhase('my-line-reading')
+              const rec = recMapRef.current.get(lineIdx)
+              if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+            }
+            if (!stopRef.current) {
+              setPhase('my-line-silence')
+              await waitWithProgress()
+            }
+          } else if (myLineMode === 'line-silence-line') {
+            // read → wait → read again
+            setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
+            setPhase('my-line-reading')
+            const rec = recMapRef.current.get(lineIdx)
+            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+            if (!stopRef.current) {
+              setPhase('my-line-silence')
+              await waitWithProgress()
+            }
+            if (!stopRef.current) {
+              setPhase('my-line-reading')
+              const rec2 = recMapRef.current.get(lineIdx)
+              if (!rec2 || !(await playRecording(rec2))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
             }
           }
         }

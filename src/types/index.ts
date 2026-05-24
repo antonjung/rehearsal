@@ -27,7 +27,7 @@ export interface Script {
   createdAt: number
 }
 
-export type MyLineMode = 'silence' | 'read' | 'gap-before' | 'gap-after'
+export type MyLineMode = 'silence' | 'read' | 'gap-before' | 'gap-after' | 'silence-line-silence' | 'line-silence-line'
 
 export interface VoiceCommandWords {
   play:   string[]

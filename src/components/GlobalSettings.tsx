@@ -20,10 +20,12 @@ interface Props {
 }
 
 const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
-  { value: 'silence', label: 'A — Silence', desc: 'Practice from memory' },
-  { value: 'read', label: 'B — Read', desc: 'Line is read aloud for you' },
-  { value: 'gap-before', label: 'C — Gap then read', desc: 'Wait, then reads your line' },
-  { value: 'gap-after', label: 'D — Read then gap', desc: 'Reads line, then you repeat' },
+  { value: 'silence',             label: 'Silence',              desc: 'Say your line from memory' },
+  { value: 'read',                label: 'Read',                 desc: 'Line is read aloud to you' },
+  { value: 'gap-before',          label: 'Gap then read',        desc: 'Wait, then line is read' },
+  { value: 'gap-after',           label: 'Read then gap',        desc: 'Line read, then you repeat' },
+  { value: 'silence-line-silence', label: 'Gap · read · gap',    desc: 'Wait, line read, then repeat' },
+  { value: 'line-silence-line',   label: 'Read · gap · read',    desc: 'Line read, you practice, read again' },
 ]
 
 export function GlobalSettings({ onClose }: Props) {
