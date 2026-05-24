@@ -24,23 +24,34 @@ function base64ToBlob(b64: string): Blob {
   return new Blob([arr], { type: 'audio/webm' })
 }
 
-export async function buildExportBundle(scripts: Script[]): Promise<ExportBundle> {
+export async function buildExportBundle(
+  scripts: Script[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<ExportBundle> {
   const allRecs = await getAllRecordings()
   const scriptIds = new Set(scripts.map(s => s.id))
+  const entries = Array.from(allRecs.entries()).filter(([k]) => scriptIds.has(k.split(':')[0]))
+  const total = entries.length
+  onProgress?.(0, total)
   const recordings: Record<string, string> = {}
-  for (const [k, blob] of allRecs) {
-    const [sid] = k.split(':')
-    if (scriptIds.has(sid)) recordings[k] = await blobToBase64(blob)
+  for (let i = 0; i < entries.length; i++) {
+    const [k, blob] = entries[i]
+    recordings[k] = await blobToBase64(blob)
+    onProgress?.(i + 1, total)
   }
   return { version: 1, exportedAt: Date.now(), scripts, recordings }
 }
 
-export function downloadBundle(bundle: ExportBundle): void {
+export function downloadBundle(bundle: ExportBundle, scriptName?: string): void {
   const blob = new Blob([JSON.stringify(bundle)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `cueline-${new Date().toISOString().split('T')[0]}.json`
+  const date = new Date().toISOString().split('T')[0]
+  const safeName = scriptName
+    ? scriptName.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()
+    : 'cueline'
+  a.download = `${safeName}-${date}.json`
   a.click()
   URL.revokeObjectURL(url)
 }

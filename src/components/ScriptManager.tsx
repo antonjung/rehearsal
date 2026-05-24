@@ -8,10 +8,15 @@ import { buildExportBundle, downloadBundle } from '../utils/exportImport'
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
+  const [exportingId, setExportingId] = useState<string | null>(null)
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
 
   async function handleExport(script: Script) {
-    const bundle = await buildExportBundle([script])
-    downloadBundle(bundle)
+    setExportingId(script.id)
+    setExportProgress({ done: 0, total: 0 })
+    const bundle = await buildExportBundle([script], (done, total) => setExportProgress({ done, total }))
+    downloadBundle(bundle, script.name)
+    setExportingId(null)
   }
 
   return (
@@ -28,6 +33,8 @@ export function ScriptManager() {
               key={script.id}
               script={script}
               selected={script.id === selectedScriptId}
+              exporting={exportingId === script.id}
+              exportProgress={exportingId === script.id ? exportProgress : null}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
               onEdit={() => setEditingScript(script)}
@@ -47,6 +54,8 @@ export function ScriptManager() {
 function ScriptCard({
   script,
   selected,
+  exporting,
+  exportProgress,
   onSelect,
   onRemove,
   onEdit,
@@ -54,6 +63,8 @@ function ScriptCard({
 }: {
   script: Script
   selected: boolean
+  exporting: boolean
+  exportProgress: { done: number; total: number } | null
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
@@ -61,6 +72,9 @@ function ScriptCard({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
+  const progressPct = exportProgress
+    ? exportProgress.total === 0 ? 100 : Math.round(exportProgress.done / exportProgress.total * 100)
+    : 0
 
   if (confirmDelete) {
     return (
@@ -78,13 +92,14 @@ function ScriptCard({
 
   return (
     <div
-      className={`rounded-lg border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${
+      className={`rounded-lg border overflow-hidden cursor-pointer transition-colors ${
         selected
           ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
           : 'border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] hover:border-[var(--color-stage-accent-light)]'
       }`}
       onClick={onSelect}
     >
+      <div className="px-4 py-3 flex items-center justify-between">
       <div>
         <p className="font-semibold text-[var(--color-stage-text)]">{script.name}</p>
         <p className="text-xs text-[var(--color-stage-muted)] mt-0.5">
@@ -93,10 +108,11 @@ function ScriptCard({
       </div>
       <div className="flex items-center gap-1">
         <button
-          onClick={(e) => { e.stopPropagation(); onExport() }}
-          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
+          onClick={(e) => { e.stopPropagation(); if (!exporting) onExport() }}
+          className={`transition-colors p-1 rounded ${exporting ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}
           aria-label="Export script"
           title="Export script"
+          disabled={exporting}
         >
           <IconExport />
         </button>
@@ -116,6 +132,15 @@ function ScriptCard({
           <IconDismiss />
         </button>
       </div>
+      </div>
+      {exporting && (
+        <div className="h-1 bg-[var(--color-stage-border)]">
+          <div
+            className="h-full bg-[var(--color-stage-accent)] transition-all duration-300 ease-out"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      )}
     </div>
   )
 }
