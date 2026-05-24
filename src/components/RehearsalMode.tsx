@@ -106,6 +106,18 @@ export function RehearsalMode() {
     myCharacter,
   }), [rehearsalSettings, selectedScriptId, sceneId, myCharacter])
 
+  const tracks = script?.tracks ?? []
+
+  // Expand track selection to its member characters; single character otherwise
+  const myCharacters = useMemo(() => {
+    if (!settings.myCharacter) return []
+    const track = tracks.find(t => t.name === settings.myCharacter)
+    return track ? track.characters : [settings.myCharacter]
+  }, [tracks, settings.myCharacter])
+
+  const myCharactersRef = useRef<string[]>([])
+  myCharactersRef.current = myCharacters
+
   const activeScene = sceneId && script
     ? script.scenes.find((s) => s.id === sceneId) ?? null
     : null
@@ -148,18 +160,18 @@ export function RehearsalMode() {
   // Default block start = group before user's first line
   const defaultBlockStart = useMemo(() => {
     const firstUserIdx = sceneGroups.findIndex(
-      (g) => g.type === 'dialogue' && g.character === settings.myCharacter,
+      (g) => g.type === 'dialogue' && g.character != null && myCharacters.includes(g.character),
     )
     if (firstUserIdx > 0) return sceneGroups[firstUserIdx - 1].startIdx
     if (firstUserIdx === 0) return sceneGroups[0].startIdx
     return firstLine
-  }, [sceneGroups, settings.myCharacter, firstLine])
+  }, [sceneGroups, myCharacters, firstLine])
 
   // Default block end = group after user's last line
   const defaultBlockEnd = useMemo(() => {
     let lastUserIdx = -1
     for (let i = 0; i < sceneGroups.length; i++) {
-      if (sceneGroups[i].type === 'dialogue' && sceneGroups[i].character === settings.myCharacter) {
+      if (sceneGroups[i].type === 'dialogue' && sceneGroups[i].character != null && myCharacters.includes(sceneGroups[i].character!)) {
         lastUserIdx = i
       }
     }
@@ -168,7 +180,7 @@ export function RehearsalMode() {
     }
     if (lastUserIdx >= 0) return sceneGroups[lastUserIdx].startIdx
     return sceneEnd
-  }, [sceneGroups, settings.myCharacter, sceneEnd])
+  }, [sceneGroups, myCharacters, sceneEnd])
 
   // --- State ---
   const [currentIdx, setCurrentIdx] = useState(defaultBlockStart)
@@ -505,7 +517,7 @@ export function RehearsalMode() {
           continue
         }
 
-        const isMyLine = line.character === settings.myCharacter
+        const isMyLine = line.character != null && myCharactersRef.current.includes(line.character)
         const gap = estimateDuration(groupText, rate) * (settingsRef.current.voiceCalibration ?? 1)
 
         if (!isMyLine) {
@@ -707,7 +719,7 @@ export function RehearsalMode() {
             const myGi = groups.findIndex((g) => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
             let nextUserGi = -1
             for (let gi = myGi + 1; gi < groups.length; gi++) {
-              if (groups[gi].type === 'dialogue' && groups[gi].character === settingsRef.current.myCharacter) {
+              if (groups[gi].type === 'dialogue' && groups[gi].character != null && myCharactersRef.current.includes(groups[gi].character!)) {
                 nextUserGi = gi
                 break
               }
@@ -1015,7 +1027,9 @@ export function RehearsalMode() {
             let newScene = sceneId
             if (sceneId && c) {
               const sc = script.scenes.find((s) => s.id === sceneId)
-              if (sc && !sc.characters.includes(c)) { newScene = null; setSceneId(null) }
+              const selTrack = tracks.find(t => t.name === c)
+              const charsForC = selTrack ? selTrack.characters : [c]
+              if (sc && !charsForC.some(ch => sc.characters.includes(ch))) { newScene = null; setSceneId(null) }
             }
             interruptPlayback()
             if (selectedScriptId) saveRehearsalSettings({ ...(rehearsalSettings ?? DEFAULT_SETTINGS), scriptId: selectedScriptId, myCharacter: c, sceneId: newScene })
@@ -1024,6 +1038,11 @@ export function RehearsalMode() {
         >
           <option value="">Select character…</option>
           {script.characters.map((c) => <option key={c} value={c}>{c}</option>)}
+          {tracks.length > 0 && (
+            <optgroup label="Tracks">
+              {tracks.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </optgroup>
+          )}
         </select>
         {script.scenes.length > 0 && (
           <select
@@ -1034,7 +1053,9 @@ export function RehearsalMode() {
               let newChar = myCharacter
               if (id && myCharacter) {
                 const sc = script.scenes.find((s) => s.id === id)
-                if (sc && !sc.characters.includes(myCharacter)) { newChar = ''; setMyCharacter('') }
+                const selTrack = tracks.find(t => t.name === myCharacter)
+                const charsForMyChar = selTrack ? selTrack.characters : [myCharacter]
+                if (sc && !charsForMyChar.some(c => sc.characters.includes(c))) { newChar = ''; setMyCharacter('') }
               }
               interruptPlayback()
               if (selectedScriptId) saveRehearsalSettings({ ...(rehearsalSettings ?? DEFAULT_SETTINGS), scriptId: selectedScriptId, myCharacter: newChar, sceneId: id })
@@ -1042,8 +1063,8 @@ export function RehearsalMode() {
             className="flex-1 min-w-0 select-field text-sm py-1"
           >
             <option value="">Whole script</option>
-            {(myCharacter
-              ? script.scenes.filter((s) => s.characters.includes(myCharacter))
+            {(myCharacters.length > 0
+              ? script.scenes.filter((s) => myCharacters.some(c => s.characters.includes(c)))
               : script.scenes
             ).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
           </select>
@@ -1105,7 +1126,7 @@ export function RehearsalMode() {
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5" style={{ '--script-font-size': `${scriptFontSize}px` } as React.CSSProperties}>
         {sceneGroups.map((group, gi) => {
           const isCurrentGroup = group.startIdx <= currentIdx && currentIdx <= group.endIdx
-          const isMyLine = group.character === settings.myCharacter
+          const isMyLine = group.character != null && myCharacters.includes(group.character)
           const lineVisible = !isMyLine || showAllMyLines || revealedLines[group.startIdx] === true
 
           const isInClip = group.startIdx >= blockStart && group.startIdx <= blockEnd

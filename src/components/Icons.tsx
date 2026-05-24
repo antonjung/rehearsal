@@ -28,4 +28,5 @@ export {
   ArrowExportRegular as IconExport,
   ArrowUploadRegular as IconImport,
   TextCollapseRegular as IconTextCollapse,
+  StackRegular as IconTrack,
 } from '@fluentui/react-icons'

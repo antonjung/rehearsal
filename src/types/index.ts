@@ -18,6 +18,12 @@ export interface Scene {
   characters: string[]
 }
 
+export interface Track {
+  id: string
+  name: string
+  characters: string[]
+}
+
 export interface Script {
   id: string
   name: string
@@ -25,6 +31,7 @@ export interface Script {
   characters: string[]
   scenes: Scene[]
   createdAt: number
+  tracks?: Track[]
 }
 
 export type MyLineMode = 'silence' | 'read' | 'gap-before' | 'gap-after' | 'silence-line-silence' | 'line-silence-line'

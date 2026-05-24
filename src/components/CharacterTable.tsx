@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import type { ScriptLine } from '../types'
+import type { ScriptLine, Track } from '../types'
+import { IconTrack } from './Icons'
 
 const HIGHLIGHTER_COLORS: Record<string, { background: string; color: string }> = {
   yellow: { background: 'rgba(255,255,0,0.65)',  color: '#111' },
@@ -39,8 +40,14 @@ function groupSceneLines(lines: ScriptLine[]): LineGroup[] {
   return groups
 }
 
+interface TrackForm {
+  id: string | null  // null = new
+  name: string
+  characters: string[]
+}
+
 export function CharacterTable() {
-  const { scripts, selectedScriptId, rehearsalSettings } = useAppStore()
+  const { scripts, selectedScriptId, rehearsalSettings, updateScript } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ char: string; sceneId: string } | null>(null)
@@ -49,6 +56,11 @@ export function CharacterTable() {
   const [lastVisibleIdx, setLastVisibleIdx] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
   const panelScrollRef = useRef<HTMLDivElement>(null)
+
+  // Track management
+  const [showTrackPanel, setShowTrackPanel] = useState(false)
+  const [trackForm, setTrackForm] = useState<TrackForm | null>(null)
+  const tracks = script?.tracks ?? []
 
   // Clear panel when scene mode changes
   useEffect(() => { setCharHighlight(null) }, [sceneMode])
@@ -134,10 +146,53 @@ export function CharacterTable() {
       prev?.char === char && prev?.sceneId === sceneId ? null : { char, sceneId },
     )
 
+  // Track management handlers
+  const isTrackNameValid = (name: string, excludeId?: string | null) => {
+    const t = name.trim()
+    if (!t) return false
+    if (script.characters.includes(t)) return false
+    if (tracks.some(tr => tr.id !== excludeId && tr.name.toLowerCase() === t.toLowerCase())) return false
+    return true
+  }
+
+  const openNewTrack = () => setTrackForm({ id: null, name: '', characters: [] })
+
+  const openEditTrack = (t: Track) => setTrackForm({ id: t.id, name: t.name, characters: [...t.characters] })
+
+  const saveTrack = () => {
+    if (!trackForm || !isTrackNameValid(trackForm.name, trackForm.id)) return
+    const updated: Track = {
+      id: trackForm.id ?? crypto.randomUUID(),
+      name: trackForm.name.trim(),
+      characters: trackForm.characters,
+    }
+    const newTracks = trackForm.id
+      ? tracks.map(t => t.id === updated.id ? updated : t)
+      : [...tracks, updated]
+    updateScript({ ...script, tracks: newTracks })
+    setTrackForm(null)
+  }
+
+  const deleteTrack = (id: string) =>
+    updateScript({ ...script, tracks: tracks.filter(t => t.id !== id) })
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Script</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[var(--color-stage-text)]">Script</h2>
+          <button
+            onClick={() => { setShowTrackPanel(v => !v); setTrackForm(null) }}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+              showTrackPanel
+                ? 'border-[var(--color-stage-accent)] text-[var(--color-stage-accent-light)] bg-[var(--color-stage-accent)]/10'
+                : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+            }`}
+          >
+            <IconTrack className="text-sm" />
+            <span>Tracks</span>
+          </button>
+        </div>
         {hasScenes && (
           <select
             value={sceneMode}
@@ -152,6 +207,96 @@ export function CharacterTable() {
           </select>
         )}
       </div>
+
+      {/* Track management panel */}
+      {showTrackPanel && (
+        <div className="rounded-xl border border-[var(--color-stage-border)] overflow-hidden">
+          {trackForm ? (
+            <div className="p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-[var(--color-stage-text)]">
+                {trackForm.id ? 'Edit track' : 'New track'}
+              </h3>
+              <input
+                type="text"
+                value={trackForm.name}
+                onChange={(e) => setTrackForm(f => f && ({ ...f, name: e.target.value }))}
+                placeholder="Track name"
+                className="w-full rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-3 py-2 focus:outline-none focus:border-[var(--color-stage-accent)]"
+                autoFocus
+              />
+              {trackForm.name.trim() && !isTrackNameValid(trackForm.name, trackForm.id) && (
+                <p className="text-xs text-red-400">Name matches an existing character or track</p>
+              )}
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {script.characters.map(c => (
+                  <label key={c} className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={trackForm.characters.includes(c)}
+                      onChange={(e) => setTrackForm(f => f && ({
+                        ...f,
+                        characters: e.target.checked
+                          ? [...f.characters, c]
+                          : f.characters.filter(x => x !== c),
+                      }))}
+                      className="rounded"
+                    />
+                    <span className="text-sm text-[var(--color-stage-text)]">{c}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveTrack}
+                  disabled={!isTrackNameValid(trackForm.name, trackForm.id) || trackForm.characters.length === 0}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white disabled:opacity-30 hover:opacity-90 transition-opacity"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setTrackForm(null)}
+                  className="px-4 py-2 rounded-lg text-sm border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--color-stage-border)]">
+              {tracks.length === 0 && (
+                <p className="px-4 py-3 text-sm text-[var(--color-stage-muted)]">No tracks yet.</p>
+              )}
+              {tracks.map(t => (
+                <div key={t.id} className="flex items-center gap-2 px-4 py-2.5">
+                  <IconTrack className="text-sm text-[var(--color-stage-accent-light)] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-[var(--color-stage-text)]">{t.name}</span>
+                    <span className="text-xs text-[var(--color-stage-muted)] ml-2 truncate">{t.characters.join(', ')}</span>
+                  </div>
+                  <button
+                    onClick={() => openEditTrack(t)}
+                    className="text-xs px-2 py-1 rounded border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors shrink-0"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => deleteTrack(t.id)}
+                    className="text-xs px-2 py-1 rounded border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-red-400 transition-colors shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={openNewTrack}
+                className="w-full px-4 py-2.5 text-sm text-[var(--color-stage-accent-light)] hover:bg-[var(--color-stage-accent)]/10 transition-colors text-left"
+              >
+                + Add track
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl overflow-hidden border border-[var(--color-stage-border)]">
         <table className="w-full text-sm">
@@ -202,6 +347,22 @@ export function CharacterTable() {
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)] align-top">
                     {lineCounts[char] ?? 0}
                   </td>
+                </tr>
+              )
+            })}
+            {/* Track rows */}
+            {tracks.map(t => {
+              const trackLineCount = t.characters.reduce((sum, c) => sum + (lineCounts[c] ?? 0), 0)
+              return (
+                <tr key={t.id} className="border-t border-[var(--color-stage-border)] bg-[var(--color-stage-surface)]/50">
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <IconTrack className="text-xs text-[var(--color-stage-accent-light)] shrink-0" />
+                      <span className="font-medium text-[var(--color-stage-accent-light)]">{t.name}</span>
+                      <span className="text-[10px] text-[var(--color-stage-muted)] truncate">({t.characters.join(', ')})</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">{trackLineCount}</td>
                 </tr>
               )
             })}
