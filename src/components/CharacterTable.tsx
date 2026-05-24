@@ -271,7 +271,6 @@ export function CharacterTable() {
                   <IconTrack className="text-sm text-[var(--color-stage-accent-light)] shrink-0" />
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium text-[var(--color-stage-text)]">{t.name}</span>
-                    <span className="text-xs text-[var(--color-stage-muted)] ml-2 truncate">{t.characters.join(', ')}</span>
                   </div>
                   <button
                     onClick={() => openEditTrack(t)}
