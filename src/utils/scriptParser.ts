@@ -7,19 +7,23 @@ const isAllCaps = (s: string) => /^[A-Z][A-Z0-9\s\-'.]+$/.test(s)
 
 const stripTrailingComma = (s: string) => s.endsWith(',') ? s.slice(0, -1).trimEnd() : s
 
+const WORD_NUMS = 'ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY'
+
 // "ACT I", "ACT 2", "ACT ONE" — no Scene part
 const isActOnly = (s: string) =>
   /^ACT\s+[\dIVXivx]+[\s:–—-]*(–|—|-)?$/i.test(s.trim()) ||
-  /^ACT\s+[\dIVXivx]+$/.test(s.trim())
+  /^ACT\s+[\dIVXivx]+$/.test(s.trim()) ||
+  new RegExp(`^ACT\\s+(${WORD_NUMS})$`, 'i').test(s.trim())
 
 // "ACT I: Scene 1", "Act 1, Scene 2", "Act 1, Scene 2 - Description"
 const isActScene = (s: string) =>
   /^ACT\s+[\dIVXivx]+\s*[:\s]\s*Scene\s+\d+/i.test(s) ||
   /^Act\s+\d+[,\s]+Scene\s+\d+/i.test(s)
 
-// "Scene 1", "PROLOGUE", "EPILOGUE", "INDUCTION"
+// "Scene 1", "SCENE ONE", "PROLOGUE", "EPILOGUE", "INDUCTION"
 const isSceneOnly = (s: string) =>
   /^Scene\s+\d+/i.test(s) ||
+  new RegExp(`^SCENE\\s+(${WORD_NUMS})$`, 'i').test(s) ||
   /^(PROLOGUE|EPILOGUE|INDUCTION)$/i.test(s)
 
 // "Enter the Sisters", "Exeunt", "Exit Ross", "Exeunt all"
@@ -42,6 +46,9 @@ export function parseScript(text: string, name: string): Script {
   let idx = 0
   let currentCharacter: string | null = null
   let playStarted = false
+  // True once we see mixed-case "Name: dialogue" lines — prose-format scripts
+  // where stage directions are plain text rather than wrapped in brackets.
+  let naturalFormat = false
   // State for multi-line direction that opens on one line and closes on another
   let pendingDirOpener: '(' | '[' | null = null
   let pendingDirText = ''
@@ -180,6 +187,14 @@ export function parseScript(text: string, name: string): Script {
           playStarted = true
         }
       }
+      // Prose-format: "Name: dialogue" with mixed-case character name
+      if (!playStarted) {
+        const naturalPeek = trimmed.match(/^([A-Z][a-z]+(?:\s[A-Z][a-z]+){0,2})\s*:\s+\S/)
+        if (naturalPeek && !LABEL_KEYWORDS.has(naturalPeek[1].toUpperCase())) {
+          playStarted = true
+          naturalFormat = true
+        }
+      }
     }
     if (!playStarted) continue
 
@@ -228,6 +243,30 @@ export function parseScript(text: string, name: string): Script {
       characterSet.add(stripped)
       sceneCharacters.add(stripped)
       currentCharacter = stripped
+      continue
+    }
+
+    // ── Mixed-case "Name: dialogue" (prose-format scripts) ───────────────────
+    const mixedColonMatch = trimmed.match(/^([A-Z][a-z]+(?:\s[A-Z][a-z]+){0,2})\s*:\s+(.+)$/)
+    if (mixedColonMatch) {
+      const charName = mixedColonMatch[1].trim()
+      const dialogue = mixedColonMatch[2].trim()
+      if (!LABEL_KEYWORDS.has(charName.toUpperCase()) && charName.length >= 2 && charName.length <= 30) {
+        naturalFormat = true
+        characterSet.add(charName)
+        sceneCharacters.add(charName)
+        currentCharacter = charName
+        emitDialogue(dialogue, charName)
+        continue
+      }
+    }
+
+    // ── Prose-format: any new uppercase-starting line is a stage direction ───
+    // (In traditional format, plain text after a character line continues their
+    // dialogue; in prose format each direction is a fresh paragraph.)
+    if (naturalFormat && /^[A-Z]/.test(trimmed)) {
+      currentCharacter = null
+      lines.push(mkLine(idx++, 'direction', trimmed))
       continue
     }
 
