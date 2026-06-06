@@ -612,10 +612,9 @@ export function RehearsalMode() {
             if (handsFreeRef.current && supported) {
               let myLineDone = false
               let exitCmd: HandsFreeCmd | null = null
-              const waitPromise = waitWithProgress(false).then(() => { myLineDone = true })
+              const waitPromise = waitWithProgress().then(() => { myLineDone = true })
 
               while (!myLineDone && !stopRef.current) {
-                // No onSpeechStart here: timer must not start on command words (elt can be < silenceMs)
                 const heard = await Promise.race([
                   listen({ silenceMs: 1500 }),
                   waitPromise.then(() => ''),
@@ -626,24 +625,16 @@ export function RehearsalMode() {
                 if (heard) {
                   const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
                   if (cmd?.type === 'line') {
-                    let actorSpoke = false
                     const speakPromise = speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
                     await Promise.race([
                       speakPromise,
-                      listen({ silenceMs: 500, onSpeechStart: () => { cancel(); actorSpoke = true; myLineResetRef.current?.() } }).then(() => {}),
+                      listen({ silenceMs: 500, onSpeechStart: () => { cancel() } }).then(() => {}),
                     ])
                     abort()
-                    if (!actorSpoke) {
-                      if (!stopRef.current) await delay(2000)
-                      myLineResetRef.current?.()
-                    }
                   } else if (cmd) {
                     exitCmd = cmd
                     myLineResolveRef.current?.()
                     break
-                  } else {
-                    // Non-command speech detected → start timer now
-                    myLineResetRef.current?.()
                   }
                 }
               }
