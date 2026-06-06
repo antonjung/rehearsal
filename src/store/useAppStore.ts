@@ -79,13 +79,17 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'rehearsal-store',
-      version: 2,
+      version: 3,
       migrate: (state) => {
         const s = state as AppState
         // Rebuild scenes for all scripts to fix stale parse data from older app versions
         return {
           ...s,
           scripts: (s.scripts ?? []).map((script) => rebuildScript(script, script.lines)),
+          // Force hands-free off — it was previously defaulting to true
+          rehearsalSettings: s.rehearsalSettings
+            ? { ...s.rehearsalSettings, handsFreeEnabled: false }
+            : s.rehearsalSettings,
         }
       },
       partialize: (s) => ({
