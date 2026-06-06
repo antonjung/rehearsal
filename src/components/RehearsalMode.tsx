@@ -19,7 +19,7 @@ const DEFAULT_SETTINGS = {
   endLineSilenceMs: 400,
   errorPromptEnabled: false,
   errorPromptPhrase: 'The correct line is',
-  handsFreeEnabled: true,
+  handsFreeEnabled: false,
   linePingEnabled: true,
   scenePingEnabled: true,
   clipStartPingEnabled: true,
@@ -200,7 +200,7 @@ export function RehearsalMode() {
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchCursor, setSearchCursor] = useState(0)
-  const handsFreeEnabled = settings.handsFreeEnabled ?? true
+  const handsFreeEnabled = settings.handsFreeEnabled ?? false
   const loopRef = useRef(false)
   loopRef.current = loopEnabled
   const condensedLinesRef = useRef(condensedLines)

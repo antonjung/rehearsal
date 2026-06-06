@@ -55,7 +55,7 @@ export function GlobalSettings({ onClose }: Props) {
     errorPromptPhrase: 'The correct line is',
     voiceCommands: DEFAULT_VOICE_COMMANDS,
     highlighterColor: 'yellow' as const,
-    handsFreeEnabled: true,
+    handsFreeEnabled: false,
     linePingEnabled: true,
     scenePingEnabled: true,
     clipStartPingEnabled: true,
@@ -134,7 +134,7 @@ export function GlobalSettings({ onClose }: Props) {
               ))}
             </div>
             <SettingsRow label="Hands-free mode">
-              <ToggleSwitch checked={prefs.handsFreeEnabled ?? true} onChange={(v) => update('handsFreeEnabled', v)} />
+              <ToggleSwitch checked={prefs.handsFreeEnabled ?? false} onChange={(v) => update('handsFreeEnabled', v)} />
             </SettingsRow>
           </SettingsSection>
 

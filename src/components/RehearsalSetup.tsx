@@ -22,7 +22,7 @@ export function RehearsalSetup({ onStart }: Props) {
     endLineSilenceMs: 400,
     errorPromptEnabled: false,
     errorPromptPhrase: 'The correct line is',
-    handsFreeEnabled: true,
+    handsFreeEnabled: false,
     linePingEnabled: true,
     scenePingEnabled: true,
     clipStartPingEnabled: true,
