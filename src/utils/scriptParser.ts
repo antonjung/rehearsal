@@ -157,9 +157,17 @@ export function parseScript(text: string, name: string): Script {
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
-      const actMatch = trimmed.match(/^(ACT\s+[\dIVXivx]+)/i)
-      currentAct = actMatch ? actMatch[1].trim() : trimmed
-      currentSceneTitle = trimmed
+      // "ACT ONE - SCENE ONE" etc — split into distinct act/scene parts so the
+      // combined title doesn't repeat the whole line for both halves.
+      const sceneSplit = trimmed.match(/^(ACT\s+\S+?)\s*[-–—:,]+\s*(SCENE\s+.+)$/i)
+      const actMatch = trimmed.match(/^(ACT\s+[\dIVXivx]+)\b/i)
+      if (sceneSplit) {
+        currentAct = sceneSplit[1].trim()
+        currentSceneTitle = sceneSplit[2].trim()
+      } else {
+        currentAct = actMatch ? actMatch[1].trim() : trimmed
+        currentSceneTitle = ''
+      }
       sceneStartLineIdx = lines.length
       lines.push(mkLine(idx++, 'heading', trimmed))
       continue
