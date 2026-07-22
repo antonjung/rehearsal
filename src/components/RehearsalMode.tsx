@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = {
   highlighterColor: 'yellow' as const,
   voiceCalibration: 0.6,
   speechCoverageThreshold: 70,
+  minGapMs: 1000,
   voiceURI: undefined as string | undefined,
   voiceCommands: undefined as import('../types').VoiceCommandWords | undefined,
 }
@@ -555,8 +556,9 @@ export function RehearsalMode() {
             await playClipStart()
           }
 
-          // ELT: use actual recording duration when available, otherwise calibrated estimate
-          const elt = recDurMapRef.current.get(lineIdx) ?? gap
+          // ELT: use actual recording duration when available, otherwise calibrated estimate.
+          // A minimum gap is always added on top so short lines still get a usable pause.
+          const elt = (recDurMapRef.current.get(lineIdx) ?? gap) + (settingsRef.current.minGapMs ?? 1000)
 
           // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef; resettable via myLineResetRef.
           // startImmediately=false: timer only begins when myLineResetRef.current() is first called.

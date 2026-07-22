@@ -79,6 +79,7 @@ export interface RehearsalSettings {
   voiceCalibration?: number
   speechCoverageThreshold?: number
   condensedLines?: number
+  minGapMs?: number
 }
 
 export interface MarkedBlock {

@@ -62,6 +62,7 @@ export function GlobalSettings({ onClose }: Props) {
     maxPauseMs: 1000,
     voiceCalibration: 0.6,
     speechCoverageThreshold: 70,
+    minGapMs: 1000,
   }
 
   const cmdWords: VoiceCommandWords = { ...DEFAULT_VOICE_COMMANDS, ...(prefs.voiceCommands ?? {}) }
@@ -135,6 +136,11 @@ export function GlobalSettings({ onClose }: Props) {
             </div>
             <SettingsRow label="Hands-free mode">
               <ToggleSwitch checked={prefs.handsFreeEnabled ?? false} onChange={(v) => update('handsFreeEnabled', v)} />
+            </SettingsRow>
+            <SettingsRow label="Minimum gap">
+              <Stepper value={(prefs.minGapMs ?? 1000) / 1000} min={0} max={10} step={0.5}
+                display={`${((prefs.minGapMs ?? 1000) / 1000).toFixed(1)}s`}
+                onChange={(v) => update('minGapMs', Math.round(v * 1000))} />
             </SettingsRow>
           </SettingsSection>
 
