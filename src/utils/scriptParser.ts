@@ -22,6 +22,11 @@ const isSceneOnly = (s: string) =>
   /^Scene\s+\d+/i.test(s) ||
   /^(PROLOGUE|EPILOGUE|INDUCTION)$/i.test(s)
 
+// Fallback for PDF-extracted text: layout/whitespace often mangles the strict
+// "ACT I" / "ACT 1: Scene 2" forms above (e.g. "ACT 1  A street in Verona."),
+// but any line starting with "ACT " still marks an act/scene boundary.
+const isActPrefixed = (s: string) => /^ACT\s+/i.test(s.trim())
+
 // "Enter the Sisters", "Exeunt", "Exit Ross", "Exeunt all"
 const isEnterExit = (s: string) => /^(Enter|Exit|Exeunt)\b/i.test(s)
 
@@ -111,7 +116,7 @@ export function parseScript(text: string, name: string): Script {
     if (!trimmed || isSeparator(trimmed) || isPageNumber(trimmed)) continue
 
     // ── Headings always break any pending multi-line direction ────────────────
-    if (isActScene(trimmed) || isActOnly(trimmed) || isSceneOnly(trimmed)) {
+    if (isActScene(trimmed) || isActOnly(trimmed) || isSceneOnly(trimmed) || isActPrefixed(trimmed)) {
       pendingDirOpener = null
       pendingDirText = ''
     }
@@ -142,6 +147,18 @@ export function parseScript(text: string, name: string): Script {
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
+      currentSceneTitle = trimmed
+      sceneStartLineIdx = lines.length
+      lines.push(mkLine(idx++, 'heading', trimmed))
+      continue
+    }
+
+    if (isActPrefixed(trimmed)) {
+      playStarted = true
+      currentCharacter = null
+      closeScene(lines.length - 1)
+      const actMatch = trimmed.match(/^(ACT\s+[\dIVXivx]+)/i)
+      currentAct = actMatch ? actMatch[1].trim() : trimmed
       currentSceneTitle = trimmed
       sceneStartLineIdx = lines.length
       lines.push(mkLine(idx++, 'heading', trimmed))
