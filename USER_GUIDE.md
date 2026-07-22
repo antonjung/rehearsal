@@ -25,8 +25,8 @@ Plus the menu (☰, top-left) and settings (⚙️, top-right), both always avai
 
 Open ☰ → **Scripts**:
 
-- **Load** — open one or more `.txt` or `.pdf` files. Multiple scripts can be loaded at once.
-- **Import** — restore a previously exported CueLine bundle (scripts, recordings, and tracks).
+- **Load from PDF** — open one or more `.txt` or `.pdf` files. Multiple scripts can be loaded at once.
+- **Import from .json file** — restore a previously exported CueLine bundle (scripts, recordings, and tracks).
 - **Examples** — try a built-in script with one tap.
 
 Loaded scripts are listed on the **Home** tab, where you can select, rename, edit, export, or delete them. **Edit** (pencil icon) opens a line-by-line editor — change a line's text, character, or type, search the script, and bulk-reassign lines.
@@ -51,7 +51,13 @@ Choose a scene and your character, then tap **Start run through**. All other cha
 
 ### During a run-through
 
-- **Line modes** — set in ⚙️: *Silence* leaves a timed gap; *Read* speaks your line; *Gap before / Gap after* combines both in one order; *Gap · read · gap* and *Read · gap · read* add a repeat. The gap length matches the estimated speaking time for the line (or the actual recording duration if one exists), plus the minimum gap set in Settings.
+- **Line modes** — set in ⚙️. The gap length matches the estimated speaking time for the line (or the actual recording duration if one exists), plus the minimum gap set in Settings:
+  - *Silence* — a timed gap plays while you say the line from memory.
+  - *Read* — your line is read aloud for you.
+  - *Gap before* — wait, then hear the line.
+  - *Gap after* — hear the line, then a gap to repeat it.
+  - *Gap · read · gap* — wait, hear it, wait again.
+  - *Read · gap · read* — hear it, practice, hear it again.
 - **Progress bar** — a bar fills across your line as the gap counts down.
 - **Clip markers** — two red lines define a practice region. Drag them to reposition. Playback always starts from the clip start. Long-press a line to set the clip start or end there.
 - **Repeat** — loops the clip automatically when it ends.
@@ -83,18 +89,12 @@ Voices are grouped by language/region the same way iOS Settings does, with Briti
 
 ---
 
-## 7. Notes
+## 7. Your data
 
-Open ☰ → **Notes** for a simple running list of reminders. Add, tick off, edit, or clear completed notes — handy for jotting things down mid-rehearsal without leaving the app.
-
----
-
-## 8. Your data
-
-Scripts, recordings, notes, and settings stay on this device — nothing is uploaded to a server, including PDF text extraction. Use Export/Import (☰ menu) to back up a script or move it to another device.
+Scripts, recordings, and settings stay on this device — nothing is uploaded to a server, including PDF text extraction. Use Export/Import (☰ menu) to back up a script or move it to another device.
 
 ---
 
-## 9. iOS notes
+## 8. iOS notes
 
 Standard voices (e.g. Daniel) are available via the Web Speech API. Eloquence voices shown in iOS Settings are not accessible to browser apps. The first tap of Play in a session unlocks audio — this is a browser requirement.

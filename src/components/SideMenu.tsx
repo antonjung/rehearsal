@@ -4,7 +4,6 @@ import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 import { parseImportFile, countRecordingConflicts, countTrackConflicts, importBundle } from '../utils/exportImport'
-import { Notes } from './Notes'
 import type { Script } from '../types'
 
 interface ExampleMeta { name: string; file: string; description: string }
@@ -12,7 +11,7 @@ interface ExampleMeta { name: string; file: string; description: string }
 interface Props { open: boolean; onClose: () => void }
 
 export function SideMenu({ open, onClose }: Props) {
-  const { scripts, notes, addScript, removeScript, selectScript, updateScript } = useAppStore()
+  const { scripts, addScript, removeScript, selectScript, updateScript } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const importBundleRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
@@ -27,7 +26,6 @@ export function SideMenu({ open, onClose }: Props) {
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
-  const [notesOpen, setNotesOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
 
   async function handleBundleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -136,7 +134,7 @@ export function SideMenu({ open, onClose }: Props) {
               onClick={() => inputRef.current?.click()}
               className="w-full py-2.5 rounded-xl bg-[var(--color-stage-accent)] text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
             >
-              {importing && !loadingExample ? 'Loading…' : 'Load'}
+              {importing && !loadingExample ? 'Loading…' : 'Load from PDF'}
             </button>
             <input ref={inputRef} type="file" accept=".txt,.pdf" multiple className="hidden"
               onChange={(e) => { void handleFiles(e.target.files) }} />
@@ -146,7 +144,7 @@ export function SideMenu({ open, onClose }: Props) {
               onClick={() => importBundleRef.current?.click()}
               className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
             >
-              <IconImport /> Import
+              <IconImport /> Import from .json file
             </button>
             <input ref={importBundleRef} type="file" accept=".json,application/json" className="hidden"
               onChange={handleBundleFile} />
@@ -191,33 +189,6 @@ export function SideMenu({ open, onClose }: Props) {
             )}
           </div>
 
-          {/* Notes */}
-          <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)]">Notes</span>
-              {notes.length > 0 && (
-                <button
-                  onClick={() => setNotesOpen((v) => !v)}
-                  className="flex items-center gap-1 text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
-                >
-                  <span>{notes.length}</span>
-                  {notesOpen ? <IconChevronUp /> : <IconChevronDown />}
-                </button>
-              )}
-            </div>
-            <Notes listOpen={notesOpen} />
-          </div>
-
-          {/* Reload */}
-          <div className="px-5 py-3 border-b border-[var(--color-stage-border)]">
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
-            >
-              Reload app
-            </button>
-          </div>
-
           {/* About */}
           <div className="px-5 py-4">
             <button
@@ -234,8 +205,8 @@ export function SideMenu({ open, onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Loading a script (Home tab)</p>
-                  <p>Tap <span className="text-[var(--color-stage-accent-light)]">Load</span> in this menu to open a <span className="text-[var(--color-stage-accent-light)]">.txt</span> or <span className="text-[var(--color-stage-accent-light)]">.pdf</span> file. Multiple scripts can be loaded at once. Scripts are listed on the <span className="text-[var(--color-stage-accent-light)]">Home</span> tab where you can select, rename, edit, export, or delete them.</p>
-                  <p>Use <span className="text-[var(--color-stage-accent-light)]">Import</span> to restore a previously exported CueLine bundle (scripts, recordings, and tracks), or <span className="text-[var(--color-stage-accent-light)]">Examples</span> to try a built-in script.</p>
+                  <p>Tap <span className="text-[var(--color-stage-accent-light)]">Load from PDF</span> in this menu to open a <span className="text-[var(--color-stage-accent-light)]">.txt</span> or <span className="text-[var(--color-stage-accent-light)]">.pdf</span> file. Multiple scripts can be loaded at once. Scripts are listed on the <span className="text-[var(--color-stage-accent-light)]">Home</span> tab where you can select, rename, edit, export, or delete them.</p>
+                  <p>Use <span className="text-[var(--color-stage-accent-light)]">Import from .json file</span> to restore a previously exported CueLine bundle (scripts, recordings, and tracks), or <span className="text-[var(--color-stage-accent-light)]">Examples</span> to try a built-in script.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Edit</span> (pencil icon on a script) opens a line-by-line editor — change a line's text, character, or type, search the script, and bulk-reassign lines.</p>
                 </div>
 
@@ -256,7 +227,15 @@ export function SideMenu({ open, onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">During a run-through</p>
-                  <p><span className="text-[var(--color-stage-accent-light)]">Line modes</span> — set in ⚙️: <span className="text-[var(--color-stage-accent-light)]">Silence</span> leaves a timed gap; <span className="text-[var(--color-stage-accent-light)]">Read</span> speaks your line; <span className="text-[var(--color-stage-accent-light)]">Gap before / Gap after</span> combines both in one order; <span className="text-[var(--color-stage-accent-light)]">Gap · read · gap</span> and <span className="text-[var(--color-stage-accent-light)]">Read · gap · read</span> add a repeat. The gap length matches the estimated speaking time for the line (or the actual recording duration if one exists), plus the minimum gap set in Settings.</p>
+                  <p><span className="text-[var(--color-stage-accent-light)]">Line modes</span> — set in ⚙️. The gap length matches the estimated speaking time for the line (or the actual recording duration if one exists), plus the minimum gap set in Settings.</p>
+                  <ul className="list-disc pl-4 space-y-1 marker:text-[var(--color-stage-border)]">
+                    <li><span className="text-[var(--color-stage-accent-light)]">Silence</span> — a timed gap plays while you say the line from memory.</li>
+                    <li><span className="text-[var(--color-stage-accent-light)]">Read</span> — your line is read aloud for you.</li>
+                    <li><span className="text-[var(--color-stage-accent-light)]">Gap before</span> — wait, then hear the line.</li>
+                    <li><span className="text-[var(--color-stage-accent-light)]">Gap after</span> — hear the line, then a gap to repeat it.</li>
+                    <li><span className="text-[var(--color-stage-accent-light)]">Gap · read · gap</span> — wait, hear it, wait again.</li>
+                    <li><span className="text-[var(--color-stage-accent-light)]">Read · gap · read</span> — hear it, practice, hear it again.</li>
+                  </ul>
                   <p><span className="text-[var(--color-stage-accent-light)]">Progress bar</span> — a bar fills across your line as the gap counts down.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Clip markers</span> — two red lines define a practice region. Drag them to reposition. Playback always starts from the clip start. Long-press a line to set the clip start or end there.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Repeat</span> — loops the clip automatically when it ends.</p>
@@ -284,7 +263,7 @@ export function SideMenu({ open, onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Your data</p>
-                  <p>Scripts, recordings, notes, and settings stay on this device — nothing is uploaded to a server, including PDF text extraction. Use Export/Import to back up a script or move it to another device.</p>
+                  <p>Scripts, recordings, and settings stay on this device — nothing is uploaded to a server, including PDF text extraction. Use Export/Import to back up a script or move it to another device.</p>
                 </div>
 
                 <div className="space-y-1.5">
