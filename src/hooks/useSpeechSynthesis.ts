@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { warmUpAudio } from '../utils/sounds'
 
 export interface SpeakOptions {
   voiceURI?: string
@@ -114,11 +115,13 @@ export function useSpeechSynthesis() {
             done()
           }
 
-          // Pre-speak delay: helps the audio session settle between utterances
-          // before synthesis starts. Combined with the leading space above and
-          // the silent-utterance retry below, this covers the preventive and
-          // reactive cases for clipped/dropped audio at the start of a line.
-          setTimeout(() => {
+          // Pre-speak warm-up: actually exercising the AudioContext pipeline (not
+          // just waiting) is what keeps the OS audio session "live" between
+          // utterances — lines preceded by the audible clip-start ping don't
+          // clip, but a bare timer delay alone wasn't enough for others. Combined
+          // with the leading space above and the silent-utterance retry below,
+          // this covers the preventive and reactive cases for clipped audio.
+          warmUpAudio().finally(() => {
             if (resolveRef.current !== resolve) { clearWatchdog(); return }
             try {
               speechSynthesis.resume()
@@ -126,7 +129,7 @@ export function useSpeechSynthesis() {
             } catch {
               done()
             }
-          }, 400)
+          })
         }
 
         attemptSpeak(2)

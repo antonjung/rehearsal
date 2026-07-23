@@ -37,6 +37,17 @@ function tone(freq: number, duration: number, startOffset = 0, vol = 0.55): Prom
   })
 }
 
+// Silently exercises the AudioContext pipeline. Unlike a plain timer delay,
+// actually running a (silent) tone through the graph seems to be what keeps
+// the OS audio session "live" between utterances — a bare setTimeout doesn't
+// have the same effect, which is why lines preceded by the (audible) clip-start
+// ping don't clip but otherwise-unprimed lines can.
+export async function warmUpAudio(): Promise<void> {
+  if (!ctx || ctx.state === 'closed') return
+  if (ctx.state === 'suspended') await ctx.resume()
+  return tone(440, 0.08, 0, 0)
+}
+
 export async function playClipStart(): Promise<void> {
   if (!ctx || ctx.state === 'closed') return
   // Ensure the context is running before scheduling tones — resume() in unlockAudio
