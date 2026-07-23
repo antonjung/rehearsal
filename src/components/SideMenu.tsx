@@ -53,6 +53,7 @@ export function SideMenu({ open, onClose }: Props) {
     conflictWith: Script
   } | null>(null)
   const [appShareCopied, setAppShareCopied] = useState(false)
+  const [downloadedName, setDownloadedName] = useState<string | null>(null)
 
   async function handleBundleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -174,6 +175,8 @@ export function SideMenu({ open, onClose }: Props) {
     }
     await importRecordings(targetId, recordings)
     selectScript(targetId)
+    setDownloadedName(finalScript.name)
+    setTimeout(() => { setDownloadedName(null); onClose() }, 900)
   }
 
   async function handleDownload(entry: SharedLibraryEntry) {
@@ -249,7 +252,7 @@ export function SideMenu({ open, onClose }: Props) {
             <button
               disabled={importing}
               onClick={() => inputRef.current?.click()}
-              className="w-full py-2.5 rounded-xl bg-[var(--color-stage-accent)] text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-40 transition-colors"
             >
               {importing && !loadingExample ? 'Loading…' : 'Load from PDF'}
             </button>
@@ -313,6 +316,7 @@ export function SideMenu({ open, onClose }: Props) {
               <IconDownload /> <span>Download from shared library</span>
               <span className="absolute right-4">{libraryOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
             </button>
+            {downloadedName && <p className="text-xs text-[var(--color-stage-accent-light)] text-center py-1">Downloaded "{downloadedName}"</p>}
             {libraryOpen && (
               <div className="space-y-2">
                 {libraryLoading && <p className="text-xs text-[var(--color-stage-muted)] text-center py-2">Loading…</p>}

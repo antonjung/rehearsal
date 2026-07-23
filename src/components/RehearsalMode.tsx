@@ -244,7 +244,7 @@ export function RehearsalMode() {
   }, [safeSearchCursor, searchMatches, sceneGroups])
 
   // --- Refs ---
-  const lineRefs = useRef<Record<number, HTMLDivElement | null>>({})
+  const lineRefs = useRef<Record<number, HTMLElement | null>>({})
   const stopRef = useRef(false)
   const runIdRef = useRef(0)
   const pauseRef = useRef(false)
@@ -599,6 +599,18 @@ export function RehearsalMode() {
             return { groupStartIdx: progressGroupStartIdx, activeLocalIdx: localIdxOffset + sentenceDurations.length - 1, pct: 100 }
           }
 
+          // Tracks which absolute line was last scrolled to, so we re-scroll only
+          // when the active sentence actually changes — not on every rAF tick.
+          let lastScrolledActiveIdx = -1
+          const applyProgress = (progress: LineProgress) => {
+            setLineProgress(progress)
+            const absoluteIdx = progress.groupStartIdx + progress.activeLocalIdx
+            if (absoluteIdx !== lastScrolledActiveIdx) {
+              lastScrolledActiveIdx = absoluteIdx
+              scrollToLine(absoluteIdx)
+            }
+          }
+
           // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef; resettable via myLineResetRef.
           // startImmediately=false: timer only begins when myLineResetRef.current() is first called.
           const waitWithProgress = (startImmediately = true): Promise<void> => new Promise((resolve) => {
@@ -619,7 +631,7 @@ export function RehearsalMode() {
               myLineResolveRef.current = null
               myLineResetRef.current = null
               myLinePauseTimerRef.current = null
-              setLineProgress({ groupStartIdx: progressGroupStartIdx, activeLocalIdx: localIdxOffset + sentenceDurations.length - 1, pct: 100 })
+              applyProgress({ groupStartIdx: progressGroupStartIdx, activeLocalIdx: localIdxOffset + sentenceDurations.length - 1, pct: 100 })
               resolve()
             }
 
@@ -629,7 +641,7 @@ export function RehearsalMode() {
               timer = setTimeout(done, elt)
               const tick = () => {
                 if (resolved) return
-                setLineProgress(sentenceProgressAt(Date.now() - startTime))
+                applyProgress(sentenceProgressAt(Date.now() - startTime))
                 rafId = requestAnimationFrame(tick)
               }
               rafId = requestAnimationFrame(tick)
@@ -1213,6 +1225,7 @@ export function RehearsalMode() {
                 hasRecording={recMapRef.current.has(group.startIdx)}
                 lineProgress={isMyLine && lineProgress?.groupStartIdx === group.startIdx ? lineProgress : null}
                 searchActive={isSearchActive}
+                onSentenceRef={(absoluteIdx, el) => { lineRefs.current[absoluteIdx] = el }}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
               {group.startIdx === blockEnd && (
@@ -1393,12 +1406,13 @@ interface LineRowProps {
   hasRecording?: boolean
   lineProgress?: LineProgress | null
   searchActive?: boolean
+  onSentenceRef?: (absoluteIdx: number, el: HTMLElement | null) => void
 }
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
   onSelect, onReveal, onRecord, onDeleteRecording, isRecordingThis, anyRecording, hasRecording,
-  lineProgress, searchActive, ref,
+  lineProgress, searchActive, onSentenceRef, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
   if (group.type === 'heading') {
@@ -1481,6 +1495,7 @@ const LineRow = ({
               return (
                 <React.Fragment key={idx}>
                   <span
+                    ref={(el) => onSentenceRef?.(group.startIdx + idx, el)}
                     className="block"
                     style={{
                       ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
