@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { IconEdit, IconDismiss, IconExport } from './Icons'
+import { IconEdit, IconDismiss, IconExport, IconShare } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
 import { buildExportBundle, downloadBundle } from '../utils/exportImport'
+import { encodeScriptForShare, buildShareUrl } from '../utils/shareScript'
 
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
+  const [sharingId, setSharingId] = useState<string | null>(null)
+  const [sharedId, setSharedId] = useState<string | null>(null)
 
   async function handleExport(script: Script) {
     setExportingId(script.id)
@@ -22,6 +25,27 @@ export function ScriptManager() {
     } finally {
       setExportingId(null)
       setExportProgress(null)
+    }
+  }
+
+  async function handleShare(script: Script) {
+    setSharingId(script.id)
+    try {
+      const encoded = await encodeScriptForShare(script)
+      const url = buildShareUrl(encoded)
+      if (navigator.share) {
+        await navigator.share({ title: `CueLine — ${script.name}`, text: `Rehearse "${script.name}" with me on CueLine`, url })
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+        setSharedId(script.id)
+        setTimeout(() => setSharedId(null), 2000)
+      } else {
+        window.prompt('Copy this link to share:', url)
+      }
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') console.error('Share failed', err)
+    } finally {
+      setSharingId(null)
     }
   }
 
@@ -41,10 +65,13 @@ export function ScriptManager() {
               selected={script.id === selectedScriptId}
               exporting={exportingId === script.id}
               exportProgress={exportingId === script.id ? exportProgress : undefined}
+              sharing={sharingId === script.id}
+              shared={sharedId === script.id}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
               onEdit={() => setEditingScript(script)}
               onExport={() => handleExport(script)}
+              onShare={() => handleShare(script)}
             />
           ))}
         </div>
@@ -62,19 +89,25 @@ function ScriptCard({
   selected,
   exporting,
   exportProgress,
+  sharing,
+  shared,
   onSelect,
   onRemove,
   onEdit,
   onExport,
+  onShare,
 }: {
   script: Script
   selected: boolean
   exporting: boolean
   exportProgress?: { done: number; total: number } | null
+  sharing: boolean
+  shared: boolean
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
   onExport: () => void
+  onShare: () => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
@@ -113,6 +146,16 @@ function ScriptCard({
         </p>
       </div>
       <div className="flex items-center gap-1">
+        {shared && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Copied!</span>}
+        <button
+          onClick={(e) => { e.stopPropagation(); if (!sharing) onShare() }}
+          className={`transition-colors p-1 rounded ${sharing ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}
+          aria-label="Share script"
+          title="Share script"
+          disabled={sharing}
+        >
+          <IconShare />
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); if (!exporting) onExport() }}
           className={`transition-colors p-1 rounded ${exporting ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}

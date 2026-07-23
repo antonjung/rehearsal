@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ScriptManager } from './components/ScriptManager'
 import { CharacterTable } from './components/CharacterTable'
 import { RecordingStudio } from './components/RecordingStudio'
@@ -7,6 +7,7 @@ import { GlobalSettings } from './components/GlobalSettings'
 import { SideMenu } from './components/SideMenu'
 import { useAppStore } from './store/useAppStore'
 import { applyTheme } from './utils/themes'
+import { decodeSharedScript } from './utils/shareScript'
 import { IconMenu, IconSettings, IconHome, IconCharacters, IconMic, IconRunThrough } from './components/Icons'
 
 type Tab = 'scripts' | 'characters' | 'record' | 'rehearse'
@@ -37,12 +38,34 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
-  const { theme, scripts, selectedScriptId } = useAppStore()
+  const [sharedImport, setSharedImport] = useState<{ name: string } | { error: true } | null>(null)
+  const { theme, scripts, selectedScriptId, addScript, selectScript } = useAppStore()
   const selectedScript = scripts.find((s) => s.id === selectedScriptId)
+  const importedSharedScript = useRef(false)
 
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
+
+  // Auto-import a script from a shared link, e.g. .../#script=<encoded>
+  useEffect(() => {
+    if (importedSharedScript.current) return
+    const match = window.location.hash.match(/^#script=(.+)$/)
+    if (!match) return
+    importedSharedScript.current = true
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+    decodeSharedScript(match[1])
+      .then((script) => {
+        script.id = crypto.randomUUID()
+        addScript(script)
+        selectScript(script.id)
+        setSharedImport({ name: script.name })
+      })
+      .catch((err) => {
+        console.error('Failed to import shared script', err)
+        setSharedImport({ error: true })
+      })
+  }, [addScript, selectScript])
 
   useEffect(() => {
     const sw = navigator.serviceWorker
@@ -61,6 +84,16 @@ export default function App() {
         >
           Update available — tap to reload
         </button>
+      )}
+      {sharedImport && (
+        <div className="w-full py-2 px-4 text-xs font-medium bg-[var(--color-stage-accent)]/15 text-[var(--color-stage-accent-light)] text-center shrink-0 flex items-center justify-center gap-2">
+          <span>
+            {'error' in sharedImport
+              ? "Couldn't open the shared script link"
+              : `Added shared script "${sharedImport.name}"`}
+          </span>
+          <button onClick={() => setSharedImport(null)} className="opacity-70 hover:opacity-100">✕</button>
+        </div>
       )}
       {/* App header — always visible */}
       <header className="relative flex items-center px-4 pt-4 pb-3 shrink-0">
