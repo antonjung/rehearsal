@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   voiceCalibration: 0.6,
   speechCoverageThreshold: 70,
   minGapMs: 1000,
+  gapUnit: 'speech' as const,
   voiceURI: undefined as string | undefined,
   voiceCommands: undefined as import('../types').VoiceCommandWords | undefined,
 }
@@ -482,9 +483,11 @@ export function RehearsalMode() {
         const lineIdx = i
         const line = lines[lineIdx]
 
-        // Group consecutive same-character dialogue lines
+        // Group consecutive same-character dialogue lines into one spoken turn,
+        // unless the gap unit is 'sentence' — then each line (already one sentence
+        // per line from the parser) gets its own gap.
         let groupEnd = lineIdx
-        if (line.type === 'dialogue') {
+        if (line.type === 'dialogue' && (settingsRef.current.gapUnit ?? 'speech') !== 'sentence') {
           while (
             groupEnd + 1 <= endIdx &&
             lines[groupEnd + 1].type === 'dialogue' &&

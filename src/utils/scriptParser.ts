@@ -38,6 +38,37 @@ const isPageNumber = (s: string) => /^\d{1,4}$/.test(s)
 // Non-character all-caps keywords used as script labels or production directions
 const LABEL_KEYWORDS = new Set(['SETTING', 'SCENE', 'TIME', 'PLACE', 'NOTE', 'NOTES', 'CAST', 'MUSIC', 'SOUND', 'SFX', 'EFFECTS', 'SFXS'])
 
+// Splits collated dialogue text into sentences. A sentence ends at a single
+// ".", "!" or "?" — a run of dots ("...") is an ellipsis and does NOT end the
+// sentence, since it marks a trailing-off thought that continues.
+function splitIntoSentences(text: string): string[] {
+  const sentences: string[] = []
+  let start = 0
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '.' && text[i + 1] === '.') {
+      // Ellipsis — skip over the whole run of dots without splitting.
+      while (text[i] === '.') i++
+      continue
+    }
+    if (ch === '.' || ch === '!' || ch === '?') {
+      let j = i + 1
+      while (j < text.length && '.!?'.includes(text[j])) j++
+      while (j < text.length && '"\')]'.includes(text[j])) j++
+      const sentence = text.slice(start, j).trim()
+      if (sentence) sentences.push(sentence)
+      start = j
+      i = j
+    } else {
+      i++
+    }
+  }
+  const rest = text.slice(start).trim()
+  if (rest) sentences.push(rest)
+  return sentences
+}
+
 // ── Main parser ───────────────────────────────────────────────────────────────
 
 export function parseScript(text: string, name: string): Script {
@@ -74,8 +105,34 @@ export function parseScript(text: string, name: string): Script {
     sceneStartLineIdx = -1
   }
 
+  // Dialogue for a character is collated across consecutive raw lines and only
+  // split into ScriptLines at sentence boundaries (not at every newline), so a
+  // sentence that wraps across physical lines in the source stays one line here.
+  let dialogueBuffer: { char: string; text: string } | null = null
+
+  const flushDialogueBuffer = () => {
+    if (!dialogueBuffer) return
+    const { char, text } = dialogueBuffer
+    dialogueBuffer = null
+    for (const sentence of splitIntoSentences(text)) {
+      lines.push(mkLine(idx++, 'dialogue', sentence, char))
+    }
+  }
+
+  const appendDialogue = (char: string, text: string) => {
+    const trimmedText = text.trim()
+    if (!trimmedText) return
+    if (dialogueBuffer && dialogueBuffer.char === char) {
+      dialogueBuffer.text += ' ' + trimmedText
+    } else {
+      flushDialogueBuffer()
+      dialogueBuffer = { char, text: trimmedText }
+    }
+  }
+
   // Emit dialogue text for `char`, extracting any inline (…) or […] as direction lines.
-  // Direction segments are emitted in-place; surrounding text becomes dialogue lines.
+  // Direction segments are emitted in-place (flushing any collated dialogue first to
+  // preserve order); surrounding text is collated into the dialogue buffer above.
   // If a bracket opens but doesn't close within `text`, sets pendingDirOpener/Text for
   // the next raw line to continue.
   const emitDialogue = (dialogueText: string, char: string) => {
@@ -86,7 +143,7 @@ export function parseScript(text: string, name: string): Script {
       const openIdx = pIdx < 0 ? bIdx : bIdx < 0 ? pIdx : Math.min(pIdx, bIdx)
 
       if (openIdx < 0) {
-        lines.push(mkLine(idx++, 'dialogue', remaining, char))
+        appendDialogue(char, remaining)
         break
       }
 
@@ -96,9 +153,10 @@ export function parseScript(text: string, name: string): Script {
       const fromOpen = remaining.slice(openIdx)
       const closeIdx = fromOpen.indexOf(closer)
 
-      if (before) lines.push(mkLine(idx++, 'dialogue', before, char))
+      if (before) appendDialogue(char, before)
 
       if (closeIdx >= 0) {
+        flushDialogueBuffer()
         lines.push(mkLine(idx++, 'direction', fromOpen.slice(0, closeIdx + 1)))
         remaining = fromOpen.slice(closeIdx + 1).trim()
       } else {
@@ -122,6 +180,7 @@ export function parseScript(text: string, name: string): Script {
     }
 
     if (isActScene(trimmed)) {
+      flushDialogueBuffer()
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
@@ -134,6 +193,7 @@ export function parseScript(text: string, name: string): Script {
     }
 
     if (isActOnly(trimmed)) {
+      flushDialogueBuffer()
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
@@ -144,6 +204,7 @@ export function parseScript(text: string, name: string): Script {
     }
 
     if (isSceneOnly(trimmed)) {
+      flushDialogueBuffer()
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
@@ -154,6 +215,7 @@ export function parseScript(text: string, name: string): Script {
     }
 
     if (isActPrefixed(trimmed)) {
+      flushDialogueBuffer()
       playStarted = true
       currentCharacter = null
       closeScene(lines.length - 1)
@@ -178,6 +240,7 @@ export function parseScript(text: string, name: string): Script {
       const closer = pendingDirOpener === '(' ? ')' : ']'
       const closeIdx = trimmed.indexOf(closer)
       if (closeIdx >= 0) {
+        flushDialogueBuffer()
         const dirFull = (pendingDirText + ' ' + trimmed.slice(0, closeIdx + 1)).trim()
         lines.push(mkLine(idx++, 'direction', dirFull))
         pendingDirOpener = null
@@ -192,6 +255,7 @@ export function parseScript(text: string, name: string): Script {
 
     // Stage directions in [] or () that occupy the whole line — recognised even before play starts
     if (trimmed.startsWith('[') || (trimmed.startsWith('(') && trimmed.endsWith(')'))) {
+      flushDialogueBuffer()
       lines.push(mkLine(idx++, 'direction', trimmed))
       continue
     }
@@ -210,6 +274,7 @@ export function parseScript(text: string, name: string): Script {
 
     // ── Directions ────────────────────────────────────────────────────────────
     if (isEnterExit(trimmed)) {
+      flushDialogueBuffer()
       currentCharacter = null
       lines.push(mkLine(idx++, 'direction', trimmed))
       continue
@@ -228,6 +293,7 @@ export function parseScript(text: string, name: string): Script {
         continue
       }
       if (LABEL_KEYWORDS.has(charName)) {
+        flushDialogueBuffer()
         lines.push(mkLine(idx++, 'direction', trimmed))
         continue
       }
@@ -264,6 +330,7 @@ export function parseScript(text: string, name: string): Script {
     }
   }
 
+  flushDialogueBuffer()
   closeScene(lines.length - 1)
 
   return {

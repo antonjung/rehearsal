@@ -63,6 +63,7 @@ export function GlobalSettings({ onClose }: Props) {
     voiceCalibration: 0.6,
     speechCoverageThreshold: 70,
     minGapMs: 1000,
+    gapUnit: 'speech' as const,
   }
 
   const cmdWords: VoiceCommandWords = { ...DEFAULT_VOICE_COMMANDS, ...(prefs.voiceCommands ?? {}) }
@@ -141,6 +142,23 @@ export function GlobalSettings({ onClose }: Props) {
               <Stepper value={(prefs.minGapMs ?? 1000) / 1000} min={0} max={10} step={0.5}
                 display={`${((prefs.minGapMs ?? 1000) / 1000).toFixed(1)}s`}
                 onChange={(v) => update('minGapMs', Math.round(v * 1000))} />
+            </SettingsRow>
+            <SettingsRow label="Gap applies per">
+              <div className="flex rounded-lg border border-[var(--color-stage-border)] overflow-hidden">
+                {(['sentence', 'speech'] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => update('gapUnit', opt)}
+                    className={`px-3 py-1.5 text-xs capitalize transition-colors ${
+                      (prefs.gapUnit ?? 'speech') === opt
+                        ? 'bg-[var(--color-stage-accent)] text-white'
+                        : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
             </SettingsRow>
           </SettingsSection>
 

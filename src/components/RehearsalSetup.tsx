@@ -31,6 +31,7 @@ export function RehearsalSetup({ onStart }: Props) {
     voiceCalibration: 0.6,
     speechCoverageThreshold: 70,
     minGapMs: 1000,
+    gapUnit: 'speech' as const,
   }
 
   const [sceneId, setSceneId] = useState<string | null>(

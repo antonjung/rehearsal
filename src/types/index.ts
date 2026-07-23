@@ -80,6 +80,7 @@ export interface RehearsalSettings {
   speechCoverageThreshold?: number
   condensedLines?: number
   minGapMs?: number
+  gapUnit?: 'sentence' | 'speech'
 }
 
 export interface MarkedBlock {
