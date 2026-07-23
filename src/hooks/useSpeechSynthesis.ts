@@ -54,7 +54,10 @@ export function useSpeechSynthesis() {
           // Guard: if cancel() was called while we were in a retry timeout
           if (resolveRef.current !== resolve) return
 
-          const utter = new SpeechSynthesisUtterance(text)
+          // Leading space: many engines drop the first few ms of actual audio
+          // output while the synthesis pipeline spins up, clipping the first
+          // word. A silent leading character absorbs that startup window instead.
+          const utter = new SpeechSynthesisUtterance(' ' + text)
           utter.rate = options.rate ?? 1
           utter.pitch = options.pitch ?? 1
           utter.volume = options.volume ?? 1
@@ -111,9 +114,10 @@ export function useSpeechSynthesis() {
             done()
           }
 
-          // 100ms pre-speak delay: helps iOS audio session settle between utterances.
-          // Combined with the silent-utterance retry above, this covers both the
-          // preventive and reactive cases.
+          // Pre-speak delay: helps the audio session settle between utterances
+          // before synthesis starts. Combined with the leading space above and
+          // the silent-utterance retry below, this covers the preventive and
+          // reactive cases for clipped/dropped audio at the start of a line.
           setTimeout(() => {
             if (resolveRef.current !== resolve) { clearWatchdog(); return }
             try {
@@ -122,7 +126,7 @@ export function useSpeechSynthesis() {
             } catch {
               done()
             }
-          }, 100)
+          }, 200)
         }
 
         attemptSpeak(2)
