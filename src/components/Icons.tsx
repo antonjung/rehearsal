@@ -28,6 +28,8 @@ export {
   ArrowExportRegular as IconExport,
   ArrowUploadRegular as IconImport,
   ShareRegular as IconShare,
+  CloudArrowUpRegular as IconUpload,
+  CloudArrowDownRegular as IconDownload,
   TextCollapseRegular as IconTextCollapse,
   StackRegular as IconTrack,
 } from '@fluentui/react-icons'

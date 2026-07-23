@@ -1,14 +1,28 @@
 import { useRef, useState, useEffect } from 'react'
-import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport } from './Icons'
+import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport, IconDownload, IconShare } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 import { parseImportFile, countRecordingConflicts, countTrackConflicts, importBundle } from '../utils/exportImport'
+import { listSharedScripts, downloadScriptFromLibrary, copyLinkAsAnchor } from '../utils/shareScript'
+import { getAllRecordings, setRecordingRaw } from '../utils/recordingStore'
 import type { Script } from '../types'
+import type { SharedLibraryEntry } from '../utils/shareScript'
 
 interface ExampleMeta { name: string; file: string; description: string }
 
 interface Props { open: boolean; onClose: () => void }
+
+function nextVersionedName(baseName: string, existingNames: string[]): string {
+  if (!existingNames.includes(baseName)) return baseName
+  let n = 2
+  while (existingNames.includes(`${baseName} (${n})`)) n++
+  return `${baseName} (${n})`
+}
+
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
 
 export function SideMenu({ open, onClose }: Props) {
   const { scripts, addScript, removeScript, selectScript, updateScript } = useAppStore()
@@ -27,6 +41,18 @@ export function SideMenu({ open, onClose }: Props) {
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [libraryEntries, setLibraryEntries] = useState<SharedLibraryEntry[] | null>(null)
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [libraryError, setLibraryError] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [pendingDownload, setPendingDownload] = useState<{
+    script: Script
+    recordings: Map<string, Blob>
+    conflictWith: Script
+  } | null>(null)
+  const [appShareCopied, setAppShareCopied] = useState(false)
 
   async function handleBundleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -104,6 +130,97 @@ export function SideMenu({ open, onClose }: Props) {
     } finally {
       setImporting(false)
       setLoadingExample(null)
+    }
+  }
+
+  async function toggleLibrary() {
+    const next = !libraryOpen
+    setLibraryOpen(next)
+    if (next && libraryEntries === null) {
+      setLibraryLoading(true)
+      setLibraryError(null)
+      try {
+        setLibraryEntries(await listSharedScripts())
+      } catch (err) {
+        console.error('Failed to list shared library', err)
+        setLibraryError('Could not load the shared library')
+      } finally {
+        setLibraryLoading(false)
+      }
+    }
+  }
+
+  // Writes a downloaded script's recordings, skipping any line that already has
+  // a recording on the target script — downloaded recordings never clobber the
+  // user's own takes.
+  async function importRecordings(scriptId: string, recordings: Map<string, Blob>) {
+    if (recordings.size === 0) return
+    const existing = await getAllRecordings()
+    for (const [lineIdx, blob] of recordings) {
+      const key = `${scriptId}:${lineIdx}`
+      if (existing.has(key)) continue
+      await setRecordingRaw(key, blob)
+    }
+  }
+
+  async function finalizeDownload(script: Script, recordings: Map<string, Blob>, overwriteId: string | null) {
+    const targetId = overwriteId ?? crypto.randomUUID()
+    const finalScript = { ...script, id: targetId }
+    if (overwriteId) {
+      const existing = scripts.find((s) => s.id === overwriteId)
+      updateScript({ ...finalScript, tracks: existing?.tracks?.length ? existing.tracks : finalScript.tracks })
+    } else {
+      addScript(finalScript)
+    }
+    await importRecordings(targetId, recordings)
+    selectScript(targetId)
+  }
+
+  async function handleDownload(entry: SharedLibraryEntry) {
+    setDownloadingId(entry.id)
+    setLibraryError(null)
+    try {
+      const { script, recordings } = await downloadScriptFromLibrary(entry.id)
+      const conflictWith = scripts.find((s) => s.name === script.name)
+      if (conflictWith) {
+        setPendingDownload({ script, recordings, conflictWith })
+      } else {
+        await finalizeDownload(script, recordings, null)
+      }
+    } catch (err) {
+      console.error('Download failed', err)
+      setLibraryError('Could not download that script')
+    } finally {
+      setDownloadingId(null)
+    }
+  }
+
+  async function resolvePendingDownload(mode: 'overwrite' | 'keep') {
+    if (!pendingDownload) return
+    const { script, recordings, conflictWith } = pendingDownload
+    setPendingDownload(null)
+    if (mode === 'overwrite') {
+      await finalizeDownload(script, recordings, conflictWith.id)
+    } else {
+      const versionedName = nextVersionedName(script.name, scripts.map((s) => s.name))
+      await finalizeDownload({ ...script, name: versionedName }, recordings, null)
+    }
+  }
+
+  async function handleShareApp() {
+    const url = `${window.location.origin}${import.meta.env.BASE_URL}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'CueLine', text: 'Learn your lines with CueLine', url })
+      } catch (err) {
+        if ((err as Error)?.name !== 'AbortError') console.error('Share failed', err)
+      }
+    } else if (typeof navigator.clipboard?.writeText === 'function') {
+      await copyLinkAsAnchor(url, 'CueLine — learn your lines')
+      setAppShareCopied(true)
+      setTimeout(() => setAppShareCopied(false), 2000)
+    } else {
+      window.prompt('Copy this link to share:', url)
     }
   }
 
@@ -187,6 +304,47 @@ export function SideMenu({ open, onClose }: Props) {
                 )}
               </>
             )}
+
+            {/* Shared library */}
+            <button
+              onClick={() => void toggleLibrary()}
+              className="w-full relative flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors px-4"
+            >
+              <IconDownload /> <span>Download from shared library</span>
+              <span className="absolute right-4">{libraryOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
+            </button>
+            {libraryOpen && (
+              <div className="space-y-2">
+                {libraryLoading && <p className="text-xs text-[var(--color-stage-muted)] text-center py-2">Loading…</p>}
+                {libraryError && <p className="text-xs text-red-400 text-center py-1">{libraryError}</p>}
+                {!libraryLoading && libraryEntries?.length === 0 && (
+                  <p className="text-xs text-[var(--color-stage-muted)] text-center py-2">Nothing shared yet</p>
+                )}
+                {libraryEntries?.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{entry.name}</p>
+                      <p className="text-xs text-[var(--color-stage-muted)]">{formatDate(entry.createdAt)}</p>
+                    </div>
+                    <button
+                      disabled={downloadingId === entry.id}
+                      onClick={() => void handleDownload(entry)}
+                      className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+                    >
+                      {downloadingId === entry.id ? '⏳' : 'Download'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Share the app */}
+            <button
+              onClick={() => void handleShareApp()}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+            >
+              <IconShare /> <span>{appShareCopied ? 'Link copied!' : 'Share CueLine app'}</span>
+            </button>
           </div>
 
           {/* About */}
@@ -329,6 +487,31 @@ export function SideMenu({ open, onClose }: Props) {
               </button>
               <button onClick={() => setImportState(null)} disabled={importing}
                 className="py-2 rounded-lg text-sm font-medium text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-50 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDownload && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl p-5 w-full max-w-sm space-y-4">
+            <p className="font-semibold text-[var(--color-stage-text)]">Already have this script</p>
+            <p className="text-sm text-[var(--color-stage-muted)]">
+              You already have a script named "{pendingDownload.conflictWith.name}". Overwrite it, or keep both?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => void resolvePendingDownload('overwrite')}
+                className="py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white hover:opacity-90 transition-opacity">
+                Overwrite
+              </button>
+              <button onClick={() => void resolvePendingDownload('keep')}
+                className="py-2 rounded-lg text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors">
+                Keep both
+              </button>
+              <button onClick={() => setPendingDownload(null)}
+                className="py-2 rounded-lg text-sm font-medium text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors">
                 Cancel
               </button>
             </div>

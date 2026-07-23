@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore/lite'
+import { collection, addDoc, doc, getDoc, getDocs, setDoc, query, orderBy, limit } from 'firebase/firestore/lite'
 import { db } from './firebaseClient'
 import { getAllRecordings } from './recordingStore'
 import type { Script } from '../types'
@@ -55,38 +55,20 @@ async function gunzip(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBu
   return readAll(ds.readable)
 }
 
-// Encodes a script (no recordings — those are personal and would bloat the link)
-// into a compact, URL-safe string suitable for a share link fragment.
-export async function encodeScriptForShare(script: Script): Promise<string> {
-  const json = JSON.stringify({ v: 1, script } satisfies SharedScriptPayload)
-  const bytes = new TextEncoder().encode(json)
-  if (hasCompression) return 'g' + toBase64Url(await gzip(bytes))
-  return 'r' + toBase64Url(bytes)
-}
+// --- Shared library (Firestore) -------------------------------------------
+// Uploaded scripts are gzip-compressed then AES-GCM encrypted with a single
+// key built into the app (not stored in Firestore) — not readable directly by
+// anyone browsing/scraping the database without the app, but any copy of the
+// app can decrypt any listed entry. This trades per-recipient secrecy for a
+// browsable "what's available" list, which a per-link unique key can't support.
+const APP_SHARE_KEY_B64 = 'P789ZTh1b5xoKkdmlLUsVbVb6j-Bbt0lXt7WWqVwZMs'
 
-export async function decodeSharedScript(encoded: string): Promise<Script> {
-  const flag = encoded[0]
-  const bytes = fromBase64Url(encoded.slice(1))
-  if (flag === 'g' && !hasCompression) throw new Error('This link needs a newer browser to open')
-  const raw = flag === 'g' ? await gunzip(bytes) : bytes
-  const payload = JSON.parse(new TextDecoder().decode(raw)) as SharedScriptPayload
-  if (payload.v !== 1 || !payload.script || !Array.isArray(payload.script.lines)) {
-    throw new Error('Invalid shared script data')
+let cachedKey: Promise<CryptoKey> | null = null
+function getAppShareKey(): Promise<CryptoKey> {
+  if (!cachedKey) {
+    cachedKey = crypto.subtle.importKey('raw', fromBase64Url(APP_SHARE_KEY_B64), 'AES-GCM', false, ['encrypt', 'decrypt'])
   }
-  return payload.script
-}
-
-export function buildShareUrl(encoded: string): string {
-  return `${window.location.origin}${import.meta.env.BASE_URL}#script=${encoded}`
-}
-
-// --- Firebase-backed short links ------------------------------------------
-// The script is gzip-compressed then AES-GCM encrypted client-side before it
-// ever reaches Firestore, so the stored document is unusable without the key
-// — and the key travels only in the URL fragment, never sent to Firebase.
-
-async function generateAesKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
+  return cachedKey
 }
 
 async function encryptBytes(data: Uint8Array<ArrayBuffer>, key: CryptoKey) {
@@ -100,10 +82,12 @@ async function decryptBytes(ciphertext: Uint8Array<ArrayBuffer>, iv: Uint8Array<
 }
 
 interface SharedScriptDoc {
+  name: string
   ciphertext: string
   iv: string
   v: 1
   compressed: boolean
+  createdAt: number
 }
 
 interface SharedRecordingDoc {
@@ -112,10 +96,10 @@ interface SharedRecordingDoc {
 }
 
 // A recording's encrypted+base64 form must stay well under Firestore's 1MiB
-// per-document cap; anything larger is skipped rather than failing the whole share.
+// per-document cap; anything larger is skipped rather than failing the whole upload.
 const MAX_RECORDING_DOC_CHARS = 900_000
 
-async function uploadRecordingsForShare(scriptId: string, sharedId: string, key: CryptoKey): Promise<void> {
+async function uploadRecordings(scriptId: string, sharedId: string, key: CryptoKey): Promise<void> {
   const allRecs = await getAllRecordings()
   const entries = Array.from(allRecs.entries()).filter(
     ([k, v]) => k.startsWith(`${scriptId}:`) && !k.endsWith(':dur') && v instanceof Blob,
@@ -126,7 +110,7 @@ async function uploadRecordingsForShare(scriptId: string, sharedId: string, key:
     const { iv, ciphertext } = await encryptBytes(bytes, key)
     const ciphertextB64 = toBase64Url(ciphertext)
     if (ciphertextB64.length > MAX_RECORDING_DOC_CHARS) {
-      console.warn(`Skipping recording for line ${lineIdx} — too large to share (${ciphertextB64.length} chars)`)
+      console.warn(`Skipping recording for line ${lineIdx} — too large to upload (${ciphertextB64.length} chars)`)
       continue
     }
     await setDoc(doc(db, 'sharedScripts', sharedId, 'recordings', lineIdx), {
@@ -136,7 +120,7 @@ async function uploadRecordingsForShare(scriptId: string, sharedId: string, key:
   }
 }
 
-async function downloadRecordingsForShare(sharedId: string, key: CryptoKey): Promise<Map<string, Blob>> {
+async function downloadRecordings(sharedId: string, key: CryptoKey): Promise<Map<string, Blob>> {
   const snap = await getDocs(collection(db, 'sharedScripts', sharedId, 'recordings'))
   const result = new Map<string, Blob>()
   for (const d of snap.docs) {
@@ -149,27 +133,43 @@ async function downloadRecordingsForShare(sharedId: string, key: CryptoKey): Pro
   return result
 }
 
-// Encrypts and uploads a script plus its recordings, returning a short URL
-// fragment (no leading #), e.g. "s=<docId>&k=<base64url key>".
-export async function uploadScriptForShare(script: Script): Promise<string> {
+// Encrypts and uploads a script plus its recordings to the shared library.
+// Returns the new doc id.
+export async function uploadScriptToLibrary(script: Script): Promise<string> {
+  const key = await getAppShareKey()
   const json = JSON.stringify({ v: 1, script } satisfies SharedScriptPayload)
   const bytes = new TextEncoder().encode(json)
   const compressed = hasCompression ? await gzip(bytes) : bytes
-  const key = await generateAesKey()
   const { iv, ciphertext } = await encryptBytes(compressed, key)
-  const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key))
 
   const docRef = await addDoc(collection(db, 'sharedScripts'), {
+    name: script.name,
     ciphertext: toBase64Url(ciphertext),
     iv: toBase64Url(iv),
     v: 1,
     compressed: hasCompression,
     createdAt: Date.now(),
+  } satisfies SharedScriptDoc)
+
+  await uploadRecordings(script.id, docRef.id, key)
+
+  return docRef.id
+}
+
+export interface SharedLibraryEntry {
+  id: string
+  name: string
+  createdAt: number
+}
+
+// Lists what's in the shared library, newest first.
+export async function listSharedScripts(): Promise<SharedLibraryEntry[]> {
+  const q = query(collection(db, 'sharedScripts'), orderBy('createdAt', 'desc'), limit(200))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => {
+    const data = d.data() as SharedScriptDoc
+    return { id: d.id, name: data.name, createdAt: data.createdAt }
   })
-
-  await uploadRecordingsForShare(script.id, docRef.id, key)
-
-  return `s=${docRef.id}&k=${toBase64Url(rawKey)}`
 }
 
 export interface SharedScriptDownload {
@@ -178,15 +178,14 @@ export interface SharedScriptDownload {
   recordings: Map<string, Blob>
 }
 
-export async function downloadSharedScriptFromFirebase(id: string, keyB64: string): Promise<SharedScriptDownload> {
+export async function downloadScriptFromLibrary(id: string): Promise<SharedScriptDownload> {
+  const key = await getAppShareKey()
   const snap = await getDoc(doc(db, 'sharedScripts', id))
-  if (!snap.exists()) throw new Error('This shared script link has expired or is invalid')
+  if (!snap.exists()) throw new Error('This script is no longer available')
   const data = snap.data() as SharedScriptDoc
   if (data.v !== 1) throw new Error('Unsupported shared script version')
-  if (data.compressed && !hasCompression) throw new Error('This link needs a newer browser to open')
+  if (data.compressed && !hasCompression) throw new Error('This script needs a newer browser to open')
 
-  const rawKey = fromBase64Url(keyB64)
-  const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt'])
   const ciphertext = fromBase64Url(data.ciphertext)
   const iv = fromBase64Url(data.iv)
   const plainCompressed = await decryptBytes(ciphertext, iv, key)
@@ -195,23 +194,18 @@ export async function downloadSharedScriptFromFirebase(id: string, keyB64: strin
   const payload = JSON.parse(new TextDecoder().decode(plain)) as SharedScriptPayload
   if (!payload.script || !Array.isArray(payload.script.lines)) throw new Error('Invalid shared script data')
 
-  const recordings = await downloadRecordingsForShare(id, key)
+  const recordings = await downloadRecordings(id, key)
   return { script: payload.script, recordings }
-}
-
-export function buildFirebaseShareUrl(fragment: string): string {
-  return `${window.location.origin}${import.meta.env.BASE_URL}#${fragment}`
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-// Copies the link to the clipboard as a single HTML anchor (plus a plain-text
+// Copies a link to the clipboard as a single HTML anchor (plus a plain-text
 // fallback) so pasting into a rich-text target (email, Notes, Slack, docs)
-// shows one clickable link with a friendly label instead of the raw encoded
-// URL as a wall of text.
-export async function copyShareLinkAsAnchor(url: string, label: string): Promise<void> {
+// shows one clickable link with a friendly label instead of a raw URL.
+export async function copyLinkAsAnchor(url: string, label: string): Promise<void> {
   if (typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function') {
     try {
       const html = `<a href="${url}">${escapeHtml(label)}</a>`
