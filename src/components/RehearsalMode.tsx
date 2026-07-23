@@ -245,6 +245,10 @@ export function RehearsalMode() {
 
   // --- Refs ---
   const lineRefs = useRef<Record<number, HTMLElement | null>>({})
+  // Per-sentence scroll targets, separate from lineRefs (which is keyed by each
+  // rendered group's first line only) — avoids the group wrapper's ref clobbering
+  // the first sentence's own ref since they'd otherwise share the same key.
+  const sentenceRefs = useRef<Record<number, HTMLElement | null>>({})
   const stopRef = useRef(false)
   const runIdRef = useRef(0)
   const pauseRef = useRef(false)
@@ -328,7 +332,7 @@ export function RehearsalMode() {
   }
 
   const scrollToLine = (idx: number) =>
-    lineRefs.current[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    (sentenceRefs.current[idx] ?? lineRefs.current[idx])?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 
   const cancelLongPress = () => {
     if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null }
@@ -1209,6 +1213,11 @@ export function RehearsalMode() {
                 lineVisible={lineVisible}
                 highlightStyle={isMyLine ? HIGHLIGHTER_COLORS[settings.highlighterColor ?? 'yellow'] : undefined}
                 onSelect={() => handleLineSelect(group.startIdx)}
+                onSelectSentence={
+                  (settings.gapUnit ?? 'speech') === 'sentence'
+                    ? (localIdx: number) => handleLineSelect(group.startIdx + localIdx)
+                    : undefined
+                }
                 onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
                 onRecord={
                   group.type === 'dialogue' && !isPlaying && phase !== 'paused'
@@ -1225,7 +1234,7 @@ export function RehearsalMode() {
                 hasRecording={recMapRef.current.has(group.startIdx)}
                 lineProgress={isMyLine && lineProgress?.groupStartIdx === group.startIdx ? lineProgress : null}
                 searchActive={isSearchActive}
-                onSentenceRef={(absoluteIdx, el) => { lineRefs.current[absoluteIdx] = el }}
+                onSentenceRef={(absoluteIdx, el) => { sentenceRefs.current[absoluteIdx] = el }}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
               {group.startIdx === blockEnd && (
@@ -1398,6 +1407,7 @@ interface LineRowProps {
   lineVisible: boolean
   highlightStyle?: React.CSSProperties
   onSelect: () => void
+  onSelectSentence?: (localIdx: number) => void
   onReveal?: () => void
   onRecord?: () => void
   onDeleteRecording?: () => void
@@ -1411,7 +1421,7 @@ interface LineRowProps {
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
-  onSelect, onReveal, onRecord, onDeleteRecording, isRecordingThis, anyRecording, hasRecording,
+  onSelect, onSelectSentence, onReveal, onRecord, onDeleteRecording, isRecordingThis, anyRecording, hasRecording,
   lineProgress, searchActive, onSentenceRef, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -1496,7 +1506,8 @@ const LineRow = ({
                 <React.Fragment key={idx}>
                   <span
                     ref={(el) => onSentenceRef?.(group.startIdx + idx, el)}
-                    className="block"
+                    onClick={onSelectSentence ? (e) => { e.stopPropagation(); onSelectSentence(idx) } : undefined}
+                    className={`block${onSelectSentence ? ' cursor-pointer' : ''}`}
                     style={{
                       ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
                       ...(highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}),
