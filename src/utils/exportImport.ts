@@ -8,7 +8,7 @@ export interface ExportBundle {
   recordings: Record<string, string>  // "scriptId:lineIdx" → base64 audio
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
+export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve((reader.result as string).split(',')[1])
@@ -17,7 +17,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
-function base64ToBlob(b64: string): Blob {
+export function base64ToBlob(b64: string): Blob {
   const bytes = atob(b64)
   const arr = new Uint8Array(bytes.length)
   for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)

@@ -90,6 +90,11 @@ interface LineGroup {
   text: string
 }
 
+interface LineProgress {
+  sentenceIdx: number
+  pct: number
+}
+
 export function RehearsalMode() {
   const { scripts, rehearsalSettings, saveRehearsalSettings, selectedScriptId, scriptFontSize } = useAppStore()
   const { speak, cancel } = useSpeechSynthesis()
@@ -197,7 +202,7 @@ export function RehearsalMode() {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
   const [showCondensedMenu, setShowCondensedMenu] = useState(false)
-  const [lineProgressMap, setLineProgressMap] = useState<Record<number, number>>({})
+  const [lineProgressMap, setLineProgressMap] = useState<Record<number, LineProgress>>({})
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -496,10 +501,12 @@ export function RehearsalMode() {
             groupEnd++
           }
         }
-        const groupText =
-          line.type === 'dialogue'
-            ? lines.slice(lineIdx, groupEnd + 1).map((l) => l.text).join('\n')
-            : line.text
+        const groupLineTexts = line.type === 'dialogue' ? lines.slice(lineIdx, groupEnd + 1).map((l) => l.text) : [line.text]
+        const groupText = line.type === 'dialogue' ? groupLineTexts.join('\n') : line.text
+        // Per-sentence share of the group's gap, so the progress bar can advance
+        // sentence-by-sentence even when several sentences share one combined gap.
+        const sentenceDurations = groupLineTexts.map((t) => estimateDuration(t, rate) * (settingsRef.current.voiceCalibration ?? 1))
+        const sentenceDurationTotal = sentenceDurations.reduce((a, b) => a + b, 0) || 1
 
         setCurrentIdx(lineIdx)
         scrollToLine(lineIdx)
@@ -563,6 +570,22 @@ export function RehearsalMode() {
           // A minimum gap is always added on top so short lines still get a usable pause.
           const elt = (recDurMapRef.current.get(lineIdx) ?? gap) + (settingsRef.current.minGapMs ?? 1000)
 
+          // Maps elapsed ms into { sentenceIdx, pct } so the progress bar can sit under
+          // whichever sentence is currently "due" rather than the group as a whole.
+          const sentenceProgressAt = (elapsedMs: number): { sentenceIdx: number; pct: number } => {
+            let acc = 0
+            for (let idx = 0; idx < sentenceDurations.length; idx++) {
+              const isLast = idx === sentenceDurations.length - 1
+              const share = elt * (sentenceDurations[idx] / sentenceDurationTotal)
+              if (isLast || elapsedMs < acc + share) {
+                const pct = share > 0 ? Math.min(100, Math.round(((elapsedMs - acc) / share) * 100)) : 100
+                return { sentenceIdx: idx, pct: Math.max(0, pct) }
+              }
+              acc += share
+            }
+            return { sentenceIdx: sentenceDurations.length - 1, pct: 100 }
+          }
+
           // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef; resettable via myLineResetRef.
           // startImmediately=false: timer only begins when myLineResetRef.current() is first called.
           const waitWithProgress = (startImmediately = true): Promise<void> => new Promise((resolve) => {
@@ -585,7 +608,7 @@ export function RehearsalMode() {
               myLinePauseTimerRef.current = null
               setLineProgressMap(prev => ({
                 ...prev,
-                [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
+                [lineIdx]: { sentenceIdx: sentenceDurations.length - 1, pct: 100 }
               }))
               resolve()
             }
@@ -598,7 +621,7 @@ export function RehearsalMode() {
                 if (resolved) return
                 setLineProgressMap(prev => ({
                   ...prev,
-                  [lineIdx]: Math.min(100, Math.round(((Date.now() - startTime) / elt) * 100))
+                  [lineIdx]: sentenceProgressAt(Date.now() - startTime)
                 }))
                 rafId = requestAnimationFrame(tick)
               }
@@ -1361,7 +1384,7 @@ interface LineRowProps {
   isRecordingThis?: boolean
   anyRecording?: boolean
   hasRecording?: boolean
-  lineProgress?: number | null
+  lineProgress?: LineProgress | null
   searchActive?: boolean
 }
 
@@ -1445,30 +1468,31 @@ const LineRow = ({
               <span className="w-1.5 h-1.5 rounded-full bg-red-400/70 shrink-0 self-center" title="Has recording" />
             )}
           </div>
-          {lineVisible ? (
-            <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
-              {group.text.split('\n').map((t, idx) => (
-                <span key={idx} className="block" style={highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
-              ))}
-            </span>
-          ) : (
-            <span
-              className="text-[var(--color-stage-text)] select-none"
-              style={{ fontSize: 'var(--script-font-size, 14px)', filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }}
-            >
-              {group.text.split('\n').map((t, idx) => (
-                <span key={idx} className="block" style={highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}}>{t}</span>
-              ))}
-            </span>
-          )}
-          {lineProgress != null && (
-            <div className="mt-1.5 h-1 rounded-full bg-[var(--color-stage-border)] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[var(--color-stage-accent)]"
-                style={{ width: `${lineProgress}%` }}
-              />
-            </div>
-          )}
+          <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
+            {group.text.split('\n').map((t, idx) => (
+              <React.Fragment key={idx}>
+                <span
+                  className="block"
+                  style={{
+                    ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
+                    ...(highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}),
+                  }}
+                >
+                  {t}
+                </span>
+                {/* Progress bar for the sentence currently being timed, so pacing is
+                    visible per-sentence even when several share one combined gap */}
+                {lineProgress != null && lineProgress.sentenceIdx === idx && (
+                  <div className="my-1 h-1 rounded-full bg-[var(--color-stage-border)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-[var(--color-stage-accent)]"
+                      style={{ width: `${lineProgress.pct}%` }}
+                    />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </span>
         </div>
 
         {/* Right column: delete + record buttons */}

@@ -53,6 +53,9 @@ export function ScriptEditor({ script, onClose }: Props) {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
   const [bulkCharMode, setBulkCharMode] = useState(false)
   const [bulkCharacter, setBulkCharacter] = useState('')
+  const [fixCharOpen, setFixCharOpen] = useState(false)
+  const [fixFrom, setFixFrom] = useState('')
+  const [fixTo, setFixTo] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const savedScrollRef = useRef(0)
 
@@ -158,6 +161,29 @@ export function ScriptEditor({ script, onClose }: Props) {
     savedScrollRef.current = scrollRef.current?.scrollTop ?? 0
     setSelectMode(true)
     setEditingIdx(null)
+    exitFixCharMode()
+  }
+
+  const enterFixCharMode = () => {
+    setFixCharOpen(true)
+    setEditingIdx(null)
+    setSelectMode(false)
+    setSelectedIndices(new Set())
+  }
+
+  const exitFixCharMode = () => {
+    setFixCharOpen(false)
+    setFixFrom('')
+    setFixTo('')
+  }
+
+  const applyCharacterFix = () => {
+    const newName = fixTo.trim().toUpperCase()
+    if (!fixFrom || !newName) return
+    setLines((prev) => prev.map((l) =>
+      l.type === 'dialogue' && l.character === fixFrom ? { ...l, character: newName } : l
+    ))
+    exitFixCharMode()
   }
 
   useLayoutEffect(() => {
@@ -180,25 +206,74 @@ export function ScriptEditor({ script, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-stage-border)] shrink-0">
           <button
-            onClick={selectMode ? exitSelectMode : onClose}
+            onClick={selectMode ? exitSelectMode : fixCharOpen ? exitFixCharMode : onClose}
             className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors shrink-0"
           >
-            {selectMode ? '← Cancel' : '← Done'}
+            {selectMode || fixCharOpen ? '← Cancel' : '← Done'}
           </button>
           <h2 className="flex-1 font-semibold text-[var(--color-stage-text)] truncate">{script.name}</h2>
           {selectMode ? (
             <span className="text-xs text-[var(--color-stage-muted)] shrink-0">
               {selectedIndices.size} selected
             </span>
-          ) : (
-            <button
-              onClick={enterSelectMode}
-              className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-2 py-1 rounded border border-[var(--color-stage-border)] shrink-0"
-            >
-              Select
-            </button>
-          )}
+          ) : !fixCharOpen ? (
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={enterFixCharMode}
+                className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-2 py-1 rounded border border-[var(--color-stage-border)]"
+              >
+                Fix character
+              </button>
+              <button
+                onClick={enterSelectMode}
+                className="text-xs text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors px-2 py-1 rounded border border-[var(--color-stage-border)]"
+              >
+                Select
+              </button>
+            </div>
+          ) : null}
         </div>
+
+        {/* Fix character panel */}
+        {fixCharOpen && (
+          <div className="px-3 py-2.5 border-b border-[var(--color-stage-border)] shrink-0 space-y-2 bg-[var(--color-stage-surface)]">
+            <p className="text-xs text-[var(--color-stage-muted)]">Rename a character everywhere it appears in this script (e.g. a misspelling).</p>
+            <div className="flex gap-2 items-center">
+              <select
+                value={fixFrom}
+                onChange={(e) => setFixFrom(e.target.value)}
+                className="flex-1 min-w-0 text-xs px-2 py-1.5 rounded-md bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] text-[var(--color-stage-text)]"
+              >
+                <option value="">— from —</option>
+                {allCharacters.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <span className="text-[var(--color-stage-muted)] shrink-0">→</span>
+              <input
+                type="text"
+                value={fixTo}
+                onChange={(e) => setFixTo(e.target.value.toUpperCase())}
+                placeholder="correct name"
+                list="fix-char-suggestions"
+                className="flex-1 min-w-0 text-xs px-2 py-1.5 rounded-md bg-[var(--color-stage-bg)] border border-[var(--color-stage-border)] text-[var(--color-stage-text)] placeholder:text-[var(--color-stage-muted)]"
+              />
+              <datalist id="fix-char-suggestions">
+                {allCharacters.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--color-stage-muted)]">
+                {fixFrom ? `${lines.filter((l) => l.type === 'dialogue' && l.character === fixFrom).length} line(s) will change` : ''}
+              </span>
+              <button
+                disabled={!fixFrom || !fixTo.trim() || fixFrom === fixTo.trim().toUpperCase()}
+                onClick={applyCharacterFix}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[var(--color-stage-accent)] hover:opacity-90 disabled:opacity-40 transition-opacity"
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Search bar */}
         <div className="px-3 py-2 border-b border-[var(--color-stage-border)] shrink-0">

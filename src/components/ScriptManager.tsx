@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
 import { buildExportBundle, downloadBundle } from '../utils/exportImport'
-import { encodeScriptForShare, buildShareUrl } from '../utils/shareScript'
+import { encodeScriptForShare, buildShareUrl, copyShareLinkAsAnchor, uploadScriptForShare, buildFirebaseShareUrl } from '../utils/shareScript'
 
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
@@ -31,12 +31,17 @@ export function ScriptManager() {
   async function handleShare(script: Script) {
     setSharingId(script.id)
     try {
-      const encoded = await encodeScriptForShare(script)
-      const url = buildShareUrl(encoded)
+      let url: string
+      try {
+        url = buildFirebaseShareUrl(await uploadScriptForShare(script))
+      } catch (uploadErr) {
+        console.error('Short link upload failed, falling back to a self-contained link', uploadErr)
+        url = buildShareUrl(await encodeScriptForShare(script))
+      }
       if (navigator.share) {
         await navigator.share({ title: `CueLine — ${script.name}`, text: `Rehearse "${script.name}" with me on CueLine`, url })
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url)
+      } else if (typeof navigator.clipboard?.writeText === 'function') {
+        await copyShareLinkAsAnchor(url, `Rehearse "${script.name}" on CueLine`)
         setSharedId(script.id)
         setTimeout(() => setSharedId(null), 2000)
       } else {
