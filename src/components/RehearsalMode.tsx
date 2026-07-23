@@ -91,7 +91,11 @@ interface LineGroup {
 }
 
 interface LineProgress {
-  sentenceIdx: number
+  // The rendered (visual) group this progress belongs to, and which sentence
+  // within it is currently active — a single shared value rather than a map,
+  // so switching lines/groups can't leave stale entries that render as extra bars.
+  groupStartIdx: number
+  activeLocalIdx: number
   pct: number
 }
 
@@ -202,7 +206,7 @@ export function RehearsalMode() {
   const [loopEnabled, setLoopEnabled] = useState(false)
   const [condensedLines, setCondensedLines] = useState(0)
   const [showCondensedMenu, setShowCondensedMenu] = useState(false)
-  const [lineProgressMap, setLineProgressMap] = useState<Record<number, LineProgress>>({})
+  const [lineProgress, setLineProgress] = useState<LineProgress | null>(null)
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -405,7 +409,7 @@ export function RehearsalMode() {
     blockStartRef.current = defaultBlockStart
     blockEndRef.current = defaultBlockEnd
     setRevealedLines({})
-    setLineProgressMap({})
+    setLineProgress(null)
     setPhase('idle')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myCharacter, sceneId])
@@ -570,20 +574,29 @@ export function RehearsalMode() {
           // A minimum gap is always added on top so short lines still get a usable pause.
           const elt = (recDurMapRef.current.get(lineIdx) ?? gap) + (settingsRef.current.minGapMs ?? 1000)
 
-          // Maps elapsed ms into { sentenceIdx, pct } so the progress bar can sit under
-          // whichever sentence is currently "due" rather than the group as a whole.
-          const sentenceProgressAt = (elapsedMs: number): { sentenceIdx: number; pct: number } => {
+          // The rendered (visual) group is always the maximal consecutive run of
+          // same-character dialogue, regardless of gap unit — in 'speech' mode that's
+          // exactly this playback group (lineIdx === its start); in 'sentence' mode
+          // lineIdx may be partway into a bigger visual group, hence the offset.
+          const progressGroup = sceneGroupsRef.current.find((g) => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
+          const progressGroupStartIdx = progressGroup?.startIdx ?? lineIdx
+          const localIdxOffset = lineIdx - progressGroupStartIdx
+
+          // Maps elapsed ms into which sentence is currently "due" and how far
+          // through it we are, so the progress bar can sit under that sentence
+          // specifically rather than the group as a whole.
+          const sentenceProgressAt = (elapsedMs: number): LineProgress => {
             let acc = 0
             for (let idx = 0; idx < sentenceDurations.length; idx++) {
               const isLast = idx === sentenceDurations.length - 1
               const share = elt * (sentenceDurations[idx] / sentenceDurationTotal)
               if (isLast || elapsedMs < acc + share) {
                 const pct = share > 0 ? Math.min(100, Math.round(((elapsedMs - acc) / share) * 100)) : 100
-                return { sentenceIdx: idx, pct: Math.max(0, pct) }
+                return { groupStartIdx: progressGroupStartIdx, activeLocalIdx: localIdxOffset + idx, pct: Math.max(0, pct) }
               }
               acc += share
             }
-            return { sentenceIdx: sentenceDurations.length - 1, pct: 100 }
+            return { groupStartIdx: progressGroupStartIdx, activeLocalIdx: localIdxOffset + sentenceDurations.length - 1, pct: 100 }
           }
 
           // Pure timer-based gap with rAF progress bar. Interruptible via myLineResolveRef; resettable via myLineResetRef.
@@ -606,10 +619,7 @@ export function RehearsalMode() {
               myLineResolveRef.current = null
               myLineResetRef.current = null
               myLinePauseTimerRef.current = null
-              setLineProgressMap(prev => ({
-                ...prev,
-                [lineIdx]: { sentenceIdx: sentenceDurations.length - 1, pct: 100 }
-              }))
+              setLineProgress({ groupStartIdx: progressGroupStartIdx, activeLocalIdx: localIdxOffset + sentenceDurations.length - 1, pct: 100 })
               resolve()
             }
 
@@ -619,10 +629,7 @@ export function RehearsalMode() {
               timer = setTimeout(done, elt)
               const tick = () => {
                 if (resolved) return
-                setLineProgressMap(prev => ({
-                  ...prev,
-                  [lineIdx]: sentenceProgressAt(Date.now() - startTime)
-                }))
+                setLineProgress(sentenceProgressAt(Date.now() - startTime))
                 rafId = requestAnimationFrame(tick)
               }
               rafId = requestAnimationFrame(tick)
@@ -787,7 +794,7 @@ export function RehearsalMode() {
             stopRef.current = false
             setCurrentIdx(blockStartRef.current)
             setRevealedLines({})
-            setLineProgressMap({})
+            setLineProgress(null)
             runPlayback(blockStartRef.current, blockEndRef.current)
           }, 600)
         } else {
@@ -840,7 +847,7 @@ export function RehearsalMode() {
     } catch { /* ignore */ }
     speechSynthesis.cancel()
     unlockAudio()
-    setLineProgressMap({})
+    setLineProgress(null)
     setRevealedLines({})
     if (phase === 'paused') {
       interruptPlayback(() => { stopRef.current = false; runPlayback(currentIdx, blockEnd) })
@@ -912,7 +919,7 @@ export function RehearsalMode() {
     recMapRef.current.delete(lineIdx)
     recDurMapRef.current.delete(lineIdx)
     void deleteRecording(script!.id, lineIdx)
-    setLineProgressMap((p) => { const n = { ...p }; delete n[lineIdx]; return n })
+    setLineProgress(null)
   }
 
   const toggleReveal = (lineIdx: number) => {
@@ -1204,15 +1211,7 @@ export function RehearsalMode() {
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
                 hasRecording={recMapRef.current.has(group.startIdx)}
-                lineProgress={isMyLine ? (localIdx: number) => {
-                  // 'speech' gap unit: the whole group shares one timer keyed at
-                  // group.startIdx, with sentenceIdx marking which sentence is due.
-                  const bubbleEntry = lineProgressMap[group.startIdx]
-                  if (bubbleEntry && bubbleEntry.sentenceIdx === localIdx) return bubbleEntry
-                  // 'sentence' gap unit: each sentence is timed on its own, keyed
-                  // at its own line index.
-                  return lineProgressMap[group.startIdx + localIdx] ?? null
-                } : null}
+                lineProgress={isMyLine && lineProgress?.groupStartIdx === group.startIdx ? lineProgress : null}
                 searchActive={isSearchActive}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
@@ -1392,7 +1391,7 @@ interface LineRowProps {
   isRecordingThis?: boolean
   anyRecording?: boolean
   hasRecording?: boolean
-  lineProgress?: ((localIdx: number) => LineProgress | null) | null
+  lineProgress?: LineProgress | null
   searchActive?: boolean
 }
 
@@ -1478,7 +1477,7 @@ const LineRow = ({
           </div>
           <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
             {group.text.split('\n').map((t, idx) => {
-              const thisProgress = lineProgress?.(idx) ?? null
+              const thisProgress = lineProgress != null && lineProgress.activeLocalIdx === idx ? lineProgress : null
               return (
                 <React.Fragment key={idx}>
                   <span

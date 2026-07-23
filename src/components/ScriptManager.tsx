@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import type { Script } from '../types'
 import { buildExportBundle, downloadBundle } from '../utils/exportImport'
-import { encodeScriptForShare, buildShareUrl, copyShareLinkAsAnchor, uploadScriptForShare, buildFirebaseShareUrl } from '../utils/shareScript'
+import { copyShareLinkAsAnchor, uploadScriptForShare, buildFirebaseShareUrl } from '../utils/shareScript'
 
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
@@ -13,6 +13,7 @@ export function ScriptManager() {
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [sharingId, setSharingId] = useState<string | null>(null)
   const [sharedId, setSharedId] = useState<string | null>(null)
+  const [shareErrorId, setShareErrorId] = useState<string | null>(null)
 
   async function handleExport(script: Script) {
     setExportingId(script.id)
@@ -30,13 +31,16 @@ export function ScriptManager() {
 
   async function handleShare(script: Script) {
     setSharingId(script.id)
+    setShareErrorId(null)
     try {
       let url: string
       try {
         url = buildFirebaseShareUrl(await uploadScriptForShare(script))
       } catch (uploadErr) {
-        console.error('Short link upload failed, falling back to a self-contained link', uploadErr)
-        url = buildShareUrl(await encodeScriptForShare(script))
+        console.error('Share upload failed', uploadErr)
+        setShareErrorId(script.id)
+        setTimeout(() => setShareErrorId(null), 3000)
+        return
       }
       if (navigator.share) {
         await navigator.share({ title: `CueLine — ${script.name}`, text: `Rehearse "${script.name}" with me on CueLine`, url })
@@ -72,6 +76,7 @@ export function ScriptManager() {
               exportProgress={exportingId === script.id ? exportProgress : undefined}
               sharing={sharingId === script.id}
               shared={sharedId === script.id}
+              shareError={shareErrorId === script.id}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
               onEdit={() => setEditingScript(script)}
@@ -96,6 +101,7 @@ function ScriptCard({
   exportProgress,
   sharing,
   shared,
+  shareError,
   onSelect,
   onRemove,
   onEdit,
@@ -108,6 +114,7 @@ function ScriptCard({
   exportProgress?: { done: number; total: number } | null
   sharing: boolean
   shared: boolean
+  shareError: boolean
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
@@ -152,6 +159,7 @@ function ScriptCard({
       </div>
       <div className="flex items-center gap-1">
         {shared && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Copied!</span>}
+        {shareError && <span className="text-[10px] text-red-400 mr-0.5">Share failed</span>}
         <button
           onClick={(e) => { e.stopPropagation(); if (!sharing) onShare() }}
           className={`transition-colors p-1 rounded ${sharing ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}
