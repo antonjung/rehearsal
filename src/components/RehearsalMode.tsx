@@ -1204,7 +1204,15 @@ export function RehearsalMode() {
                 isRecordingThis={recordingLineIdx === group.startIdx}
                 anyRecording={micRecording || recordingLineIdx !== null}
                 hasRecording={recMapRef.current.has(group.startIdx)}
-                lineProgress={isMyLine ? (lineProgressMap[group.startIdx] ?? null) : null}
+                lineProgress={isMyLine ? (localIdx: number) => {
+                  // 'speech' gap unit: the whole group shares one timer keyed at
+                  // group.startIdx, with sentenceIdx marking which sentence is due.
+                  const bubbleEntry = lineProgressMap[group.startIdx]
+                  if (bubbleEntry && bubbleEntry.sentenceIdx === localIdx) return bubbleEntry
+                  // 'sentence' gap unit: each sentence is timed on its own, keyed
+                  // at its own line index.
+                  return lineProgressMap[group.startIdx + localIdx] ?? null
+                } : null}
                 searchActive={isSearchActive}
                 ref={(el) => { lineRefs.current[group.startIdx] = el }}
               />
@@ -1384,7 +1392,7 @@ interface LineRowProps {
   isRecordingThis?: boolean
   anyRecording?: boolean
   hasRecording?: boolean
-  lineProgress?: LineProgress | null
+  lineProgress?: ((localIdx: number) => LineProgress | null) | null
   searchActive?: boolean
 }
 
@@ -1469,29 +1477,32 @@ const LineRow = ({
             )}
           </div>
           <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
-            {group.text.split('\n').map((t, idx) => (
-              <React.Fragment key={idx}>
-                <span
-                  className="block"
-                  style={{
-                    ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
-                    ...(highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}),
-                  }}
-                >
-                  {t}
-                </span>
-                {/* Progress bar for the sentence currently being timed, so pacing is
-                    visible per-sentence even when several share one combined gap */}
-                {lineProgress != null && lineProgress.sentenceIdx === idx && (
-                  <div className="my-1 h-1 rounded-full bg-[var(--color-stage-border)] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[var(--color-stage-accent)]"
-                      style={{ width: `${lineProgress.pct}%` }}
-                    />
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
+            {group.text.split('\n').map((t, idx) => {
+              const thisProgress = lineProgress?.(idx) ?? null
+              return (
+                <React.Fragment key={idx}>
+                  <span
+                    className="block"
+                    style={{
+                      ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
+                      ...(highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}),
+                    }}
+                  >
+                    {t}
+                  </span>
+                  {/* Progress bar for the sentence currently being timed, so pacing is
+                      visible per-sentence even when several share one combined gap */}
+                  {thisProgress != null && (
+                    <div className="my-1 h-1 rounded-full bg-[var(--color-stage-border)] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[var(--color-stage-accent)]"
+                        style={{ width: `${thisProgress.pct}%` }}
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
+              )
+            })}
           </span>
         </div>
 
