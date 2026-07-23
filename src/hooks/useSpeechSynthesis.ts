@@ -126,7 +126,7 @@ export function useSpeechSynthesis() {
             } catch {
               done()
             }
-          }, 200)
+          }, 400)
         }
 
         attemptSpeak(2)
