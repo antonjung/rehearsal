@@ -55,12 +55,14 @@ signInBtn.addEventListener('click', async () => {
 
 signOutBtn.addEventListener('click', () => { void signOut(auth) })
 
+const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+
 copyUidBtn.addEventListener('click', () => {
   if (!currentUid) return
   navigator.clipboard.writeText(currentUid).then(() => {
-    const original = copyUidBtn.textContent
-    copyUidBtn.textContent = '✅'
-    setTimeout(() => { copyUidBtn.textContent = original }, 1200)
+    const original = copyUidBtn.innerHTML
+    copyUidBtn.innerHTML = CHECK_ICON_SVG
+    setTimeout(() => { copyUidBtn.innerHTML = original }, 1200)
   })
 })
 

@@ -2,28 +2,32 @@ import { useState } from 'react'
 import { IconEdit, IconDismiss, IconUpload, IconRename } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
-import { OrgPinPrompt } from './OrgPinPrompt'
 import type { Script } from '../types'
 import { uploadScriptToLibrary, listSharedScripts } from '../utils/shareScript'
 
 export function ScriptManager() {
-  const { scripts, selectedScriptId, removeScript, selectScript, updateScript, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
+  const { scripts, selectedScriptId, removeScript, selectScript, updateScript, libraryOrg, libraryPin } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [uploadedId, setUploadedId] = useState<string | null>(null)
   const [uploadErrorId, setUploadErrorId] = useState<string | null>(null)
-  const [pendingUploadScript, setPendingUploadScript] = useState<Script | null>(null)
+  const [needsCredsId, setNeedsCredsId] = useState<string | null>(null)
 
-  async function doUpload(script: Script, org: string, pin: string) {
+  async function handleUpload(script: Script) {
+    if (!libraryOrg || !libraryPin) {
+      setNeedsCredsId(script.id)
+      setTimeout(() => setNeedsCredsId(null), 4000)
+      return
+    }
     setUploadingId(script.id)
     setUploadErrorId(null)
     try {
-      const existing = await listSharedScripts(org)
+      const existing = await listSharedScripts(libraryOrg)
       const conflict = existing.some((e) => e.name === script.name)
-      if (conflict && !window.confirm(`"${script.name}" already exists in the shared library for "${org}". Overwrite it?`)) {
+      if (conflict && !window.confirm(`"${script.name}" already exists in the shared library for "${libraryOrg}". Overwrite it?`)) {
         return
       }
-      await uploadScriptToLibrary(script, org, pin)
+      await uploadScriptToLibrary(script, libraryOrg, libraryPin)
       setUploadedId(script.id)
       setTimeout(() => setUploadedId(null), 2000)
     } catch (err) {
@@ -33,14 +37,6 @@ export function ScriptManager() {
     } finally {
       setUploadingId(null)
     }
-  }
-
-  function handleUpload(script: Script) {
-    if (!libraryOrg || !libraryPin) {
-      setPendingUploadScript(script)
-      return
-    }
-    void doUpload(script, libraryOrg, libraryPin)
   }
 
   return (
@@ -60,6 +56,7 @@ export function ScriptManager() {
               uploading={uploadingId === script.id}
               uploaded={uploadedId === script.id}
               uploadError={uploadErrorId === script.id}
+              needsCreds={needsCredsId === script.id}
               existingNames={scripts.filter((s) => s.id !== script.id).map((s) => s.name)}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
@@ -74,19 +71,6 @@ export function ScriptManager() {
       {editingScript && (
         <ScriptEditor script={editingScript} onClose={() => setEditingScript(null)} />
       )}
-
-      {pendingUploadScript && (
-        <OrgPinPrompt
-          initialOrg={libraryOrg}
-          onCancel={() => setPendingUploadScript(null)}
-          onSubmit={(org, pin) => {
-            setLibraryCredentials(org, pin)
-            const script = pendingUploadScript
-            setPendingUploadScript(null)
-            void doUpload(script, org, pin)
-          }}
-        />
-      )}
     </>
   )
 }
@@ -97,6 +81,7 @@ function ScriptCard({
   uploading,
   uploaded,
   uploadError,
+  needsCreds,
   existingNames,
   onSelect,
   onRemove,
@@ -109,6 +94,7 @@ function ScriptCard({
   uploading: boolean
   uploaded: boolean
   uploadError: boolean
+  needsCreds: boolean
   existingNames: string[]
   onSelect: () => void
   onRemove: () => void
@@ -188,6 +174,7 @@ function ScriptCard({
       <div className="flex items-center gap-1 shrink-0">
         {uploaded && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Uploaded!</span>}
         {uploadError && <span className="text-[10px] text-red-400 mr-0.5">Upload failed</span>}
+        {needsCreds && <span className="text-[10px] text-red-400 mr-0.5">Set organisation &amp; PIN in Settings</span>}
         <button
           onClick={(e) => { e.stopPropagation(); setNameDraft(script.name); setRenaming(true) }}
           className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"

@@ -5,7 +5,6 @@ import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 import { listSharedScripts, downloadScriptFromLibrary, copyLinkAsAnchor } from '../utils/shareScript'
 import { getAllRecordings, setRecordingRaw } from '../utils/recordingStore'
-import { OrgPinPrompt } from './OrgPinPrompt'
 import type { Script } from '../types'
 import type { SharedLibraryEntry } from '../utils/shareScript'
 
@@ -25,7 +24,7 @@ function formatDate(ms: number): string {
 }
 
 export function SideMenu({ open, onClose }: Props) {
-  const { scripts, addScript, removeScript, selectScript, updateScript, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
+  const { scripts, addScript, removeScript, selectScript, updateScript, libraryOrg, libraryPin } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [examples, setExamples] = useState<ExampleMeta[]>([])
@@ -44,7 +43,6 @@ export function SideMenu({ open, onClose }: Props) {
     conflictWith: Script
   } | null>(null)
   const [appShareCopied, setAppShareCopied] = useState(false)
-  const [showOrgPinPrompt, setShowOrgPinPrompt] = useState(false)
   const [downloadedName, setDownloadedName] = useState<string | null>(null)
 
   useEffect(() => {
@@ -113,7 +111,7 @@ export function SideMenu({ open, onClose }: Props) {
 
   async function toggleLibrary() {
     if (!libraryOpen && (!libraryOrg || !libraryPin)) {
-      setShowOrgPinPrompt(true)
+      setLibraryError('Set an organisation and PIN in Settings ⚙️ first')
       return
     }
     const next = !libraryOpen
@@ -218,8 +216,6 @@ export function SideMenu({ open, onClose }: Props) {
 
           {/* Scripts section */}
           <div className="px-5 py-4 border-b border-[var(--color-stage-border)] space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] mb-3">Scripts</p>
-
             {/* Load */}
             <button
               disabled={importing}
@@ -241,15 +237,14 @@ export function SideMenu({ open, onClose }: Props) {
             </button>
             {libraryOrg && (
               <p className="text-xs text-[var(--color-stage-muted)] text-center">
-                Organisation: <span className="text-[var(--color-stage-text)]">{libraryOrg}</span>{' '}
-                <button onClick={() => setShowOrgPinPrompt(true)} className="text-[var(--color-stage-accent-light)] hover:text-white transition-colors">Change</button>
+                Organisation: <span className="text-[var(--color-stage-text)]">{libraryOrg}</span>
               </p>
             )}
             {downloadedName && <p className="text-xs text-[var(--color-stage-accent-light)] text-center py-1">Downloaded "{downloadedName}"</p>}
+            {libraryError && <p className="text-xs text-red-400 text-center py-1">{libraryError}</p>}
             {libraryOpen && (
               <div className="space-y-2">
                 {libraryLoading && <p className="text-xs text-[var(--color-stage-muted)] text-center py-2">Loading…</p>}
-                {libraryError && <p className="text-xs text-red-400 text-center py-1">{libraryError}</p>}
                 {!libraryLoading && libraryEntries?.length === 0 && (
                   <p className="text-xs text-[var(--color-stage-muted)] text-center py-2">Nothing shared yet</p>
                 )}
@@ -350,6 +345,7 @@ export function SideMenu({ open, onClose }: Props) {
                   <p><span className="text-[var(--color-stage-accent-light)]">Voice commands</span> — customise the trigger words for each hands-free command.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Voice calibration</span> — read a sample phrase at your natural pace so gap timing matches how you speak.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Microphone</span> — test your mic input.</p>
+                  <p><span className="text-[var(--color-stage-accent-light)]">Shared library</span> — set the organisation name and PIN used to upload/download scripts.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -431,19 +427,6 @@ export function SideMenu({ open, onClose }: Props) {
         </div>
       )}
 
-      {showOrgPinPrompt && (
-        <OrgPinPrompt
-          initialOrg={libraryOrg}
-          onCancel={() => setShowOrgPinPrompt(false)}
-          onSubmit={(org, pin) => {
-            setLibraryCredentials(org, pin)
-            setShowOrgPinPrompt(false)
-            setLibraryEntries(null)
-            setLibraryOpen(true)
-            void loadLibraryEntries(org)
-          }}
-        />
-      )}
     </>
   )
 }

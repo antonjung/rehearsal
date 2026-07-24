@@ -29,7 +29,7 @@ const LINE_MODES: { value: MyLineMode; label: string; desc: string }[] = [
 ]
 
 export function GlobalSettings({ onClose }: Props) {
-  const { theme, setTheme, rehearsalSettings, saveRehearsalSettings, scriptFontSize, setScriptFontSize } = useAppStore()
+  const { theme, setTheme, rehearsalSettings, saveRehearsalSettings, scriptFontSize, setScriptFontSize, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
   const [showMicTest, setShowMicTest] = useState(false)
   const [visible, setVisible] = useState(false)
 
@@ -261,6 +261,31 @@ export function GlobalSettings({ onClose }: Props) {
               onSave={(c) => update('voiceCalibration', c as number)}
               onReset={() => saveRehearsalSettings({ ...prefs, voiceCalibration: undefined })}
             />
+          </SettingsSection>
+
+          {/* ── Shared library ── */}
+          <SettingsSection title="Shared library">
+            <p className="text-xs text-[var(--color-stage-muted)]">
+              Only people using the same organisation name and PIN can download scripts you upload, and vice versa.
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs text-[var(--color-stage-muted)]">Organisation</label>
+              <input type="text"
+                defaultValue={libraryOrg}
+                onBlur={(e) => setLibraryCredentials(e.target.value.trim(), libraryPin)}
+                placeholder="Organisation name"
+                className="w-full rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-2 py-1.5 focus:outline-none focus:border-[var(--color-stage-accent)]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-[var(--color-stage-muted)]">PIN</label>
+              <input type="text" inputMode="numeric"
+                defaultValue={libraryPin}
+                onBlur={(e) => setLibraryCredentials(libraryOrg, e.target.value.trim())}
+                placeholder="PIN"
+                className="w-full rounded-md border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] text-sm text-[var(--color-stage-text)] px-2 py-1.5 focus:outline-none focus:border-[var(--color-stage-accent)]"
+              />
+            </div>
           </SettingsSection>
 
           {/* ── Microphone ── */}
