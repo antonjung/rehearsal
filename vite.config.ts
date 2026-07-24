@@ -27,7 +27,7 @@ export default defineConfig(({ command }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['cueline.png'],
+      includeAssets: ['cueline.png', 'admin-icon.png'],
       manifest: {
         name: 'CueLine',
         short_name: 'CueLine',
@@ -36,7 +36,7 @@ export default defineConfig(({ command }) => ({
         background_color: '#0f0e17',
         display: 'standalone',
         icons: [
-          { src: 'cueline.png', sizes: '412x382', type: 'image/png' },
+          { src: 'cueline.png', sizes: '1024x1024', type: 'image/png' },
         ],
       },
       workbox: {
