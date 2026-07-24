@@ -35,7 +35,7 @@ export function SideMenu({ open, onClose }: Props) {
     script: Script
     conflictWith: Script
   } | null>(null)
-  const [appShareCopied, setAppShareCopied] = useState(false)
+  const [appShareCopied, setAppShareCopied] = useState<'plain' | 'org' | null>(null)
   const [downloadedName, setDownloadedName] = useState<string | null>(null)
 
   const confirmAndAdd = (script: Script) => {
@@ -134,11 +134,12 @@ export function SideMenu({ open, onClose }: Props) {
     }
   }
 
-  async function handleShareApp() {
+  async function handleShareApp(withOrg: boolean) {
     let url = `${window.location.origin}${import.meta.env.BASE_URL}`
-    if (libraryOrg && libraryPin && window.confirm('Include your organisation and PIN in this link, so whoever opens it has them set automatically?')) {
+    if (withOrg && libraryOrg && libraryPin) {
       url += `#org=${encodeURIComponent(libraryOrg)}&pin=${encodeURIComponent(libraryPin)}`
     }
+    const variant = withOrg ? 'org' : 'plain'
     if (navigator.share) {
       try {
         await navigator.share({ title: 'CueLine', text: 'Learn your lines with CueLine', url })
@@ -147,8 +148,8 @@ export function SideMenu({ open, onClose }: Props) {
       }
     } else if (typeof navigator.clipboard?.writeText === 'function') {
       await copyLinkAsAnchor(url, 'CueLine — learn your lines')
-      setAppShareCopied(true)
-      setTimeout(() => setAppShareCopied(false), 2000)
+      setAppShareCopied(variant)
+      setTimeout(() => setAppShareCopied(null), 2000)
     } else {
       window.prompt('Copy this link to share:', url)
     }
@@ -226,11 +227,19 @@ export function SideMenu({ open, onClose }: Props) {
 
             {/* Share the app */}
             <button
-              onClick={() => void handleShareApp()}
+              onClick={() => void handleShareApp(false)}
               className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
             >
-              <IconShare /> <span>{appShareCopied ? 'Link copied!' : 'Share CueLine app'}</span>
+              <IconShare /> <span>{appShareCopied === 'plain' ? 'Link copied!' : 'Share CueLine app'}</span>
             </button>
+            {libraryOrg && libraryPin && (
+              <button
+                onClick={() => void handleShareApp(true)}
+                className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+              >
+                <IconShare /> <span>{appShareCopied === 'org' ? 'Link copied!' : 'Share with org details'}</span>
+              </button>
+            )}
           </div>
 
           {/* About */}
