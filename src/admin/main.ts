@@ -7,6 +7,11 @@ import { extractPdfText } from '../utils/pdfExtract'
 const auth = getAuth(app)
 const provider = new GoogleAuthProvider()
 
+// Only these Google accounts (by UID) may use the admin portal at all.
+// Deleting is independently enforced server-side via Firestore rules — this
+// list only gates whether the page's UI is shown, so keep both in sync.
+const ALLOWED_ADMIN_UIDS = ['J3hoP1HvYNT99gyutghMu3kywgv2']
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 
 const signedOutEl = $('signedOut')
@@ -38,12 +43,16 @@ signInBtn.addEventListener('click', async () => {
 signOutBtn.addEventListener('click', () => { void signOut(auth) })
 
 onAuthStateChanged(auth, (user: User | null) => {
-  if (user) {
+  if (user && ALLOWED_ADMIN_UIDS.includes(user.uid)) {
     signedOutEl.style.display = 'none'
     appEl.style.display = 'block'
     userEmailEl.textContent = user.email ?? '(no email)'
     uidBox.textContent = user.uid
     void refreshLibrary()
+  } else if (user) {
+    // Signed in with Google, but not an allowed admin — sign out immediately.
+    signInError.textContent = `Signed in as ${user.email ?? user.uid}, but this account isn't authorized for the admin portal.`
+    void signOut(auth)
   } else {
     signedOutEl.style.display = 'block'
     appEl.style.display = 'none'
