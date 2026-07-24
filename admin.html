@@ -37,6 +37,11 @@
       button:hover { border-color: #7c3aed; }
       button.primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
       button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.icon-btn {
+        padding: 6px 8px;
+        line-height: 1;
+        font-size: 1rem;
+      }
       input {
         font: inherit;
         background: #0f0e17;
@@ -48,28 +53,44 @@
       }
       label { display: block; font-size: 0.8rem; color: #9d9bb0; margin: 10px 0 4px; }
       .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-      .uid-box {
-        font-family: ui-monospace, monospace;
-        font-size: 0.8rem;
-        background: #0f0e17;
-        border: 1px solid #2e2b40;
-        border-radius: 8px;
-        padding: 8px 10px;
-        word-break: break-all;
-        user-select: all;
-      }
       table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
       th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #2e2b40; }
-      th { color: #9d9bb0; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+      th { color: #9d9bb0; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; position: sticky; top: 0; background: #1a1825; }
+      button.sort-th {
+        background: none;
+        border: none;
+        padding: 0;
+        color: inherit;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      button.sort-th:hover { color: #e8e6f0; border: none; }
       .muted { color: #9d9bb0; }
       .err { color: #f87171; font-size: 0.85rem; }
       .ok { color: #a78bfa; font-size: 0.85rem; }
       #signedOut { text-align: center; padding: 60px 0; }
       #app { display: none; }
+      .library-scroll { max-height: 400px; overflow-y: auto; }
+      .version { text-align: center; color: #6b6880; font-size: 0.75rem; margin-top: 24px; }
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        z-index: 10;
+      }
+      .modal-overlay.open { display: flex; }
+      .modal-box { max-width: 420px; width: 100%; }
     </style>
-    <script type="module" crossorigin src="/rehearsal/assets/admin-1nDTlkZC.js"></script>
+    <script type="module" crossorigin src="/rehearsal/assets/admin-BEdjHMbM.js"></script>
     <link rel="modulepreload" crossorigin href="/rehearsal/assets/preload-helper-Bhcatj8M.js">
-    <link rel="modulepreload" crossorigin href="/rehearsal/assets/pdfExtract-BMVpPd8Y.js">
+    <link rel="modulepreload" crossorigin href="/rehearsal/assets/pdfExtract-VtSmhgrr.js">
   <link rel="manifest" href="/rehearsal/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/rehearsal/registerSW.js"></script></head>
   <body>
     <div class="wrap">
@@ -91,26 +112,10 @@
             <div class="muted" style="font-size:0.8rem;">Signed in as</div>
             <div id="userEmail"></div>
           </div>
-          <button id="signOutBtn">Sign out</button>
-        </div>
-
-        <div class="card">
-          <div class="muted" style="font-size:0.8rem; margin-bottom:4px;">Your Google UID (send this once to gate delete access)</div>
-          <div id="uidBox" class="uid-box"></div>
-        </div>
-
-        <div class="card">
-          <p style="margin-top:0;"><strong>Upload a script</strong></p>
-          <label for="uploadFile">Script file (.txt or .pdf)</label>
-          <input id="uploadFile" type="file" accept=".txt,.pdf" />
-          <label for="uploadOrg">Organisation</label>
-          <input id="uploadOrg" type="text" placeholder="Organisation name" />
-          <label for="uploadPin">PIN</label>
-          <input id="uploadPin" type="text" inputmode="numeric" placeholder="PIN" />
-          <div style="margin-top:12px;">
-            <button id="uploadBtn" class="primary">Upload</button>
+          <div class="row" style="gap:6px;">
+            <button id="copyUidBtn" class="icon-btn" title="Copy Google UID">📋</button>
+            <button id="signOutBtn">Sign out</button>
           </div>
-          <p id="uploadStatus" style="margin-bottom:0;"></p>
         </div>
 
         <div class="card">
@@ -118,15 +123,45 @@
             <p style="margin:0;"><strong>Shared library</strong></p>
             <button id="refreshBtn">Refresh</button>
           </div>
+          <input id="orgFilter" type="text" placeholder="Filter by organisation…" style="margin-bottom:10px;" />
           <p id="listStatus" class="muted"></p>
-          <table id="libraryTable" style="display:none;">
-            <thead>
-              <tr><th>Name</th><th>Organisation</th><th>Uploaded</th><th></th></tr>
-            </thead>
-            <tbody id="libraryBody"></tbody>
-          </table>
+          <div class="library-scroll">
+            <table id="libraryTable" style="display:none;">
+              <thead>
+                <tr>
+                  <th><button class="sort-th" data-sort="name">Name</button></th>
+                  <th>Organisation</th>
+                  <th><button class="sort-th" data-sort="createdAt">Uploaded</button></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="libraryBody"></tbody>
+            </table>
+          </div>
         </div>
+
+        <button id="openUploadBtn" class="primary" style="width:100%;">+ Upload a script</button>
+      </div>
+
+      <p class="version">v<span id="versionText"></span></p>
+    </div>
+
+    <div id="uploadModalOverlay" class="modal-overlay">
+      <div class="card modal-box">
+        <p style="margin-top:0;"><strong>Upload a script</strong></p>
+        <label for="uploadFile">Script file (.txt or .pdf)</label>
+        <input id="uploadFile" type="file" accept=".txt,.pdf" />
+        <label for="uploadOrg">Organisation</label>
+        <input id="uploadOrg" type="text" placeholder="Organisation name" />
+        <label for="uploadPin">PIN</label>
+        <input id="uploadPin" type="text" inputmode="numeric" placeholder="PIN" />
+        <div class="row" style="margin-top:12px;">
+          <button id="uploadBtn" class="primary" style="flex:1;">Upload</button>
+          <button id="closeUploadBtn">Cancel</button>
+        </div>
+        <p id="uploadStatus" style="margin-bottom:0;"></p>
       </div>
     </div>
+
   </body>
 </html>
