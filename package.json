@@ -1,14 +1,14 @@
 {
   "name": "rehearsal",
   "private": true,
-  "version": "3.1.84",
+  "version": "3.1.85",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/bump-version.mjs",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/fix-admin-html.mjs",
     "postbuild": "node scripts/git-push.mjs",
-    "build:ci": "tsc -b && vite build",
+    "build:ci": "tsc -b && vite build && node scripts/fix-admin-html.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
