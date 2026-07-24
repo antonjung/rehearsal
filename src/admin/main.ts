@@ -85,7 +85,9 @@ onAuthStateChanged(auth, (user: User | null) => {
 })
 
 function formatDate(ms: number): string {
-  return new Date(ms).toLocaleString()
+  const d = new Date(ms)
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })
+    + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
 function renderTable() {
@@ -106,15 +108,18 @@ function renderTable() {
 
     const nameTd = document.createElement('td')
     nameTd.textContent = entry.name
+    nameTd.title = entry.name
     tr.appendChild(nameTd)
 
     const orgTd = document.createElement('td')
     orgTd.textContent = entry.org
+    orgTd.title = entry.org
     orgTd.className = 'muted'
     tr.appendChild(orgTd)
 
     const dateTd = document.createElement('td')
     dateTd.textContent = formatDate(entry.createdAt)
+    dateTd.title = new Date(entry.createdAt).toLocaleString()
     dateTd.className = 'muted'
     tr.appendChild(dateTd)
 

@@ -430,14 +430,11 @@ function ScriptCard({
         )}
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-          className="relative text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
+          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
           aria-label="Script options"
           title="Script options"
         >
           <IconMore />
-          {pendingCharacters.length > 0 && (
-            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-          )}
         </button>
       </div>
       </div>
