@@ -1,9 +1,35 @@
 import { useState } from 'react'
-import { IconEdit, IconDismiss, IconUpload, IconRename } from './Icons'
+import { IconEdit, IconDismiss, IconUpload, IconDownload, IconRename, IconPersonVoice, IconMore } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
-import type { Script } from '../types'
-import { uploadScriptToLibrary, listSharedScripts } from '../utils/shareScript'
+import type { Script, ScriptLine } from '../types'
+import { uploadScriptToLibrary, listSharedScripts, uploadVoiceTrack, listVoiceTracks, downloadVoiceTrackLines } from '../utils/shareScript'
+import {
+  getAllRecordings, setRecordingRaw, getRecordedAt,
+  getVoiceTrackUploadedAt, setVoiceTrackUploadedAt,
+  getVoiceTrackDownloadedAt, setVoiceTrackDownloadedAt,
+} from '../utils/recordingStore'
+
+// Enumerates the recordable "slots" for one character across the whole
+// script — the start index of each run of consecutive same-character
+// dialogue lines — mirroring RecordingStudio's buildCharacterGroups but
+// unscoped by scene, since a voice track covers the entire script.
+function characterGroupStarts(lines: ScriptLine[], character: string): number[] {
+  const starts: number[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (line.type === 'dialogue') {
+      let j = i
+      while (j + 1 < lines.length && lines[j + 1].type === 'dialogue' && lines[j + 1].character === line.character) j++
+      if (line.character === character) starts.push(i)
+      i = j + 1
+    } else {
+      i++
+    }
+  }
+  return starts
+}
 
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript, updateScript, libraryOrg, libraryPin } = useAppStore()
@@ -12,6 +38,11 @@ export function ScriptManager() {
   const [uploadedId, setUploadedId] = useState<string | null>(null)
   const [uploadErrorId, setUploadErrorId] = useState<string | null>(null)
   const [needsCredsId, setNeedsCredsId] = useState<string | null>(null)
+  const [vtBusyId, setVtBusyId] = useState<string | null>(null)
+  const [vtUploadedId, setVtUploadedId] = useState<string | null>(null)
+  const [vtDownloadedId, setVtDownloadedId] = useState<string | null>(null)
+  const [vtErrorId, setVtErrorId] = useState<string | null>(null)
+  const [vtMessageId, setVtMessageId] = useState<string | null>(null)
 
   async function handleUpload(script: Script) {
     if (!libraryOrg || !libraryPin) {
@@ -48,6 +79,119 @@ export function ScriptManager() {
     }
   }
 
+  async function handleUploadVoiceTracks(script: Script) {
+    if (!libraryOrg || !libraryPin) {
+      setNeedsCredsId(script.id)
+      setTimeout(() => setNeedsCredsId(null), 4000)
+      return
+    }
+
+    setVtBusyId(script.id)
+    try {
+      const allRecordings = await getAllRecordings()
+      const toUpload: { character: string; recordings: Map<number, Blob>; totalLines: number }[] = []
+
+      for (const character of script.characters) {
+        const groupStarts = characterGroupStarts(script.lines, character)
+        if (groupStarts.length === 0) continue
+
+        const recordings = new Map<number, Blob>()
+        for (const idx of groupStarts) {
+          const blob = allRecordings.get(`${script.id}:${idx}`)
+          if (blob) recordings.set(idx, blob)
+        }
+        if (recordings.size === 0) continue
+
+        const lastUploaded = await getVoiceTrackUploadedAt(script.id, character)
+        let newestRecordedAt = 0
+        for (const idx of recordings.keys()) {
+          const at = await getRecordedAt(script.id, idx)
+          if (at && at > newestRecordedAt) newestRecordedAt = at
+        }
+        if (lastUploaded && newestRecordedAt <= lastUploaded) continue
+
+        toUpload.push({ character, recordings, totalLines: groupStarts.length })
+      }
+
+      if (toUpload.length === 0) {
+        setVtBusyId(null)
+        setVtMessageId(script.id)
+        setTimeout(() => setVtMessageId(null), 3000)
+        return
+      }
+
+      const names = toUpload.map((c) => c.character).join(', ')
+      if (!window.confirm(`Upload voice tracks for: ${names}?`)) {
+        setVtBusyId(null)
+        return
+      }
+
+      for (const { character, recordings, totalLines } of toUpload) {
+        const { createdAt } = await uploadVoiceTrack(libraryOrg, libraryPin, script.name, character, totalLines, recordings)
+        await setVoiceTrackUploadedAt(script.id, character, createdAt)
+      }
+      setVtUploadedId(script.id)
+      setTimeout(() => setVtUploadedId(null), 2500)
+    } catch (err) {
+      console.error('Voice track upload failed', err)
+      setVtErrorId(script.id)
+      setTimeout(() => setVtErrorId(null), 3000)
+    } finally {
+      setVtBusyId(null)
+    }
+  }
+
+  async function handleCheckVoiceTracks(script: Script) {
+    if (!libraryOrg || !libraryPin) {
+      setNeedsCredsId(script.id)
+      setTimeout(() => setNeedsCredsId(null), 4000)
+      return
+    }
+
+    setVtBusyId(script.id)
+    try {
+      const entries = await listVoiceTracks(libraryOrg, script.name)
+
+      const newEntries = []
+      for (const entry of entries) {
+        const lastDownloaded = await getVoiceTrackDownloadedAt(script.id, entry.character)
+        if (!lastDownloaded || entry.createdAt > lastDownloaded) newEntries.push(entry)
+      }
+
+      if (newEntries.length === 0) {
+        setVtBusyId(null)
+        setVtMessageId(script.id)
+        setTimeout(() => setVtMessageId(null), 3000)
+        return
+      }
+
+      const names = newEntries.map((e) => e.character).join(', ')
+      if (!window.confirm(`Download voice tracks for: ${names}?`)) {
+        setVtBusyId(null)
+        return
+      }
+
+      const existing = await getAllRecordings()
+      for (const entry of newEntries) {
+        const lines = await downloadVoiceTrackLines(entry.id, libraryOrg, libraryPin)
+        for (const [lineIdxStr, blob] of lines) {
+          const key = `${script.id}:${lineIdxStr}`
+          if (existing.has(key)) continue
+          await setRecordingRaw(key, blob)
+        }
+        await setVoiceTrackDownloadedAt(script.id, entry.character, entry.createdAt)
+      }
+      setVtDownloadedId(script.id)
+      setTimeout(() => setVtDownloadedId(null), 2500)
+    } catch (err) {
+      console.error('Voice track download failed', err)
+      setVtErrorId(script.id)
+      setTimeout(() => setVtErrorId(null), 3000)
+    } finally {
+      setVtBusyId(null)
+    }
+  }
+
   return (
     <>
       {scripts.length === 0 ? (
@@ -66,12 +210,19 @@ export function ScriptManager() {
               uploaded={uploadedId === script.id}
               uploadError={uploadErrorId === script.id}
               needsCreds={needsCredsId === script.id}
+              vtBusy={vtBusyId === script.id}
+              vtUploaded={vtUploadedId === script.id}
+              vtDownloaded={vtDownloadedId === script.id}
+              vtError={vtErrorId === script.id}
+              vtMessage={vtMessageId === script.id}
               existingNames={scripts.filter((s) => s.id !== script.id).map((s) => s.name)}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
               onEdit={() => setEditingScript(script)}
               onUpload={() => handleUpload(script)}
               onRename={(name) => updateScript({ ...script, name })}
+              onUploadVoiceTracks={() => handleUploadVoiceTracks(script)}
+              onCheckVoiceTracks={() => handleCheckVoiceTracks(script)}
             />
           ))}
         </div>
@@ -84,6 +235,35 @@ export function ScriptManager() {
   )
 }
 
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        danger
+          ? 'text-red-400 hover:bg-red-400/10'
+          : 'text-[var(--color-stage-text)] hover:bg-[var(--color-stage-accent)]/10'
+      }`}
+    >
+      <span className="shrink-0">{icon}</span>
+      {label}
+    </button>
+  )
+}
+
 function ScriptCard({
   script,
   selected,
@@ -91,12 +271,19 @@ function ScriptCard({
   uploaded,
   uploadError,
   needsCreds,
+  vtBusy,
+  vtUploaded,
+  vtDownloaded,
+  vtError,
+  vtMessage,
   existingNames,
   onSelect,
   onRemove,
   onEdit,
   onUpload,
   onRename,
+  onUploadVoiceTracks,
+  onCheckVoiceTracks,
 }: {
   script: Script
   selected: boolean
@@ -104,17 +291,25 @@ function ScriptCard({
   uploaded: boolean
   uploadError: boolean
   needsCreds: boolean
+  vtBusy: boolean
+  vtUploaded: boolean
+  vtDownloaded: boolean
+  vtError: boolean
+  vtMessage: boolean
   existingNames: string[]
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
   onUpload: () => void
   onRename: (name: string) => void
+  onUploadVoiceTracks: () => void
+  onCheckVoiceTracks: () => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [nameDraft, setNameDraft] = useState(script.name)
   const [renameError, setRenameError] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
 
   if (confirmDelete) {
@@ -133,7 +328,7 @@ function ScriptCard({
 
   return (
     <div
-      className={`rounded-lg border overflow-hidden cursor-pointer transition-colors ${
+      className={`relative rounded-lg border cursor-pointer transition-colors ${
         selected
           ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10'
           : 'border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] hover:border-[var(--color-stage-accent-light)]'
@@ -183,41 +378,38 @@ function ScriptCard({
       <div className="flex items-center gap-1 shrink-0">
         {uploaded && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Uploaded!</span>}
         {uploadError && <span className="text-[10px] text-red-400 mr-0.5">Upload failed</span>}
+        {vtUploaded && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Voice tracks uploaded!</span>}
+        {vtDownloaded && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Voice tracks downloaded!</span>}
+        {vtError && <span className="text-[10px] text-red-400 mr-0.5">Voice track sync failed</span>}
+        {vtMessage && <span className="text-[10px] text-[var(--color-stage-muted)] mr-0.5">Nothing new</span>}
         {needsCreds && <span className="text-[10px] text-red-400 mr-0.5">Set organisation &amp; PIN in Settings</span>}
         <button
-          onClick={(e) => { e.stopPropagation(); setNameDraft(script.name); setRenaming(true) }}
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
           className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
-          aria-label="Rename script"
-          title="Rename script"
+          aria-label="Script options"
+          title="Script options"
         >
-          <IconRename />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); if (!uploading) onUpload() }}
-          className={`transition-colors p-1 rounded ${uploading ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}
-          aria-label="Upload to shared library"
-          title="Upload to shared library"
-          disabled={uploading}
-        >
-          <IconUpload />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit() }}
-          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded text-sm"
-          aria-label="Edit script"
-          title="Edit script"
-        >
-          <IconEdit />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
-          className="text-[var(--color-stage-muted)] hover:text-red-400 transition-colors p-1 rounded"
-          aria-label="Remove script"
-        >
-          <IconDismiss />
+          <IconMore />
         </button>
       </div>
       </div>
+
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} />
+          <div
+            className="absolute right-3 top-11 z-20 w-56 rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shadow-lg py-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MenuItem icon={<IconRename />} label="Rename" onClick={() => { setMenuOpen(false); setNameDraft(script.name); setRenaming(true) }} />
+            <MenuItem icon={<IconUpload />} label="Upload script" onClick={() => { setMenuOpen(false); onUpload() }} disabled={uploading} />
+            <MenuItem icon={<IconDownload />} label="Check voice tracks" onClick={() => { setMenuOpen(false); onCheckVoiceTracks() }} disabled={vtBusy} />
+            <MenuItem icon={<IconPersonVoice />} label="Upload voice tracks" onClick={() => { setMenuOpen(false); onUploadVoiceTracks() }} disabled={vtBusy} />
+            <MenuItem icon={<IconEdit />} label="Edit" onClick={() => { setMenuOpen(false); onEdit() }} />
+            <MenuItem icon={<IconDismiss />} label="Delete" danger onClick={() => { setMenuOpen(false); setConfirmDelete(true) }} />
+          </div>
+        </>
+      )}
     </div>
   )
 }

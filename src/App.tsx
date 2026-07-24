@@ -37,12 +37,26 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
-  const { theme, scripts, selectedScriptId } = useAppStore()
+  const [orgSetFromLink, setOrgSetFromLink] = useState<string | null>(null)
+  const { theme, scripts, selectedScriptId, setLibraryCredentials } = useAppStore()
   const selectedScript = scripts.find((s) => s.id === selectedScriptId)
 
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
+
+  // Picks up organisation + PIN from a shared app link, e.g. .../#org=X&pin=Y
+  useEffect(() => {
+    const match = window.location.hash.match(/^#org=([^&]+)&pin=([^&]+)$/)
+    if (!match) return
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+    const org = decodeURIComponent(match[1])
+    const pin = decodeURIComponent(match[2])
+    setLibraryCredentials(org, pin)
+    setOrgSetFromLink(org)
+    setTimeout(() => setOrgSetFromLink(null), 4000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const sw = navigator.serviceWorker
@@ -61,6 +75,11 @@ export default function App() {
         >
           Update available — tap to reload
         </button>
+      )}
+      {orgSetFromLink && (
+        <div className="w-full py-2 px-4 text-xs font-medium bg-[var(--color-stage-accent)]/15 text-[var(--color-stage-accent-light)] text-center shrink-0">
+          Organisation set to "{orgSetFromLink}" from the shared link
+        </div>
       )}
       {/* App header — always visible */}
       <header className="relative flex items-center px-4 pt-4 pb-3 shrink-0">

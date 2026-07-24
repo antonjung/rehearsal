@@ -34,4 +34,5 @@ export {
   LibraryRegular as IconLibrary,
   TextCollapseRegular as IconTextCollapse,
   StackRegular as IconTrack,
+  MoreVerticalRegular as IconMore,
 } from '@fluentui/react-icons'

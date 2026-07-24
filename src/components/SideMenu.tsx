@@ -4,7 +4,6 @@ import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 import { listSharedScripts, downloadScriptFromLibrary, copyLinkAsAnchor } from '../utils/shareScript'
-import { getAllRecordings, setRecordingRaw } from '../utils/recordingStore'
 import type { Script } from '../types'
 import type { SharedLibraryEntry } from '../utils/shareScript'
 
@@ -34,7 +33,6 @@ export function SideMenu({ open, onClose }: Props) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [pendingDownload, setPendingDownload] = useState<{
     script: Script
-    recordings: Map<string, Blob>
     conflictWith: Script
   } | null>(null)
   const [appShareCopied, setAppShareCopied] = useState(false)
@@ -91,20 +89,7 @@ export function SideMenu({ open, onClose }: Props) {
     }
   }
 
-  // Writes a downloaded script's recordings, skipping any line that already has
-  // a recording on the target script — downloaded recordings never clobber the
-  // user's own takes.
-  async function importRecordings(scriptId: string, recordings: Map<string, Blob>) {
-    if (recordings.size === 0) return
-    const existing = await getAllRecordings()
-    for (const [lineIdx, blob] of recordings) {
-      const key = `${scriptId}:${lineIdx}`
-      if (existing.has(key)) continue
-      await setRecordingRaw(key, blob)
-    }
-  }
-
-  async function finalizeDownload(script: Script, recordings: Map<string, Blob>, overwriteId: string | null) {
+  async function finalizeDownload(script: Script, overwriteId: string | null) {
     const targetId = overwriteId ?? crypto.randomUUID()
     const finalScript = { ...script, id: targetId }
     if (overwriteId) {
@@ -113,7 +98,6 @@ export function SideMenu({ open, onClose }: Props) {
     } else {
       addScript(finalScript)
     }
-    await importRecordings(targetId, recordings)
     selectScript(targetId)
     setDownloadedName(finalScript.name)
     setTimeout(() => { setDownloadedName(null); onClose() }, 900)
@@ -123,12 +107,12 @@ export function SideMenu({ open, onClose }: Props) {
     setDownloadingId(entry.id)
     setLibraryError(null)
     try {
-      const { script, recordings } = await downloadScriptFromLibrary(entry.id, libraryOrg, libraryPin)
+      const script = await downloadScriptFromLibrary(entry.id, libraryOrg, libraryPin)
       const conflictWith = scripts.find((s) => s.name === script.name)
       if (conflictWith) {
-        setPendingDownload({ script, recordings, conflictWith })
+        setPendingDownload({ script, conflictWith })
       } else {
-        await finalizeDownload(script, recordings, null)
+        await finalizeDownload(script, null)
       }
     } catch (err) {
       console.error('Download failed', err)
@@ -140,18 +124,21 @@ export function SideMenu({ open, onClose }: Props) {
 
   async function resolvePendingDownload(mode: 'overwrite' | 'keep') {
     if (!pendingDownload) return
-    const { script, recordings, conflictWith } = pendingDownload
+    const { script, conflictWith } = pendingDownload
     setPendingDownload(null)
     if (mode === 'overwrite') {
-      await finalizeDownload(script, recordings, conflictWith.id)
+      await finalizeDownload(script, conflictWith.id)
     } else {
       const versionedName = nextVersionedName(script.name, scripts.map((s) => s.name))
-      await finalizeDownload({ ...script, name: versionedName }, recordings, null)
+      await finalizeDownload({ ...script, name: versionedName }, null)
     }
   }
 
   async function handleShareApp() {
-    const url = `${window.location.origin}${import.meta.env.BASE_URL}`
+    let url = `${window.location.origin}${import.meta.env.BASE_URL}`
+    if (libraryOrg && libraryPin && window.confirm('Include your organisation and PIN in this link, so whoever opens it has them set automatically?')) {
+      url += `#org=${encodeURIComponent(libraryOrg)}&pin=${encodeURIComponent(libraryPin)}`
+    }
     if (navigator.share) {
       try {
         await navigator.share({ title: 'CueLine', text: 'Learn your lines with CueLine', url })
@@ -321,7 +308,7 @@ export function SideMenu({ open, onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Your data</p>
-                  <p>Scripts, recordings, and settings stay on this device by default — nothing is uploaded, including PDF text extraction. <span className="text-[var(--color-stage-accent-light)]">Upload</span> (cloud icon on a script) sends an encrypted copy to the shared library, downloadable only by others using the same organisation name and PIN.</p>
+                  <p>Scripts, recordings, and settings stay on this device by default — nothing is uploaded, including PDF text extraction. Use the <span className="text-[var(--color-stage-accent-light)]">⋮ menu</span> on a script to upload it (or its recorded voice tracks) to the shared library, or to check for and download voice tracks recorded by others — all encrypted, accessible only with the same organisation name and PIN.</p>
                 </div>
 
                 <div className="space-y-1.5">
