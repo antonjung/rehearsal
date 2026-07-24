@@ -1,19 +1,21 @@
 import { useState } from 'react'
-import { IconEdit, IconDismiss, IconExport, IconUpload } from './Icons'
+import { IconEdit, IconDismiss, IconExport, IconUpload, IconRename } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
+import { OrgPinPrompt } from './OrgPinPrompt'
 import type { Script } from '../types'
 import { buildExportBundle, downloadBundle } from '../utils/exportImport'
 import { uploadScriptToLibrary } from '../utils/shareScript'
 
 export function ScriptManager() {
-  const { scripts, selectedScriptId, removeScript, selectScript } = useAppStore()
+  const { scripts, selectedScriptId, removeScript, selectScript, updateScript, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [uploadedId, setUploadedId] = useState<string | null>(null)
   const [uploadErrorId, setUploadErrorId] = useState<string | null>(null)
+  const [pendingUploadScript, setPendingUploadScript] = useState<Script | null>(null)
 
   async function handleExport(script: Script) {
     setExportingId(script.id)
@@ -29,11 +31,11 @@ export function ScriptManager() {
     }
   }
 
-  async function handleUpload(script: Script) {
+  async function doUpload(script: Script, org: string, pin: string) {
     setUploadingId(script.id)
     setUploadErrorId(null)
     try {
-      await uploadScriptToLibrary(script)
+      await uploadScriptToLibrary(script, org, pin)
       setUploadedId(script.id)
       setTimeout(() => setUploadedId(null), 2000)
     } catch (err) {
@@ -43,6 +45,14 @@ export function ScriptManager() {
     } finally {
       setUploadingId(null)
     }
+  }
+
+  function handleUpload(script: Script) {
+    if (!libraryOrg || !libraryPin) {
+      setPendingUploadScript(script)
+      return
+    }
+    void doUpload(script, libraryOrg, libraryPin)
   }
 
   return (
@@ -69,6 +79,7 @@ export function ScriptManager() {
               onEdit={() => setEditingScript(script)}
               onExport={() => handleExport(script)}
               onUpload={() => handleUpload(script)}
+              onRename={(name) => updateScript({ ...script, name })}
             />
           ))}
         </div>
@@ -76,6 +87,19 @@ export function ScriptManager() {
 
       {editingScript && (
         <ScriptEditor script={editingScript} onClose={() => setEditingScript(null)} />
+      )}
+
+      {pendingUploadScript && (
+        <OrgPinPrompt
+          initialOrg={libraryOrg}
+          onCancel={() => setPendingUploadScript(null)}
+          onSubmit={(org, pin) => {
+            setLibraryCredentials(org, pin)
+            const script = pendingUploadScript
+            setPendingUploadScript(null)
+            void doUpload(script, org, pin)
+          }}
+        />
       )}
     </>
   )
@@ -94,6 +118,7 @@ function ScriptCard({
   onEdit,
   onExport,
   onUpload,
+  onRename,
 }: {
   script: Script
   selected: boolean
@@ -107,8 +132,11 @@ function ScriptCard({
   onEdit: () => void
   onExport: () => void
   onUpload: () => void
+  onRename: (name: string) => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState(script.name)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
   const progressPct = exportProgress == null
     ? null  // indeterminate
@@ -138,15 +166,43 @@ function ScriptCard({
       onClick={onSelect}
     >
       <div className="px-4 py-3 flex items-center justify-between">
-      <div>
-        <p className="font-semibold text-[var(--color-stage-text)]">{script.name}</p>
+      <div className="min-w-0 flex-1">
+        {renaming ? (
+          <input
+            autoFocus
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') { setNameDraft(script.name); setRenaming(false) }
+            }}
+            onBlur={() => {
+              const trimmed = nameDraft.trim()
+              if (trimmed && trimmed !== script.name) onRename(trimmed)
+              else setNameDraft(script.name)
+              setRenaming(false)
+            }}
+            className="font-semibold text-[var(--color-stage-text)] bg-transparent border-b border-[var(--color-stage-accent)] focus:outline-none w-full"
+          />
+        ) : (
+          <p className="font-semibold text-[var(--color-stage-text)] truncate">{script.name}</p>
+        )}
         <p className="text-xs text-[var(--color-stage-muted)] mt-0.5">
           {script.characters.length} characters · {dialogueCount} lines
         </p>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         {uploaded && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Uploaded!</span>}
         {uploadError && <span className="text-[10px] text-red-400 mr-0.5">Upload failed</span>}
+        <button
+          onClick={(e) => { e.stopPropagation(); setNameDraft(script.name); setRenaming(true) }}
+          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
+          aria-label="Rename script"
+          title="Rename script"
+        >
+          <IconRename />
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); if (!uploading) onUpload() }}
           className={`transition-colors p-1 rounded ${uploading ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}

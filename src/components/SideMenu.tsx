@@ -6,6 +6,7 @@ import { extractPdfText } from '../utils/pdfExtract'
 import { parseImportFile, countRecordingConflicts, countTrackConflicts, importBundle } from '../utils/exportImport'
 import { listSharedScripts, downloadScriptFromLibrary, copyLinkAsAnchor } from '../utils/shareScript'
 import { getAllRecordings, setRecordingRaw } from '../utils/recordingStore'
+import { OrgPinPrompt } from './OrgPinPrompt'
 import type { Script } from '../types'
 import type { SharedLibraryEntry } from '../utils/shareScript'
 
@@ -25,7 +26,7 @@ function formatDate(ms: number): string {
 }
 
 export function SideMenu({ open, onClose }: Props) {
-  const { scripts, addScript, removeScript, selectScript, updateScript } = useAppStore()
+  const { scripts, addScript, removeScript, selectScript, updateScript, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const importBundleRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
@@ -53,6 +54,7 @@ export function SideMenu({ open, onClose }: Props) {
     conflictWith: Script
   } | null>(null)
   const [appShareCopied, setAppShareCopied] = useState(false)
+  const [showOrgPinPrompt, setShowOrgPinPrompt] = useState(false)
   const [downloadedName, setDownloadedName] = useState<string | null>(null)
 
   async function handleBundleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -134,20 +136,28 @@ export function SideMenu({ open, onClose }: Props) {
     }
   }
 
+  async function loadLibraryEntries(org: string) {
+    setLibraryLoading(true)
+    setLibraryError(null)
+    try {
+      setLibraryEntries(await listSharedScripts(org))
+    } catch (err) {
+      console.error('Failed to list shared library', err)
+      setLibraryError('Could not load the shared library')
+    } finally {
+      setLibraryLoading(false)
+    }
+  }
+
   async function toggleLibrary() {
+    if (!libraryOpen && (!libraryOrg || !libraryPin)) {
+      setShowOrgPinPrompt(true)
+      return
+    }
     const next = !libraryOpen
     setLibraryOpen(next)
     if (next && libraryEntries === null) {
-      setLibraryLoading(true)
-      setLibraryError(null)
-      try {
-        setLibraryEntries(await listSharedScripts())
-      } catch (err) {
-        console.error('Failed to list shared library', err)
-        setLibraryError('Could not load the shared library')
-      } finally {
-        setLibraryLoading(false)
-      }
+      await loadLibraryEntries(libraryOrg)
     }
   }
 
@@ -183,7 +193,7 @@ export function SideMenu({ open, onClose }: Props) {
     setDownloadingId(entry.id)
     setLibraryError(null)
     try {
-      const { script, recordings } = await downloadScriptFromLibrary(entry.id)
+      const { script, recordings } = await downloadScriptFromLibrary(entry.id, libraryOrg, libraryPin)
       const conflictWith = scripts.find((s) => s.name === script.name)
       if (conflictWith) {
         setPendingDownload({ script, recordings, conflictWith })
@@ -316,6 +326,12 @@ export function SideMenu({ open, onClose }: Props) {
               <IconDownload /> <span>Download from shared library</span>
               <span className="absolute right-4">{libraryOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
             </button>
+            {libraryOrg && (
+              <p className="text-xs text-[var(--color-stage-muted)] text-center">
+                Organisation: <span className="text-[var(--color-stage-text)]">{libraryOrg}</span>{' '}
+                <button onClick={() => setShowOrgPinPrompt(true)} className="text-[var(--color-stage-accent-light)] hover:text-white transition-colors">Change</button>
+              </p>
+            )}
             {downloadedName && <p className="text-xs text-[var(--color-stage-accent-light)] text-center py-1">Downloaded "{downloadedName}"</p>}
             {libraryOpen && (
               <div className="space-y-2">
@@ -521,6 +537,20 @@ export function SideMenu({ open, onClose }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {showOrgPinPrompt && (
+        <OrgPinPrompt
+          initialOrg={libraryOrg}
+          onCancel={() => setShowOrgPinPrompt(false)}
+          onSubmit={(org, pin) => {
+            setLibraryCredentials(org, pin)
+            setShowOrgPinPrompt(false)
+            setLibraryEntries(null)
+            setLibraryOpen(true)
+            void loadLibraryEntries(org)
+          }}
+        />
       )}
     </>
   )

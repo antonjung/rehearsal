@@ -10,6 +10,8 @@ interface AppState {
   theme: string
   scriptFontSize: number
   notes: Note[]
+  libraryOrg: string
+  libraryPin: string
 
   addScript: (script: Script) => void
   removeScript: (id: string) => void
@@ -23,6 +25,7 @@ interface AppState {
   updateNote: (id: string, text: string) => void
   deleteNote: (id: string) => void
   clearDoneNotes: () => void
+  setLibraryCredentials: (org: string, pin: string) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -34,6 +37,8 @@ export const useAppStore = create<AppState>()(
       theme: 'stage',
       scriptFontSize: 14,
       notes: [],
+      libraryOrg: '',
+      libraryPin: '',
 
       addScript: (script) =>
         set((s) => ({ scripts: [...s.scripts, script] })),
@@ -76,6 +81,8 @@ export const useAppStore = create<AppState>()(
 
       clearDoneNotes: () =>
         set((s) => ({ notes: s.notes.filter((n) => !n.done) })),
+
+      setLibraryCredentials: (org, pin) => set({ libraryOrg: org, libraryPin: pin }),
     }),
     {
       name: 'rehearsal-store',
@@ -99,6 +106,8 @@ export const useAppStore = create<AppState>()(
         theme: s.theme,
         scriptFontSize: s.scriptFontSize,
         notes: s.notes,
+        libraryOrg: s.libraryOrg,
+        libraryPin: s.libraryPin,
       }),
     },
   ),

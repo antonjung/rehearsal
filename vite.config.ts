@@ -3,13 +3,24 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'fs'
+import { resolve } from 'path'
+import { fileURLToPath } from 'url'
 
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/rehearsal/' : '/',
   define: {
     __APP_VERSION__: JSON.stringify(version),
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        admin: resolve(__dirname, 'admin.html'),
+      },
+    },
   },
   plugins: [
     tailwindcss(),

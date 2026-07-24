@@ -30,6 +30,7 @@ export {
   ShareRegular as IconShare,
   CloudArrowUpRegular as IconUpload,
   CloudArrowDownRegular as IconDownload,
+  RenameRegular as IconRename,
   TextCollapseRegular as IconTextCollapse,
   StackRegular as IconTrack,
 } from '@fluentui/react-icons'
