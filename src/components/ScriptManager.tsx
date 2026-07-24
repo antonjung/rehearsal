@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { IconEdit, IconDismiss, IconUpload, IconDownload, IconRename, IconPersonVoice, IconMore } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
@@ -31,6 +31,31 @@ function characterGroupStarts(lines: ScriptLine[], character: string): number[] 
   return starts
 }
 
+// Characters in a script that have local recordings newer than their last
+// voice-track upload (or never uploaded at all) — used both to decide what
+// to upload and to show a "not uploaded" indicator on the script card.
+async function pendingUploadCharacters(script: Script, allRecordings: Map<string, Blob>): Promise<string[]> {
+  const pending: string[] = []
+  for (const character of script.characters) {
+    const groupStarts = characterGroupStarts(script.lines, character)
+    if (groupStarts.length === 0) continue
+
+    let newestRecordedAt = 0
+    let hasAny = false
+    for (const idx of groupStarts) {
+      if (!allRecordings.has(`${script.id}:${idx}`)) continue
+      hasAny = true
+      const at = await getRecordedAt(script.id, idx)
+      if (at && at > newestRecordedAt) newestRecordedAt = at
+    }
+    if (!hasAny) continue
+
+    const lastUploaded = await getVoiceTrackUploadedAt(script.id, character)
+    if (!lastUploaded || newestRecordedAt > lastUploaded) pending.push(character)
+  }
+  return pending
+}
+
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript, updateScript, libraryOrg, libraryPin } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
@@ -43,6 +68,22 @@ export function ScriptManager() {
   const [vtDownloadedId, setVtDownloadedId] = useState<string | null>(null)
   const [vtErrorId, setVtErrorId] = useState<string | null>(null)
   const [vtMessageId, setVtMessageId] = useState<string | null>(null)
+  const [pendingByScript, setPendingByScript] = useState<Record<string, string[]>>({})
+
+  const refreshPendingUploads = useCallback(async () => {
+    const allRecordings = await getAllRecordings()
+    const result: Record<string, string[]> = {}
+    for (const script of scripts) {
+      const pending = await pendingUploadCharacters(script, allRecordings)
+      if (pending.length > 0) result[script.id] = pending
+    }
+    setPendingByScript(result)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scripts])
+
+  useEffect(() => {
+    refreshPendingUploads()
+  }, [refreshPendingUploads])
 
   async function handleUpload(script: Script) {
     if (!libraryOrg || !libraryPin) {
@@ -89,27 +130,16 @@ export function ScriptManager() {
     setVtBusyId(script.id)
     try {
       const allRecordings = await getAllRecordings()
+      const pendingCharacters = await pendingUploadCharacters(script, allRecordings)
       const toUpload: { character: string; recordings: Map<number, Blob>; totalLines: number }[] = []
 
-      for (const character of script.characters) {
+      for (const character of pendingCharacters) {
         const groupStarts = characterGroupStarts(script.lines, character)
-        if (groupStarts.length === 0) continue
-
         const recordings = new Map<number, Blob>()
         for (const idx of groupStarts) {
           const blob = allRecordings.get(`${script.id}:${idx}`)
           if (blob) recordings.set(idx, blob)
         }
-        if (recordings.size === 0) continue
-
-        const lastUploaded = await getVoiceTrackUploadedAt(script.id, character)
-        let newestRecordedAt = 0
-        for (const idx of recordings.keys()) {
-          const at = await getRecordedAt(script.id, idx)
-          if (at && at > newestRecordedAt) newestRecordedAt = at
-        }
-        if (lastUploaded && newestRecordedAt <= lastUploaded) continue
-
         toUpload.push({ character, recordings, totalLines: groupStarts.length })
       }
 
@@ -129,9 +159,13 @@ export function ScriptManager() {
       for (const { character, recordings, totalLines } of toUpload) {
         const { createdAt } = await uploadVoiceTrack(libraryOrg, libraryPin, script.name, character, totalLines, recordings)
         await setVoiceTrackUploadedAt(script.id, character, createdAt)
+        // This device already has the content it just sent — treat it as
+        // downloaded too, so "check voice tracks" doesn't re-offer our own upload.
+        await setVoiceTrackDownloadedAt(script.id, character, createdAt)
       }
       setVtUploadedId(script.id)
       setTimeout(() => setVtUploadedId(null), 2500)
+      refreshPendingUploads()
     } catch (err) {
       console.error('Voice track upload failed', err)
       setVtErrorId(script.id)
@@ -215,6 +249,7 @@ export function ScriptManager() {
               vtDownloaded={vtDownloadedId === script.id}
               vtError={vtErrorId === script.id}
               vtMessage={vtMessageId === script.id}
+              pendingCharacters={pendingByScript[script.id] ?? []}
               existingNames={scripts.filter((s) => s.id !== script.id).map((s) => s.name)}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
@@ -276,6 +311,7 @@ function ScriptCard({
   vtDownloaded,
   vtError,
   vtMessage,
+  pendingCharacters,
   existingNames,
   onSelect,
   onRemove,
@@ -296,6 +332,7 @@ function ScriptCard({
   vtDownloaded: boolean
   vtError: boolean
   vtMessage: boolean
+  pendingCharacters: string[]
   existingNames: string[]
   onSelect: () => void
   onRemove: () => void
@@ -383,13 +420,24 @@ function ScriptCard({
         {vtError && <span className="text-[10px] text-red-400 mr-0.5">Voice track sync failed</span>}
         {vtMessage && <span className="text-[10px] text-[var(--color-stage-muted)] mr-0.5">Nothing new</span>}
         {needsCreds && <span className="text-[10px] text-red-400 mr-0.5">Set organisation &amp; PIN in Settings</span>}
+        {!vtUploaded && !vtDownloaded && !vtError && !vtMessage && pendingCharacters.length > 0 && (
+          <span
+            className="text-[10px] text-amber-400 mr-0.5"
+            title={`Not uploaded: ${pendingCharacters.join(', ')}`}
+          >
+            Voice track{pendingCharacters.length > 1 ? 's' : ''} not uploaded
+          </span>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-          className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
+          className="relative text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded"
           aria-label="Script options"
           title="Script options"
         >
           <IconMore />
+          {pendingCharacters.length > 0 && (
+            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+          )}
         </button>
       </div>
       </div>
@@ -404,7 +452,12 @@ function ScriptCard({
             <MenuItem icon={<IconRename />} label="Rename" onClick={() => { setMenuOpen(false); setNameDraft(script.name); setRenaming(true) }} />
             <MenuItem icon={<IconUpload />} label="Upload script" onClick={() => { setMenuOpen(false); onUpload() }} disabled={uploading} />
             <MenuItem icon={<IconDownload />} label="Check voice tracks" onClick={() => { setMenuOpen(false); onCheckVoiceTracks() }} disabled={vtBusy} />
-            <MenuItem icon={<IconPersonVoice />} label="Upload voice tracks" onClick={() => { setMenuOpen(false); onUploadVoiceTracks() }} disabled={vtBusy} />
+            <MenuItem
+              icon={<IconPersonVoice />}
+              label={pendingCharacters.length > 0 ? `Upload voice tracks (${pendingCharacters.length})` : 'Upload voice tracks'}
+              onClick={() => { setMenuOpen(false); onUploadVoiceTracks() }}
+              disabled={vtBusy}
+            />
             <MenuItem icon={<IconEdit />} label="Edit" onClick={() => { setMenuOpen(false); onEdit() }} />
             <MenuItem icon={<IconDismiss />} label="Delete" danger onClick={() => { setMenuOpen(false); setConfirmDelete(true) }} />
           </div>
