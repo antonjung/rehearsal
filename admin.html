@@ -17,15 +17,15 @@
         color: #e8e6f0;
         min-height: 100vh;
       }
-      .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
-      h1 { font-size: 1.4rem; margin: 0 0 4px; }
-      .sub { color: #9d9bb0; font-size: 0.85rem; margin: 0 0 24px; }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 16px 10px 80px; }
+      h1 { font-size: 1.2rem; margin: 0 0 4px; }
+      .sub { color: #9d9bb0; font-size: 0.78rem; margin: 0 0 20px; }
       .card {
         background: #1a1825;
         border: 1px solid #2e2b40;
         border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
+        padding: 12px;
+        margin-bottom: 12px;
       }
       button {
         font: inherit;
@@ -53,11 +53,22 @@
         padding: 8px 10px;
         width: 100%;
       }
-      label { display: block; font-size: 0.8rem; color: #9d9bb0; margin: 10px 0 4px; }
-      .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-      th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #2e2b40; }
-      th { color: #9d9bb0; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; position: sticky; top: 0; background: #1a1825; }
+      label { display: block; font-size: 0.75rem; color: #9d9bb0; margin: 10px 0 4px; }
+      .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.68rem; table-layout: fixed; }
+      th, td {
+        text-align: left;
+        padding: 5px 3px;
+        border-bottom: 1px solid #2e2b40;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      th:nth-child(1), td:nth-child(1) { width: 34%; }
+      th:nth-child(2), td:nth-child(2) { width: 24%; }
+      th:nth-child(3), td:nth-child(3) { width: 28%; }
+      th:nth-child(4), td:nth-child(4) { width: 14%; text-align: right; }
+      th { color: #9d9bb0; font-weight: 600; font-size: 0.6rem; text-transform: uppercase; position: sticky; top: 0; background: #1a1825; }
       button.sort-th {
         background: none;
         border: none;
@@ -65,18 +76,28 @@
         color: inherit;
         font: inherit;
         font-weight: 600;
-        font-size: 0.75rem;
+        font-size: 0.6rem;
         text-transform: uppercase;
         cursor: pointer;
       }
       button.sort-th:hover { color: #e8e6f0; border: none; }
+      td button {
+        font-size: 0.65rem;
+        padding: 3px 6px;
+      }
       .muted { color: #9d9bb0; }
-      .err { color: #f87171; font-size: 0.85rem; }
-      .ok { color: #a78bfa; font-size: 0.85rem; }
+      .err { color: #f87171; font-size: 0.8rem; }
+      .ok { color: #a78bfa; font-size: 0.8rem; }
       #signedOut { text-align: center; padding: 60px 0; }
       #app { display: none; }
-      .library-scroll { max-height: 400px; overflow-y: auto; }
-      .version { text-align: center; color: #6b6880; font-size: 0.75rem; margin-top: 24px; }
+      .library-scroll { max-height: 400px; overflow-y: auto; overflow-x: auto; }
+      .version { text-align: center; color: #6b6880; font-size: 0.7rem; margin-top: 20px; }
+      @media (max-width: 420px) {
+        .wrap { padding: 12px 8px 72px; }
+        .card { padding: 10px; border-radius: 10px; }
+        table { font-size: 0.62rem; }
+        th, td { padding: 4px 2px; }
+      }
       .modal-overlay {
         display: none;
         position: fixed;
@@ -90,7 +111,7 @@
       .modal-overlay.open { display: flex; }
       .modal-box { max-width: 420px; width: 100%; }
     </style>
-    <script type="module" crossorigin src="/rehearsal/assets/admin-GyYiwuZh.js"></script>
+    <script type="module" crossorigin src="/rehearsal/assets/admin-C27OXxSX.js"></script>
     <link rel="modulepreload" crossorigin href="/rehearsal/assets/preload-helper-Bhcatj8M.js">
     <link rel="modulepreload" crossorigin href="/rehearsal/assets/pdfExtract-D1Ry6r-b.js">
   <link rel="manifest" href="/rehearsal/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/rehearsal/registerSW.js"></script></head>
