@@ -19,14 +19,23 @@ export function ScriptManager() {
       setTimeout(() => setNeedsCredsId(null), 4000)
       return
     }
-    setUploadingId(script.id)
     setUploadErrorId(null)
+
+    let conflict = false
     try {
       const existing = await listSharedScripts(libraryOrg)
-      const conflict = existing.some((e) => e.name === script.name)
-      if (conflict && !window.confirm(`"${script.name}" already exists in the shared library for "${libraryOrg}". Overwrite it?`)) {
-        return
-      }
+      conflict = existing.some((e) => e.name === script.name)
+    } catch (err) {
+      console.error('Failed to check shared library', err)
+    }
+
+    const message = conflict
+      ? `"${script.name}" already exists in the shared library for "${libraryOrg}". Overwrite it?`
+      : `Upload "${script.name}" to the shared library for "${libraryOrg}"?`
+    if (!window.confirm(message)) return
+
+    setUploadingId(script.id)
+    try {
       await uploadScriptToLibrary(script, libraryOrg, libraryPin)
       setUploadedId(script.id)
       setTimeout(() => setUploadedId(null), 2000)
