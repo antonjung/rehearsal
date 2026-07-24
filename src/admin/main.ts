@@ -1,6 +1,6 @@
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, type User } from 'firebase/auth'
 import { app } from '../utils/firebaseClient'
-import { listAllSharedScripts, deleteSharedScript, uploadScriptToLibrary } from '../utils/shareScript'
+import { listAllSharedScripts, deleteSharedScript, uploadScriptToLibrary, type SharedLibraryAdminEntry } from '../utils/shareScript'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 
@@ -20,16 +20,29 @@ const signInBtn = $<HTMLButtonElement>('signInBtn')
 const signInError = $('signInError')
 const signOutBtn = $<HTMLButtonElement>('signOutBtn')
 const userEmailEl = $('userEmail')
-const uidBox = $('uidBox')
+const copyUidBtn = $<HTMLButtonElement>('copyUidBtn')
+const orgFilterInput = $<HTMLInputElement>('orgFilter')
+const refreshBtn = $<HTMLButtonElement>('refreshBtn')
+const listStatus = $('listStatus')
+const libraryTable = $<HTMLTableElement>('libraryTable')
+const libraryBody = $<HTMLTableSectionElement>('libraryBody')
+const versionText = $('versionText')
+
+const openUploadBtn = $<HTMLButtonElement>('openUploadBtn')
+const closeUploadBtn = $<HTMLButtonElement>('closeUploadBtn')
+const uploadModalOverlay = $('uploadModalOverlay')
 const uploadFile = $<HTMLInputElement>('uploadFile')
 const uploadOrg = $<HTMLInputElement>('uploadOrg')
 const uploadPin = $<HTMLInputElement>('uploadPin')
 const uploadBtn = $<HTMLButtonElement>('uploadBtn')
 const uploadStatus = $('uploadStatus')
-const refreshBtn = $<HTMLButtonElement>('refreshBtn')
-const listStatus = $('listStatus')
-const libraryTable = $<HTMLTableElement>('libraryTable')
-const libraryBody = $<HTMLTableSectionElement>('libraryBody')
+
+versionText.textContent = __APP_VERSION__
+
+let currentUid: string | null = null
+let allEntries: SharedLibraryAdminEntry[] = []
+let sortKey: 'name' | 'createdAt' = 'createdAt'
+let sortDir: 'asc' | 'desc' = 'desc'
 
 signInBtn.addEventListener('click', async () => {
   signInError.textContent = ''
@@ -42,18 +55,28 @@ signInBtn.addEventListener('click', async () => {
 
 signOutBtn.addEventListener('click', () => { void signOut(auth) })
 
+copyUidBtn.addEventListener('click', () => {
+  if (!currentUid) return
+  navigator.clipboard.writeText(currentUid).then(() => {
+    const original = copyUidBtn.textContent
+    copyUidBtn.textContent = '✅'
+    setTimeout(() => { copyUidBtn.textContent = original }, 1200)
+  })
+})
+
 onAuthStateChanged(auth, (user: User | null) => {
   if (user && ALLOWED_ADMIN_UIDS.includes(user.uid)) {
+    currentUid = user.uid
     signedOutEl.style.display = 'none'
     appEl.style.display = 'block'
     userEmailEl.textContent = user.email ?? '(no email)'
-    uidBox.textContent = user.uid
     void refreshLibrary()
   } else if (user) {
     // Signed in with Google, but not an allowed admin — sign out immediately.
     signInError.textContent = `Signed in as ${user.email ?? user.uid}, but this account isn't authorized for the admin portal.`
     void signOut(auth)
   } else {
+    currentUid = null
     signedOutEl.style.display = 'block'
     appEl.style.display = 'none'
   }
@@ -63,42 +86,78 @@ function formatDate(ms: number): string {
   return new Date(ms).toLocaleString()
 }
 
+function renderTable() {
+  const filter = orgFilterInput.value.trim().toLowerCase()
+  const filtered = filter
+    ? allEntries.filter((e) => e.org.toLowerCase().includes(filter))
+    : allEntries
+
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1
+    if (sortKey === 'name') return a.name.localeCompare(b.name) * dir
+    return (a.createdAt - b.createdAt) * dir
+  })
+
+  libraryBody.innerHTML = ''
+  for (const entry of sorted) {
+    const tr = document.createElement('tr')
+
+    const nameTd = document.createElement('td')
+    nameTd.textContent = entry.name
+    tr.appendChild(nameTd)
+
+    const orgTd = document.createElement('td')
+    orgTd.textContent = entry.org
+    orgTd.className = 'muted'
+    tr.appendChild(orgTd)
+
+    const dateTd = document.createElement('td')
+    dateTd.textContent = formatDate(entry.createdAt)
+    dateTd.className = 'muted'
+    tr.appendChild(dateTd)
+
+    const actionTd = document.createElement('td')
+    const delBtn = document.createElement('button')
+    delBtn.textContent = 'Delete'
+    delBtn.addEventListener('click', () => void handleDelete(entry.id, entry.name, delBtn))
+    actionTd.appendChild(delBtn)
+    tr.appendChild(actionTd)
+
+    libraryBody.appendChild(tr)
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.sort-th').forEach((btn) => {
+    const key = btn.dataset.sort
+    const active = key === sortKey
+    btn.textContent = (key === 'name' ? 'Name' : 'Uploaded') + (active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
+  })
+
+  listStatus.textContent = sorted.length === 0 ? 'Nothing matches.' : ''
+  libraryTable.style.display = sorted.length === 0 ? 'none' : 'table'
+}
+
+document.querySelectorAll<HTMLButtonElement>('.sort-th').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.sort as 'name' | 'createdAt'
+    if (sortKey === key) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc'
+    } else {
+      sortKey = key
+      sortDir = key === 'name' ? 'asc' : 'desc'
+    }
+    renderTable()
+  })
+})
+
+orgFilterInput.addEventListener('input', () => renderTable())
+
 async function refreshLibrary() {
   listStatus.textContent = 'Loading…'
   libraryTable.style.display = 'none'
   try {
-    const entries = await listAllSharedScripts()
-    libraryBody.innerHTML = ''
-    for (const entry of entries) {
-      const tr = document.createElement('tr')
-
-      const nameTd = document.createElement('td')
-      nameTd.textContent = entry.name
-      tr.appendChild(nameTd)
-
-      const orgTd = document.createElement('td')
-      orgTd.textContent = entry.org
-      orgTd.className = 'muted'
-      tr.appendChild(orgTd)
-
-      const dateTd = document.createElement('td')
-      dateTd.textContent = formatDate(entry.createdAt)
-      dateTd.className = 'muted'
-      tr.appendChild(dateTd)
-
-      const actionTd = document.createElement('td')
-      const delBtn = document.createElement('button')
-      delBtn.textContent = 'Delete'
-      delBtn.addEventListener('click', () => void handleDelete(entry.id, entry.name, delBtn))
-      actionTd.appendChild(delBtn)
-      tr.appendChild(actionTd)
-
-      libraryBody.appendChild(tr)
-    }
-    listStatus.textContent = entries.length === 0 ? 'Nothing in the library yet.' : ''
-    libraryTable.style.display = entries.length === 0 ? 'none' : 'table'
+    allEntries = await listAllSharedScripts()
+    renderTable()
   } catch (err) {
-    listStatus.textContent = ''
     listStatus.innerHTML = `<span class="err">${err instanceof Error ? err.message : 'Failed to load library'}</span>`
   }
 }
@@ -118,6 +177,15 @@ async function handleDelete(id: string, name: string, btn: HTMLButtonElement) {
 }
 
 refreshBtn.addEventListener('click', () => void refreshLibrary())
+
+openUploadBtn.addEventListener('click', () => {
+  uploadStatus.innerHTML = ''
+  uploadModalOverlay.classList.add('open')
+})
+closeUploadBtn.addEventListener('click', () => uploadModalOverlay.classList.remove('open'))
+uploadModalOverlay.addEventListener('click', (e) => {
+  if (e.target === uploadModalOverlay) uploadModalOverlay.classList.remove('open')
+})
 
 uploadBtn.addEventListener('click', () => void handleUpload())
 
@@ -144,6 +212,7 @@ async function handleUpload() {
     uploadStatus.innerHTML = `<span class="ok">Uploaded "${name}".</span>`
     uploadFile.value = ''
     await refreshLibrary()
+    setTimeout(() => uploadModalOverlay.classList.remove('open'), 900)
   } catch (err) {
     uploadStatus.innerHTML = `<span class="err">${err instanceof Error ? err.message : 'Upload failed'}</span>`
   } finally {

@@ -1,9 +1,8 @@
 import { useRef, useState, useEffect } from 'react'
-import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport, IconDownload, IconShare } from './Icons'
+import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport, IconDownload, IconShare, IconInfo, IconLibrary } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
-import { parseImportFile, countRecordingConflicts, countTrackConflicts, importBundle } from '../utils/exportImport'
 import { listSharedScripts, downloadScriptFromLibrary, copyLinkAsAnchor } from '../utils/shareScript'
 import { getAllRecordings, setRecordingRaw } from '../utils/recordingStore'
 import { OrgPinPrompt } from './OrgPinPrompt'
@@ -28,16 +27,7 @@ function formatDate(ms: number): string {
 export function SideMenu({ open, onClose }: Props) {
   const { scripts, addScript, removeScript, selectScript, updateScript, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
-  const importBundleRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
-  const [importState, setImportState] = useState<{
-    bundle: Awaited<ReturnType<typeof parseImportFile>>
-    recConflicts: number
-    trackConflicts: number
-  } | null>(null)
-  const [keepRecordings, setKeepRecordings] = useState(true)
-  const [keepTracks, setKeepTracks] = useState(true)
-  const [importError, setImportError] = useState<string | null>(null)
   const [examples, setExamples] = useState<ExampleMeta[]>([])
   const [loadingExample, setLoadingExample] = useState<string | null>(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
@@ -56,34 +46,6 @@ export function SideMenu({ open, onClose }: Props) {
   const [appShareCopied, setAppShareCopied] = useState(false)
   const [showOrgPinPrompt, setShowOrgPinPrompt] = useState(false)
   const [downloadedName, setDownloadedName] = useState<string | null>(null)
-
-  async function handleBundleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    try {
-      const bundle = await parseImportFile(file)
-      const recConflicts = await countRecordingConflicts(bundle)
-      const trackConflicts = countTrackConflicts(bundle, scripts)
-      setKeepRecordings(true)
-      setKeepTracks(true)
-      setImportState({ bundle, recConflicts, trackConflicts })
-      setImportError(null)
-    } catch {
-      setImportError('Invalid file — please choose a CueLine export (.json)')
-    }
-  }
-
-  async function confirmImport() {
-    if (!importState) return
-    setImporting(true)
-    try {
-      await importBundle(importState.bundle, keepRecordings, keepTracks, addScript, updateScript, scripts)
-    } finally {
-      setImporting(false)
-      setImportState(null)
-    }
-  }
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}examples/index.json`)
@@ -262,69 +224,20 @@ export function SideMenu({ open, onClose }: Props) {
             <button
               disabled={importing}
               onClick={() => inputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-40 transition-colors"
+              className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-40 transition-colors"
             >
-              {importing && !loadingExample ? 'Loading…' : 'Load from PDF'}
+              <IconImport /> <span>{importing && !loadingExample ? 'Loading…' : 'Load from PDF'}</span>
             </button>
             <input ref={inputRef} type="file" accept=".txt,.pdf" multiple className="hidden"
               onChange={(e) => { void handleFiles(e.target.files) }} />
 
-            {/* Import */}
-            <button
-              onClick={() => importBundleRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
-            >
-              <IconImport /> Import from .json file
-            </button>
-            <input ref={importBundleRef} type="file" accept=".json,application/json" className="hidden"
-              onChange={handleBundleFile} />
-            {importError && <p className="text-xs text-red-400 text-center">{importError}</p>}
-
-            {/* Examples */}
-            {examples.length > 0 && (
-              <>
-                <button
-                  onClick={() => setExamplesOpen((v) => !v)}
-                  className="w-full relative flex items-center justify-center py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors px-4"
-                >
-                  <span>Examples</span>
-                  <span className="absolute right-4">{examplesOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
-                </button>
-                {examplesOpen && (
-                  <div className="space-y-2">
-                    {examples.map((ex) => {
-                      const loaded = scripts.some((s) => s.name === ex.name)
-                      return (
-                        <div key={ex.file} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
-                          <div className="min-w-0 flex items-start gap-1.5">
-                            <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}><IconCheckmark /></span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
-                              <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
-                            </div>
-                          </div>
-                          <button
-                            disabled={importing}
-                            onClick={() => void loadExample(ex)}
-                            className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
-                          >
-                            {loadingExample === ex.file ? '⏳' : 'Load'}
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-
             {/* Shared library */}
             <button
               onClick={() => void toggleLibrary()}
-              className="w-full relative flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors px-4"
+              className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
             >
-              <IconDownload /> <span>Download from shared library</span>
-              <span className="absolute right-4">{libraryOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
+              <IconDownload /> <span className="flex-1 text-left">Download from shared library</span>
+              {libraryOpen ? <IconChevronUp /> : <IconChevronDown />}
             </button>
             {libraryOrg && (
               <p className="text-xs text-[var(--color-stage-muted)] text-center">
@@ -361,19 +274,19 @@ export function SideMenu({ open, onClose }: Props) {
             {/* Share the app */}
             <button
               onClick={() => void handleShareApp()}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+              className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
             >
               <IconShare /> <span>{appShareCopied ? 'Link copied!' : 'Share CueLine app'}</span>
             </button>
           </div>
 
           {/* About */}
-          <div className="px-5 py-4">
+          <div className="px-5 py-4 border-b border-[var(--color-stage-border)]">
             <button
               onClick={() => setAboutOpen((v) => !v)}
-              className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors mb-1"
+              className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
             >
-              <span>About</span>
+              <IconInfo /> <span className="flex-1 text-left">About</span>
               {aboutOpen ? <IconChevronUp /> : <IconChevronDown />}
             </button>
             {aboutOpen && (
@@ -383,8 +296,8 @@ export function SideMenu({ open, onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Loading a script (Home tab)</p>
-                  <p>Tap <span className="text-[var(--color-stage-accent-light)]">Load from PDF</span> in this menu to open a <span className="text-[var(--color-stage-accent-light)]">.txt</span> or <span className="text-[var(--color-stage-accent-light)]">.pdf</span> file. Multiple scripts can be loaded at once. Scripts are listed on the <span className="text-[var(--color-stage-accent-light)]">Home</span> tab where you can select, rename, edit, export, or delete them.</p>
-                  <p>Use <span className="text-[var(--color-stage-accent-light)]">Import from .json file</span> to restore a previously exported CueLine bundle (scripts, recordings, and tracks), or <span className="text-[var(--color-stage-accent-light)]">Examples</span> to try a built-in script.</p>
+                  <p>Tap <span className="text-[var(--color-stage-accent-light)]">Load from PDF</span> in this menu to open a <span className="text-[var(--color-stage-accent-light)]">.txt</span> or <span className="text-[var(--color-stage-accent-light)]">.pdf</span> file. Multiple scripts can be loaded at once. Scripts are listed on the <span className="text-[var(--color-stage-accent-light)]">Home</span> tab where you can select, rename, edit, upload, or delete them.</p>
+                  <p>Use <span className="text-[var(--color-stage-accent-light)]">Download from shared library</span> to pull a script uploaded by you or your group, or <span className="text-[var(--color-stage-accent-light)]">Examples</span> to try a built-in script.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Edit</span> (pencil icon on a script) opens a line-by-line editor — change a line's text, character, or type, search the script, and bulk-reassign lines.</p>
                 </div>
 
@@ -441,7 +354,7 @@ export function SideMenu({ open, onClose }: Props) {
 
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Your data</p>
-                  <p>Scripts, recordings, and settings stay on this device — nothing is uploaded to a server, including PDF text extraction. Use Export/Import to back up a script or move it to another device.</p>
+                  <p>Scripts, recordings, and settings stay on this device by default — nothing is uploaded, including PDF text extraction. <span className="text-[var(--color-stage-accent-light)]">Upload</span> (cloud icon on a script) sends an encrypted copy to the shared library, downloadable only by others using the same organisation name and PIN.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -452,67 +365,46 @@ export function SideMenu({ open, onClose }: Props) {
             )}
           </div>
 
+          {/* Examples */}
+          {examples.length > 0 && (
+            <div className="px-5 py-4">
+              <button
+                onClick={() => setExamplesOpen((v) => !v)}
+                className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
+              >
+                <IconLibrary /> <span className="flex-1 text-left">Examples</span>
+                {examplesOpen ? <IconChevronUp /> : <IconChevronDown />}
+              </button>
+              {examplesOpen && (
+                <div className="space-y-2 mt-2">
+                  {examples.map((ex) => {
+                    const loaded = scripts.some((s) => s.name === ex.name)
+                    return (
+                      <div key={ex.file} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
+                        <div className="min-w-0 flex items-start gap-1.5">
+                          <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}><IconCheckmark /></span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
+                            <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
+                          </div>
+                        </div>
+                        <button
+                          disabled={importing}
+                          onClick={() => void loadExample(ex)}
+                          className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+                        >
+                          {loadingExample === ex.file ? '⏳' : 'Load'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
-
-      {importState && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
-          <div className="bg-[var(--color-stage-surface)] border border-[var(--color-stage-border)] rounded-xl p-5 w-full max-w-sm space-y-4">
-            <p className="font-semibold text-[var(--color-stage-text)]">Import</p>
-            <p className="text-sm text-[var(--color-stage-muted)]">
-              {importState.bundle.scripts.length} script{importState.bundle.scripts.length !== 1 ? 's' : ''} ·{' '}
-              {Object.keys(importState.bundle.recordings).filter(k => !k.endsWith(':dur')).length} recording{Object.keys(importState.bundle.recordings).filter(k => !k.endsWith(':dur')).length !== 1 ? 's' : ''}
-            </p>
-
-            {importState.recConflicts > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-sm text-amber-400">
-                  {importState.recConflicts} recording{importState.recConflicts !== 1 ? 's' : ''} already exist locally.
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => setKeepRecordings(true)} disabled={importing}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${keepRecordings ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
-                    Keep mine
-                  </button>
-                  <button onClick={() => setKeepRecordings(false)} disabled={importing}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!keepRecordings ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
-                    Use imported
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {importState.trackConflicts > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-sm text-amber-400">
-                  {importState.trackConflicts} script{importState.trackConflicts !== 1 ? 's have' : ' has'} existing tracks.
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => setKeepTracks(true)} disabled={importing}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${keepTracks ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
-                    Keep mine
-                  </button>
-                  <button onClick={() => setKeepTracks(false)} disabled={importing}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!keepTracks ? 'border-[var(--color-stage-accent)] bg-[var(--color-stage-accent)]/10 text-[var(--color-stage-accent-light)]' : 'border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)]'}`}>
-                    Use imported
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <button onClick={confirmImport} disabled={importing}
-                className="py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                {importing ? 'Importing…' : 'Import'}
-              </button>
-              <button onClick={() => setImportState(null)} disabled={importing}
-                className="py-2 rounded-lg text-sm font-medium text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] disabled:opacity-50 transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {pendingDownload && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">

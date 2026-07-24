@@ -1,40 +1,28 @@
 import { useState } from 'react'
-import { IconEdit, IconDismiss, IconExport, IconUpload, IconRename } from './Icons'
+import { IconEdit, IconDismiss, IconUpload, IconRename } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
 import { OrgPinPrompt } from './OrgPinPrompt'
 import type { Script } from '../types'
-import { buildExportBundle, downloadBundle } from '../utils/exportImport'
-import { uploadScriptToLibrary } from '../utils/shareScript'
+import { uploadScriptToLibrary, listSharedScripts } from '../utils/shareScript'
 
 export function ScriptManager() {
   const { scripts, selectedScriptId, removeScript, selectScript, updateScript, libraryOrg, libraryPin, setLibraryCredentials } = useAppStore()
   const [editingScript, setEditingScript] = useState<Script | null>(null)
-  const [exportingId, setExportingId] = useState<string | null>(null)
-  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [uploadedId, setUploadedId] = useState<string | null>(null)
   const [uploadErrorId, setUploadErrorId] = useState<string | null>(null)
   const [pendingUploadScript, setPendingUploadScript] = useState<Script | null>(null)
 
-  async function handleExport(script: Script) {
-    setExportingId(script.id)
-    setExportProgress(null)
-    try {
-      const bundle = await buildExportBundle([script], (done, total) => setExportProgress({ done, total }))
-      downloadBundle(bundle, script.name)
-    } catch (err) {
-      console.error('Export failed', err)
-    } finally {
-      setExportingId(null)
-      setExportProgress(null)
-    }
-  }
-
   async function doUpload(script: Script, org: string, pin: string) {
     setUploadingId(script.id)
     setUploadErrorId(null)
     try {
+      const existing = await listSharedScripts(org)
+      const conflict = existing.some((e) => e.name === script.name)
+      if (conflict && !window.confirm(`"${script.name}" already exists in the shared library for "${org}". Overwrite it?`)) {
+        return
+      }
       await uploadScriptToLibrary(script, org, pin)
       setUploadedId(script.id)
       setTimeout(() => setUploadedId(null), 2000)
@@ -69,15 +57,13 @@ export function ScriptManager() {
               key={script.id}
               script={script}
               selected={script.id === selectedScriptId}
-              exporting={exportingId === script.id}
-              exportProgress={exportingId === script.id ? exportProgress : undefined}
               uploading={uploadingId === script.id}
               uploaded={uploadedId === script.id}
               uploadError={uploadErrorId === script.id}
+              existingNames={scripts.filter((s) => s.id !== script.id).map((s) => s.name)}
               onSelect={() => selectScript(script.id)}
               onRemove={() => removeScript(script.id)}
               onEdit={() => setEditingScript(script)}
-              onExport={() => handleExport(script)}
               onUpload={() => handleUpload(script)}
               onRename={(name) => updateScript({ ...script, name })}
             />
@@ -108,39 +94,33 @@ export function ScriptManager() {
 function ScriptCard({
   script,
   selected,
-  exporting,
-  exportProgress,
   uploading,
   uploaded,
   uploadError,
+  existingNames,
   onSelect,
   onRemove,
   onEdit,
-  onExport,
   onUpload,
   onRename,
 }: {
   script: Script
   selected: boolean
-  exporting: boolean
-  exportProgress?: { done: number; total: number } | null
   uploading: boolean
   uploaded: boolean
   uploadError: boolean
+  existingNames: string[]
   onSelect: () => void
   onRemove: () => void
   onEdit: () => void
-  onExport: () => void
   onUpload: () => void
   onRename: (name: string) => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [nameDraft, setNameDraft] = useState(script.name)
+  const [renameError, setRenameError] = useState(false)
   const dialogueCount = script.lines.filter((l) => l.type === 'dialogue').length
-  const progressPct = exportProgress == null
-    ? null  // indeterminate
-    : exportProgress.total === 0 ? 100 : Math.round(exportProgress.done / exportProgress.total * 100)
 
   if (confirmDelete) {
     return (
@@ -179,8 +159,17 @@ function ScriptCard({
             }}
             onBlur={() => {
               const trimmed = nameDraft.trim()
-              if (trimmed && trimmed !== script.name) onRename(trimmed)
-              else setNameDraft(script.name)
+              if (trimmed && trimmed !== script.name) {
+                if (existingNames.includes(trimmed)) {
+                  setRenameError(true)
+                  setTimeout(() => setRenameError(false), 3000)
+                  setNameDraft(script.name)
+                } else {
+                  onRename(trimmed)
+                }
+              } else {
+                setNameDraft(script.name)
+              }
               setRenaming(false)
             }}
             className="font-semibold text-[var(--color-stage-text)] bg-transparent border-b border-[var(--color-stage-accent)] focus:outline-none w-full"
@@ -188,9 +177,13 @@ function ScriptCard({
         ) : (
           <p className="font-semibold text-[var(--color-stage-text)] truncate">{script.name}</p>
         )}
-        <p className="text-xs text-[var(--color-stage-muted)] mt-0.5">
-          {script.characters.length} characters · {dialogueCount} lines
-        </p>
+        {renameError ? (
+          <p className="text-xs text-red-400 mt-0.5">A script with that name already exists</p>
+        ) : (
+          <p className="text-xs text-[var(--color-stage-muted)] mt-0.5">
+            {script.characters.length} characters · {dialogueCount} lines
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-1 shrink-0">
         {uploaded && <span className="text-[10px] text-[var(--color-stage-accent-light)] mr-0.5">Uploaded!</span>}
@@ -213,15 +206,6 @@ function ScriptCard({
           <IconUpload />
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); if (!exporting) onExport() }}
-          className={`transition-colors p-1 rounded ${exporting ? 'text-[var(--color-stage-accent-light)] opacity-60 cursor-wait' : 'text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)]'}`}
-          aria-label="Export script"
-          title="Export script"
-          disabled={exporting}
-        >
-          <IconExport />
-        </button>
-        <button
           onClick={(e) => { e.stopPropagation(); onEdit() }}
           className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors p-1 rounded text-sm"
           aria-label="Edit script"
@@ -238,18 +222,6 @@ function ScriptCard({
         </button>
       </div>
       </div>
-      {exporting && (
-        <div className="h-1 bg-[var(--color-stage-border)]">
-          {progressPct == null ? (
-            <div className="h-full bg-[var(--color-stage-accent)] w-1/3 animate-pulse" />
-          ) : (
-            <div
-              className="h-full bg-[var(--color-stage-accent)] transition-all duration-300 ease-out"
-              style={{ width: `${progressPct}%` }}
-            />
-          )}
-        </div>
-      )}
     </div>
   )
 }
