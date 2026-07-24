@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react'
-import { IconDismiss, IconChevronUp, IconChevronDown, IconCheckmark, IconImport, IconDownload, IconShare, IconInfo, IconLibrary } from './Icons'
+import { useRef, useState } from 'react'
+import { IconDismiss, IconChevronUp, IconChevronDown, IconImport, IconDownload, IconShare, IconInfo } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
@@ -7,8 +7,6 @@ import { listSharedScripts, downloadScriptFromLibrary, copyLinkAsAnchor } from '
 import { getAllRecordings, setRecordingRaw } from '../utils/recordingStore'
 import type { Script } from '../types'
 import type { SharedLibraryEntry } from '../utils/shareScript'
-
-interface ExampleMeta { name: string; file: string; description: string }
 
 interface Props { open: boolean; onClose: () => void }
 
@@ -27,9 +25,6 @@ export function SideMenu({ open, onClose }: Props) {
   const { scripts, addScript, removeScript, selectScript, updateScript, libraryOrg, libraryPin } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
-  const [examples, setExamples] = useState<ExampleMeta[]>([])
-  const [loadingExample, setLoadingExample] = useState<string | null>(null)
-  const [examplesOpen, setExamplesOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
 
   const [libraryOpen, setLibraryOpen] = useState(false)
@@ -44,13 +39,6 @@ export function SideMenu({ open, onClose }: Props) {
   } | null>(null)
   const [appShareCopied, setAppShareCopied] = useState(false)
   const [downloadedName, setDownloadedName] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}examples/index.json`)
-      .then((r) => r.ok ? r.json() : [])
-      .then((data: ExampleMeta[]) => setExamples(data))
-      .catch(() => {})
-  }, [])
 
   const confirmAndAdd = (script: Script) => {
     const existing = scripts.find((s) => s.name === script.name)
@@ -75,24 +63,6 @@ export function SideMenu({ open, onClose }: Props) {
       }
     } finally {
       setImporting(false)
-    }
-  }
-
-  const loadExample = async (ex: ExampleMeta) => {
-    setLoadingExample(ex.file)
-    setImporting(true)
-    try {
-      const res = await fetch(`${import.meta.env.BASE_URL}examples/${ex.file}`)
-      if (!res.ok) throw new Error('Failed to load')
-      const text = ex.file.endsWith('.pdf')
-        ? await extractPdfText(await res.blob() as File)
-        : await res.text()
-      confirmAndAdd(parseScript(text, ex.name))
-    } catch {
-      // silently ignore
-    } finally {
-      setImporting(false)
-      setLoadingExample(null)
     }
   }
 
@@ -212,6 +182,12 @@ export function SideMenu({ open, onClose }: Props) {
           <button onClick={onClose} className="text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] text-xl leading-none px-1"><IconDismiss /></button>
         </div>
 
+        {libraryOrg && (
+          <p className="text-xs text-[var(--color-stage-muted)] text-center py-2 border-b border-[var(--color-stage-border)] shrink-0">
+            Organisation: <span className="text-[var(--color-stage-text)]">{libraryOrg}</span>
+          </p>
+        )}
+
         <div className="flex-1 overflow-y-auto">
 
           {/* Scripts section */}
@@ -222,7 +198,7 @@ export function SideMenu({ open, onClose }: Props) {
               onClick={() => inputRef.current?.click()}
               className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] disabled:opacity-40 transition-colors"
             >
-              <IconImport /> <span>{importing && !loadingExample ? 'Loading…' : 'Load from PDF'}</span>
+              <IconImport /> <span>{importing ? 'Loading…' : 'Load from PDF'}</span>
             </button>
             <input ref={inputRef} type="file" accept=".txt,.pdf" multiple className="hidden"
               onChange={(e) => { void handleFiles(e.target.files) }} />
@@ -235,11 +211,6 @@ export function SideMenu({ open, onClose }: Props) {
               <IconDownload /> <span className="flex-1 text-left">Download from shared library</span>
               {libraryOpen ? <IconChevronUp /> : <IconChevronDown />}
             </button>
-            {libraryOrg && (
-              <p className="text-xs text-[var(--color-stage-muted)] text-center">
-                Organisation: <span className="text-[var(--color-stage-text)]">{libraryOrg}</span>
-              </p>
-            )}
             {downloadedName && <p className="text-xs text-[var(--color-stage-accent-light)] text-center py-1">Downloaded "{downloadedName}"</p>}
             {libraryError && <p className="text-xs text-red-400 text-center py-1">{libraryError}</p>}
             {libraryOpen && (
@@ -292,7 +263,7 @@ export function SideMenu({ open, onClose }: Props) {
                 <div className="space-y-1.5">
                   <p className="font-semibold text-[var(--color-stage-text)]">Loading a script (Home tab)</p>
                   <p>Tap <span className="text-[var(--color-stage-accent-light)]">Load from PDF</span> in this menu to open a <span className="text-[var(--color-stage-accent-light)]">.txt</span> or <span className="text-[var(--color-stage-accent-light)]">.pdf</span> file. Multiple scripts can be loaded at once. Scripts are listed on the <span className="text-[var(--color-stage-accent-light)]">Home</span> tab where you can select, rename, edit, upload, or delete them.</p>
-                  <p>Use <span className="text-[var(--color-stage-accent-light)]">Download from shared library</span> to pull a script uploaded by you or your group, or <span className="text-[var(--color-stage-accent-light)]">Examples</span> to try a built-in script.</p>
+                  <p>Use <span className="text-[var(--color-stage-accent-light)]">Download from shared library</span> to pull a script uploaded by you or your group. To try some example scripts, set your organisation to <span className="text-[var(--color-stage-accent-light)]">examples</span> and your PIN to <span className="text-[var(--color-stage-accent-light)]">123456</span> in Settings ⚙️, then download from there.</p>
                   <p><span className="text-[var(--color-stage-accent-light)]">Edit</span> (pencil icon on a script) opens a line-by-line editor — change a line's text, character, or type, search the script, and bulk-reassign lines.</p>
                 </div>
 
@@ -360,44 +331,6 @@ export function SideMenu({ open, onClose }: Props) {
               </div>
             )}
           </div>
-
-          {/* Examples */}
-          {examples.length > 0 && (
-            <div className="px-5 py-4">
-              <button
-                onClick={() => setExamplesOpen((v) => !v)}
-                className="w-full flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] hover:border-[var(--color-stage-accent-light)] transition-colors"
-              >
-                <IconLibrary /> <span className="flex-1 text-left">Examples</span>
-                {examplesOpen ? <IconChevronUp /> : <IconChevronDown />}
-              </button>
-              {examplesOpen && (
-                <div className="space-y-2 mt-2">
-                  {examples.map((ex) => {
-                    const loaded = scripts.some((s) => s.name === ex.name)
-                    return (
-                      <div key={ex.file} className="flex items-center justify-between rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-bg)] px-3 py-2.5 gap-3">
-                        <div className="min-w-0 flex items-start gap-1.5">
-                          <span className={`mt-0.5 text-sm shrink-0 ${loaded ? 'text-[var(--color-stage-accent-light)]' : 'invisible'}`}><IconCheckmark /></span>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--color-stage-text)] truncate">{ex.name}</p>
-                            <p className="text-xs text-[var(--color-stage-muted)]">{ex.description}</p>
-                          </div>
-                        </div>
-                        <button
-                          disabled={importing}
-                          onClick={() => void loadExample(ex)}
-                          className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-[var(--color-stage-accent)] text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
-                        >
-                          {loadingExample === ex.file ? '⏳' : 'Load'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
 
         </div>
       </div>
