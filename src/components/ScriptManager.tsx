@@ -33,7 +33,15 @@ async function blobsEqual(a: Blob, b: Blob): Promise<boolean> {
 // Characters in a script that have local recordings newer than their last
 // voice-track upload (or never uploaded at all) — used both to decide what
 // to upload and to show a "not uploaded" indicator on the script card.
-async function pendingUploadCharacters(script: Script, allRecordings: Map<string, Blob>): Promise<string[]> {
+// `remoteCharacters`, when given, is the set of characters currently found
+// in the shared library for this script — local "already uploaded" timestamps
+// survive a remote deletion (e.g. via the admin portal), so anything missing
+// from the remote listing is always treated as pending regardless of them.
+async function pendingUploadCharacters(
+  script: Script,
+  allRecordings: Map<string, Blob>,
+  remoteCharacters?: Set<string>,
+): Promise<string[]> {
   const pending: string[] = []
   for (const character of script.characters) {
     const groupStarts = characterGroupStarts(script.lines, character)
@@ -48,6 +56,11 @@ async function pendingUploadCharacters(script: Script, allRecordings: Map<string
       if (at && at > newestRecordedAt) newestRecordedAt = at
     }
     if (!hasAny) continue
+
+    if (remoteCharacters && !remoteCharacters.has(character)) {
+      pending.push(character)
+      continue
+    }
 
     const lastUploaded = await getVoiceTrackUploadedAt(script.id, character)
     if (!lastUploaded || newestRecordedAt > lastUploaded) pending.push(character)
@@ -130,7 +143,15 @@ export function ScriptManager() {
     setVtBusyId(script.id)
     try {
       const allRecordings = await getAllRecordings()
-      const pendingCharacters = await pendingUploadCharacters(script, allRecordings)
+
+      let remoteCharacters: Set<string> | undefined
+      try {
+        remoteCharacters = new Set((await listVoiceTracks(libraryOrg, script.name)).map((e) => e.character))
+      } catch (err) {
+        console.error('Failed to check remote voice tracks before upload', err)
+      }
+
+      const pendingCharacters = await pendingUploadCharacters(script, allRecordings, remoteCharacters)
       const toUpload: { character: string; recordings: Map<number, Blob>; totalLines: number }[] = []
 
       for (const character of pendingCharacters) {
