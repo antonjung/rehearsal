@@ -6,7 +6,7 @@ import { getRecording, setRecording, getRecordingDuration, setRecordingDuration,
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { estimateDuration } from '../utils/speechDuration'
-import { unlockAudio, playCompletion, playClipStart, getAudioContext } from '../utils/sounds'
+import { unlockAudio, playCompletion, playClipStart } from '../utils/sounds'
 import type { VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
@@ -268,7 +268,6 @@ export function RehearsalMode() {
   const myLineResetRef = useRef<(() => void) | null>(null)
   const myLinePauseTimerRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const recAudioElRef = useRef<HTMLAudioElement | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
@@ -284,13 +283,19 @@ export function RehearsalMode() {
   voiceCmdWordsRef.current = { ...DEFAULT_VOICE_COMMANDS, ...(settings.voiceCommands ?? {}) }
 
   // --- Audio helpers ---
-  // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
-  // playback works on iOS without requiring a direct user gesture per-element.
-  // decodeAudioData is stricter than HTMLMediaElement about container/codec
-  // quirks in MediaRecorder output — if it rejects a blob that's otherwise a
-  // valid recording (playable fine via the Record tab's plain <audio>), fall
-  // back to a plain <audio> element here rather than silently substituting TTS.
-  const playRecordingViaAudioElement = (blob: Blob): Promise<boolean> =>
+  // Plays a recording via a plain <audio> element rather than AudioContext.
+  // AudioContext-based playback (decodeAudioData + BufferSource) was tried
+  // first here, since AudioContext is supposed to survive without a fresh
+  // per-element user gesture on iOS — but in practice, interleaving it with
+  // speechSynthesis (TTS, used for every other line) across a long rehearsal
+  // session leaves it "silently deaf": scheduling and playback report success
+  // (no error, no unusually short/quiet buffer) but no sound reaches the
+  // speakers, because TTS's own audio session activation disrupts it. Plain
+  // <audio> playback is what the Record tab already uses successfully, and
+  // since TTS keeps working throughout the whole rehearsal (proving the
+  // audio session stays unlocked), <audio> elements played deep in this same
+  // async chain work reliably too — so it's the primary path, not a fallback.
+  const playRecording = (blob: Blob): Promise<boolean> =>
     new Promise((resolve) => {
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
@@ -304,78 +309,10 @@ export function RehearsalMode() {
       recResolveRef.current = done
       audio.onended = () => done(true)
       audio.onerror = () => done(false)
-      audio.play().catch(() => done(false))
-    })
-
-  // Some MediaRecorder blobs decode "successfully" via decodeAudioData (no
-  // error thrown) but to a truncated or near-silent buffer, so nothing
-  // audible plays. Checked three independent ways, since any one signal can
-  // be unavailable/unreliable on its own: absolute duration floor, duration
-  // vs. the recording's actual known length (measured via <audio> metadata
-  // when it was made), and peak sample amplitude. Any hit falls back to the
-  // <audio>-element path already proven to work in the Record tab.
-  const looksLikeBrokenDecode = (audioBuf: AudioBuffer, expectedDurationMs?: number): string | null => {
-    const decodedMs = audioBuf.duration * 1000
-    if (decodedMs < 150) return `decoded duration ${audioBuf.duration}s is implausibly short`
-    if (expectedDurationMs && expectedDurationMs > 300 && decodedMs < expectedDurationMs * 0.5) {
-      return `decoded duration ${audioBuf.duration}s looks truncated vs expected ${expectedDurationMs}ms`
-    }
-    try {
-      const data = audioBuf.getChannelData(0)
-      const step = Math.max(1, Math.floor(data.length / 2000))
-      let peak = 0
-      for (let i = 0; i < data.length; i += step) {
-        const v = Math.abs(data[i])
-        if (v > peak) peak = v
-        if (peak > 0.01) break
-      }
-      if (peak <= 0.01) return `decoded buffer is effectively silent (peak ${peak})`
-    } catch {
-      // channel data unreadable — not itself a failure signal, ignore
-    }
-    return null
-  }
-
-  const playRecording = (blob: Blob, expectedDurationMs?: number): Promise<boolean> =>
-    new Promise((resolve) => {
-      const audioCtx = getAudioContext()
-      if (!audioCtx || audioCtx.state === 'closed') { resolve(false); return }
-
-      const done = (ok: boolean) => {
-        recSourceRef.current = null
-        recResolveRef.current = null
-        resolve(ok)
-      }
-      recResolveRef.current = done
-
-      const fallBackToAudioElement = (reason: unknown) => {
-        console.error('Recording playback via AudioContext looked broken, falling back to <audio> element', reason)
-        if (recResolveRef.current !== done) { resolve(false); return }
-        recResolveRef.current = null
-        playRecordingViaAudioElement(blob).then((ok) => {
-          if (!ok) console.error('Fallback <audio> element playback also failed for this recording')
-          resolve(ok)
-        })
-      }
-
-      blob.arrayBuffer()
-        .then((buf) => audioCtx.decodeAudioData(buf))
-        .then((audioBuf) => {
-          if (recResolveRef.current !== done) { resolve(false); return }
-          const brokenReason = looksLikeBrokenDecode(audioBuf, expectedDurationMs)
-          if (brokenReason) {
-            fallBackToAudioElement(brokenReason)
-            return
-          }
-          const source = audioCtx.createBufferSource()
-          source.buffer = audioBuf
-          source.connect(audioCtx.destination)
-          recSourceRef.current = source
-          source.onended = () => done(true)
-          source.start(0)
-          if (audioCtx.state === 'suspended') void audioCtx.resume()
-        })
-        .catch(fallBackToAudioElement)
+      audio.play().catch((err) => {
+        console.error('Recording playback via <audio> element failed', err)
+        done(false)
+      })
     })
 
   // Plays a run of sentences (startIdx..endIdx) in sequence, one at a time —
@@ -386,8 +323,10 @@ export function RehearsalMode() {
   const playTurnAudio = async (startIdx: number, endIdx: number, runId: number) => {
     for (let idx = startIdx; idx <= endIdx; idx++) {
       if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
+      setCurrentIdx(idx)
+      scrollToLine(idx)
       const rec = recMapRef.current.get(idx)
-      const ok = rec ? await playRecording(rec, recDurMapRef.current.get(idx)) : false
+      const ok = rec ? await playRecording(rec) : false
       if (ok) continue
       if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
       await speak(lines[idx].text, { rate, voiceURI: settingsRef.current.voiceURI })
@@ -395,8 +334,6 @@ export function RehearsalMode() {
   }
 
   const cancelRecording = () => {
-    try { recSourceRef.current?.stop() } catch { /* source not started */ }
-    recSourceRef.current = null
     try { recAudioElRef.current?.pause() } catch { /* element not playing */ }
     recAudioElRef.current = null
     recResolveRef.current?.(false)
@@ -916,15 +853,6 @@ export function RehearsalMode() {
     if (cb) setTimeout(cb, 50)
   }
 
-  const prevGroupStart = (idx: number) => {
-    const gi = sceneGroups.findIndex((g) => g.startIdx <= idx && idx <= g.endIdx)
-    return gi > 0 ? sceneGroups[gi - 1].startIdx : firstLine
-  }
-  const nextGroupStart = (idx: number) => {
-    const gi = sceneGroups.findIndex((g) => g.startIdx <= idx && idx <= g.endIdx)
-    return gi >= 0 && gi + 1 < sceneGroups.length ? sceneGroups[gi + 1].startIdx : sceneEnd
-  }
-
   const handlePlay = () => {
     // Stop the idle command listener immediately so its pending listen() doesn't
     // compete with runPlayback's own listen() calls (would block user-line detection).
@@ -965,16 +893,18 @@ export function RehearsalMode() {
 
   const handleStop = () => { interruptPlayback(); setPhase('idle') }
 
+  // Sentence-level, not turn-level — each dialogue line is already one
+  // sentence, so stepping by one absolute line index is exactly right.
   const handleSkip = () =>
     interruptPlayback(() => {
       stopRef.current = false
-      runPlayback(Math.min(nextGroupStart(currentIdx), blockEnd), blockEnd)
+      runPlayback(Math.min(currentIdx + 1, blockEnd), blockEnd)
     })
 
   const handleBack = () =>
     interruptPlayback(() => {
       stopRef.current = false
-      runPlayback(Math.max(prevGroupStart(currentIdx), blockStart), blockEnd)
+      runPlayback(Math.max(currentIdx - 1, blockStart), blockEnd)
     })
 
   const handleLineSelect = (idx: number) => {
@@ -1285,6 +1215,7 @@ export function RehearsalMode() {
               <LineRow
                 group={group}
                 isCurrent={isCurrentGroup}
+                currentSentenceLocalIdx={isCurrentGroup ? currentIdx - group.startIdx : null}
                 phase={phase}
                 isMyLine={isMyLine}
                 lineVisible={lineVisible}
@@ -1483,6 +1414,7 @@ function CtrlBtn({
 interface LineRowProps {
   group: LineGroup
   isCurrent: boolean
+  currentSentenceLocalIdx?: number | null
   phase: Phase
   isMyLine: boolean
   lineVisible: boolean
@@ -1504,7 +1436,7 @@ interface LineRowProps {
 }
 
 const LineRow = ({
-  group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
+  group, isCurrent, currentSentenceLocalIdx, phase, isMyLine, lineVisible, highlightStyle,
   onSelect, onSelectSentence, onReveal, onRecord, onDeleteRecording, recordingLocalIdx, anyRecording, hasRecordingAt,
   lineProgress, searchActive, onSentenceRef, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
@@ -1544,11 +1476,7 @@ const LineRow = ({
       ref={ref}
       onClick={onSelect}
       className={`rounded-lg px-2 py-2 transition-colors cursor-pointer ${
-        isActiveMyLine
-          ? 'ring-1 ring-[var(--color-stage-accent)]'
-          : isActiveLine
-          ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
-          : searchActive
+        searchActive
           ? 'bg-blue-500/10 ring-1 ring-blue-400/60'
           : isCurrent
           ? 'bg-[var(--color-stage-surface)]'
@@ -1584,8 +1512,14 @@ const LineRow = ({
             const thisProgress = lineProgress != null && lineProgress.activeLocalIdx === idx ? lineProgress : null
             const sentenceHasRecording = hasRecordingAt?.(idx) ?? false
             const isRecordingThisSentence = recordingLocalIdx === idx
+            const isCurrentSentence = currentSentenceLocalIdx === idx
+            const sentenceRingClass = isCurrentSentence && isActiveMyLine
+              ? 'ring-1 ring-[var(--color-stage-accent)]'
+              : isCurrentSentence && isActiveLine
+              ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
+              : ''
             return (
-              <div key={idx} className="flex items-start gap-0.5">
+              <div key={idx} className={`flex items-start gap-0.5 rounded ${sentenceRingClass}`}>
                 <span
                   ref={(el) => onSentenceRef?.(group.startIdx + idx, el)}
                   onClick={onSelectSentence ? (e) => { e.stopPropagation(); onSelectSentence(idx) } : undefined}
