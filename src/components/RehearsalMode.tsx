@@ -307,13 +307,35 @@ export function RehearsalMode() {
       audio.play().catch(() => done(false))
     })
 
-  // expectedDurationMs (the recording's actual known duration, measured via
-  // <audio> metadata when it was made — see recDurMapRef) guards against a
-  // real MediaRecorder/decodeAudioData quirk: some WebM blobs decode
-  // "successfully" but to a near-zero/truncated buffer (no error thrown), so
-  // it silently plays almost nothing instead of the real recording. If the
-  // decoded duration is suspiciously shorter than what we know it should be,
-  // treat that as a failed decode too and fall back to the <audio> element.
+  // Some MediaRecorder blobs decode "successfully" via decodeAudioData (no
+  // error thrown) but to a truncated or near-silent buffer, so nothing
+  // audible plays. Checked three independent ways, since any one signal can
+  // be unavailable/unreliable on its own: absolute duration floor, duration
+  // vs. the recording's actual known length (measured via <audio> metadata
+  // when it was made), and peak sample amplitude. Any hit falls back to the
+  // <audio>-element path already proven to work in the Record tab.
+  const looksLikeBrokenDecode = (audioBuf: AudioBuffer, expectedDurationMs?: number): string | null => {
+    const decodedMs = audioBuf.duration * 1000
+    if (decodedMs < 150) return `decoded duration ${audioBuf.duration}s is implausibly short`
+    if (expectedDurationMs && expectedDurationMs > 300 && decodedMs < expectedDurationMs * 0.5) {
+      return `decoded duration ${audioBuf.duration}s looks truncated vs expected ${expectedDurationMs}ms`
+    }
+    try {
+      const data = audioBuf.getChannelData(0)
+      const step = Math.max(1, Math.floor(data.length / 2000))
+      let peak = 0
+      for (let i = 0; i < data.length; i += step) {
+        const v = Math.abs(data[i])
+        if (v > peak) peak = v
+        if (peak > 0.01) break
+      }
+      if (peak <= 0.01) return `decoded buffer is effectively silent (peak ${peak})`
+    } catch {
+      // channel data unreadable — not itself a failure signal, ignore
+    }
+    return null
+  }
+
   const playRecording = (blob: Blob, expectedDurationMs?: number): Promise<boolean> =>
     new Promise((resolve) => {
       const audioCtx = getAudioContext()
@@ -330,15 +352,19 @@ export function RehearsalMode() {
         console.error('Recording playback via AudioContext looked broken, falling back to <audio> element', reason)
         if (recResolveRef.current !== done) { resolve(false); return }
         recResolveRef.current = null
-        playRecordingViaAudioElement(blob).then(resolve)
+        playRecordingViaAudioElement(blob).then((ok) => {
+          if (!ok) console.error('Fallback <audio> element playback also failed for this recording')
+          resolve(ok)
+        })
       }
 
       blob.arrayBuffer()
         .then((buf) => audioCtx.decodeAudioData(buf))
         .then((audioBuf) => {
           if (recResolveRef.current !== done) { resolve(false); return }
-          if (expectedDurationMs && expectedDurationMs > 300 && audioBuf.duration * 1000 < expectedDurationMs * 0.5) {
-            fallBackToAudioElement(`decoded duration ${audioBuf.duration}s looks truncated vs expected ${expectedDurationMs}ms`)
+          const brokenReason = looksLikeBrokenDecode(audioBuf, expectedDurationMs)
+          if (brokenReason) {
+            fallBackToAudioElement(brokenReason)
             return
           }
           const source = audioCtx.createBufferSource()
@@ -1272,17 +1298,21 @@ export function RehearsalMode() {
                 onReveal={isMyLine && !showAllMyLines ? () => toggleReveal(group.startIdx) : undefined}
                 onRecord={
                   group.type === 'dialogue' && !isPlaying && phase !== 'paused'
-                    ? () => handleRecordLine(group.startIdx)
+                    ? (localIdx: number) => handleRecordLine(group.startIdx + localIdx)
                     : undefined
                 }
                 onDeleteRecording={
                   group.type === 'dialogue' && !isPlaying && phase !== 'paused'
-                    ? () => handleDeleteRecording(group.startIdx)
+                    ? (localIdx: number) => handleDeleteRecording(group.startIdx + localIdx)
                     : undefined
                 }
-                isRecordingThis={recordingLineIdx === group.startIdx}
+                recordingLocalIdx={
+                  recordingLineIdx !== null && recordingLineIdx >= group.startIdx && recordingLineIdx <= group.endIdx
+                    ? recordingLineIdx - group.startIdx
+                    : null
+                }
                 anyRecording={micRecording || recordingLineIdx !== null}
-                hasRecording={recMapRef.current.has(group.startIdx)}
+                hasRecordingAt={(localIdx: number) => recMapRef.current.has(group.startIdx + localIdx)}
                 lineProgress={isMyLine && lineProgress?.groupStartIdx === group.startIdx ? lineProgress : null}
                 searchActive={isSearchActive}
                 onSentenceRef={(absoluteIdx, el) => { sentenceRefs.current[absoluteIdx] = el }}
@@ -1460,11 +1490,14 @@ interface LineRowProps {
   onSelect: () => void
   onSelectSentence?: (localIdx: number) => void
   onReveal?: () => void
-  onRecord?: () => void
-  onDeleteRecording?: () => void
-  isRecordingThis?: boolean
+  // Recording is per sentence — a multi-sentence turn shows one record control
+  // per sentence, not one for the whole turn, so each sentence gets its own
+  // independently keyed recording (matching the Record tab).
+  onRecord?: (localIdx: number) => void
+  onDeleteRecording?: (localIdx: number) => void
+  recordingLocalIdx?: number | null
   anyRecording?: boolean
-  hasRecording?: boolean
+  hasRecordingAt?: (localIdx: number) => boolean
   lineProgress?: LineProgress | null
   searchActive?: boolean
   onSentenceRef?: (absoluteIdx: number, el: HTMLElement | null) => void
@@ -1472,7 +1505,7 @@ interface LineRowProps {
 
 const LineRow = ({
   group, isCurrent, phase, isMyLine, lineVisible, highlightStyle,
-  onSelect, onSelectSentence, onReveal, onRecord, onDeleteRecording, isRecordingThis, anyRecording, hasRecording,
+  onSelect, onSelectSentence, onReveal, onRecord, onDeleteRecording, recordingLocalIdx, anyRecording, hasRecordingAt,
   lineProgress, searchActive, onSentenceRef, ref,
 }: LineRowProps & { ref: React.Ref<HTMLDivElement> }) => {
 
@@ -1546,26 +1579,24 @@ const LineRow = ({
             }`}>
               {group.character}
             </span>
-            {hasRecording && !isRecordingThis && (
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400/70 shrink-0 self-center" title="Has recording" />
-            )}
           </div>
-          <span className="text-[var(--color-stage-text)]" style={{ fontSize: 'var(--script-font-size, 14px)' }}>
-            {group.text.split('\n').map((t, idx) => {
-              const thisProgress = lineProgress != null && lineProgress.activeLocalIdx === idx ? lineProgress : null
-              return (
-                <React.Fragment key={idx}>
-                  <span
-                    ref={(el) => onSentenceRef?.(group.startIdx + idx, el)}
-                    onClick={onSelectSentence ? (e) => { e.stopPropagation(); onSelectSentence(idx) } : undefined}
-                    className={`block${onSelectSentence ? ' cursor-pointer' : ''}`}
-                    style={{
-                      ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
-                      ...(highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}),
-                    }}
-                  >
-                    {t}
-                  </span>
+          {group.text.split('\n').map((t, idx) => {
+            const thisProgress = lineProgress != null && lineProgress.activeLocalIdx === idx ? lineProgress : null
+            const sentenceHasRecording = hasRecordingAt?.(idx) ?? false
+            const isRecordingThisSentence = recordingLocalIdx === idx
+            return (
+              <div key={idx} className="flex items-start gap-0.5">
+                <span
+                  ref={(el) => onSentenceRef?.(group.startIdx + idx, el)}
+                  onClick={onSelectSentence ? (e) => { e.stopPropagation(); onSelectSentence(idx) } : undefined}
+                  className={`flex-1 min-w-0 text-[var(--color-stage-text)]${onSelectSentence ? ' cursor-pointer' : ''}`}
+                  style={{
+                    fontSize: 'var(--script-font-size, 14px)',
+                    ...(lineVisible ? {} : { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' }),
+                    ...(highlightStyle ? { ...highlightStyle, borderRadius: '3px', padding: '1px 3px', marginBottom: '2px' } : {}),
+                  }}
+                >
+                  {t}
                   {/* Progress bar for the sentence currently being timed, so pacing is
                       visible per-sentence even when several share one combined gap */}
                   {thisProgress != null && (
@@ -1576,41 +1607,39 @@ const LineRow = ({
                       />
                     </div>
                   )}
-                </React.Fragment>
-              )
-            })}
-          </span>
+                </span>
+                {onRecord ? (
+                  <div className="flex items-center shrink-0 gap-0.5">
+                    {sentenceHasRecording && !isRecordingThisSentence && onDeleteRecording && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteRecording(idx) }}
+                        disabled={!!anyRecording}
+                        title="Delete recording"
+                        className="shrink-0 transition-colors leading-none p-1 rounded-full text-sm text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400 disabled:opacity-10"
+                      >
+                        <IconDismiss />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRecord(idx) }}
+                      disabled={!!anyRecording && !isRecordingThisSentence}
+                      title={isRecordingThisSentence ? 'Stop recording' : sentenceHasRecording ? 'Re-record this sentence' : 'Record this sentence'}
+                      className={`shrink-0 transition-colors leading-none p-1 rounded-full text-base ${
+                        isRecordingThisSentence
+                          ? 'text-red-400 animate-pulse'
+                          : sentenceHasRecording
+                          ? 'text-red-400/70 opacity-70 hover:opacity-100'
+                          : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
+                      } disabled:opacity-10`}
+                    >
+                      {isRecordingThisSentence ? <IconRecordStop /> : <IconRecordDot />}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
-
-        {/* Right column: delete + record buttons */}
-        {onRecord ? (
-          <div className="flex items-center shrink-0 gap-0.5">
-            {hasRecording && !isRecordingThis && onDeleteRecording && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onDeleteRecording() }}
-                disabled={!!anyRecording}
-                title="Delete recording"
-                className="shrink-0 transition-colors leading-none p-2 rounded-full text-base text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400 disabled:opacity-10"
-              >
-                <IconDismiss />
-              </button>
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); onRecord() }}
-              disabled={!!anyRecording && !isRecordingThis}
-              title={isRecordingThis ? 'Stop recording' : 'Record this line'}
-              className={`shrink-0 transition-colors leading-none p-2 rounded-full text-2xl ${
-                isRecordingThis
-                  ? 'text-red-400 animate-pulse'
-                  : 'text-[var(--color-stage-muted)] opacity-50 hover:opacity-100 hover:text-red-400'
-              } disabled:opacity-10`}
-            >
-              {isRecordingThis ? <IconRecordStop /> : <IconRecordDot />}
-            </button>
-          </div>
-        ) : (
-          <div className="w-10 shrink-0" />
-        )}
       </div>
     </div>
   )
