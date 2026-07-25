@@ -207,6 +207,7 @@ export function RehearsalMode() {
   const [condensedLines, setCondensedLines] = useState(0)
   const [showCondensedMenu, setShowCondensedMenu] = useState(false)
   const [lineProgress, setLineProgress] = useState<LineProgress | null>(null)
+  const [navLocked, setNavLocked] = useState(false)
   const rate = settings.speechRate
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -272,10 +273,7 @@ export function RehearsalMode() {
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
   const recDurMapRef = useRef<Map<number, number>>(new Map())
-  // Debounces the skip back/forward buttons — rapid presses accumulate into
-  // one final target instead of each press independently restarting playback.
-  const navDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingNavIdxRef = useRef<number | null>(null)
+  const navLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sceneGroupsRef = useRef(sceneGroups)
   const handlePlayRef = useRef<() => void>(() => {})
   const runPlaybackRef = useRef<(start: number, end: number) => void>(() => {})
@@ -419,7 +417,7 @@ export function RehearsalMode() {
       stopRef.current = true
       cancel()
       abort()
-      if (navDebounceRef.current) clearTimeout(navDebounceRef.current)
+      if (navLockTimerRef.current) clearTimeout(navLockTimerRef.current)
     }
   }, [cancel, abort])
 
@@ -512,7 +510,7 @@ export function RehearsalMode() {
 
   // --- Playback loop ---
   const runPlayback = useCallback(
-    async (startIdx: number, endIdx: number) => {
+    async (startIdx: number, endIdx: number, stepOnly = false) => {
       const runId = ++runIdRef.current
       stopRef.current = false
       let i = startIdx
@@ -825,8 +823,17 @@ export function RehearsalMode() {
       // If a newer run has started (line tap mid-play), don't clobber its phase.
       if (runIdRef.current !== runId) return
       if (!stopRef.current) {
-        if (settingsRef.current.scenePingEnabled === true) await playCompletion()
-        if (loopRef.current && runIdRef.current === runId) {
+        // Sentence-step (Back/Forward buttons): process exactly the one
+        // target line, then pause here rather than auto-continuing playback
+        // all the way to the clip end — otherwise a burst of rapid presses
+        // each kick off their own long auto-play run before being interrupted,
+        // so far more lines end up spoken than the number of presses.
+        if (stepOnly) {
+          setPhase('paused')
+        } else if (settingsRef.current.scenePingEnabled === true) {
+          await playCompletion()
+        }
+        if (!stepOnly && loopRef.current && runIdRef.current === runId) {
           const loopRunId = runId
           setTimeout(() => {
             if (runIdRef.current !== loopRunId) return
@@ -836,7 +843,7 @@ export function RehearsalMode() {
             setLineProgress(null)
             runPlayback(blockStartRef.current, blockEndRef.current)
           }, 600)
-        } else {
+        } else if (!stepOnly) {
           setPhase('done')
         }
       } else {
@@ -888,13 +895,13 @@ export function RehearsalMode() {
 
   handlePlayRef.current = handlePlay
 
-  const cancelPendingNav = () => {
-    if (navDebounceRef.current) { clearTimeout(navDebounceRef.current); navDebounceRef.current = null }
-    pendingNavIdxRef.current = null
+  const clearNavLock = () => {
+    if (navLockTimerRef.current) { clearTimeout(navLockTimerRef.current); navLockTimerRef.current = null }
+    setNavLocked(false)
   }
 
   const handlePause = () => {
-    cancelPendingNav()
+    clearNavLock()
     pauseRef.current = true
     cancel()
     cancelRecording()
@@ -906,7 +913,7 @@ export function RehearsalMode() {
     setPhase('paused')
   }
 
-  const handleStop = () => { cancelPendingNav(); interruptPlayback(); setPhase('idle') }
+  const handleStop = () => { clearNavLock(); interruptPlayback(); setPhase('idle') }
 
   // Sentence-level, not turn-level — each dialogue line is already one
   // sentence, so stepping by one absolute line index is exactly right. Stage
@@ -923,28 +930,32 @@ export function RehearsalMode() {
     return i
   }
 
-  // Debounced: each press immediately halts any current audio and updates the
-  // visual "current" position, but only schedules an actual resume 300ms
-  // after the last press — so mashing the button doesn't restart playback
-  // once per tap, and rapid presses accumulate into one final destination.
-  const scheduleNav = (target: number) => {
-    pendingNavIdxRef.current = target
-    setCurrentIdx(target)
-    scrollToLine(target)
-    interruptPlayback()
-    if (navDebounceRef.current) clearTimeout(navDebounceRef.current)
-    navDebounceRef.current = setTimeout(() => {
-      navDebounceRef.current = null
-      const idx = pendingNavIdxRef.current
-      pendingNavIdxRef.current = null
-      if (idx == null) return
+  // If playback was actively running when the button was pressed, keep
+  // playing continuously from the new position (no extra tap needed). If it
+  // was already paused/idle, just move there and stay paused — process
+  // exactly the one target sentence (stepOnly — see runPlayback) rather than
+  // resuming continuous playback all the way to the clip end, otherwise a
+  // burst of presses each kick off their own long auto-play run before being
+  // interrupted, so far more lines end up spoken than the number of presses.
+  // The buttons are also locked for 500ms after each press so rapid taps
+  // can't pile up faster than that.
+  const stepTo = (target: number) => {
+    if (navLocked) return
+    const wasPlaying = isPlaying
+    setNavLocked(true)
+    navLockTimerRef.current = setTimeout(() => { navLockTimerRef.current = null; setNavLocked(false) }, 500)
+    interruptPlayback(() => {
       stopRef.current = false
-      runPlayback(idx, blockEnd)
-    }, 300)
+      if (wasPlaying) {
+        runPlayback(target, blockEnd)
+      } else {
+        runPlayback(target, target, true)
+      }
+    })
   }
 
-  const handleSkip = () => scheduleNav(nextDialogueIdx(pendingNavIdxRef.current ?? currentIdx))
-  const handleBack = () => scheduleNav(prevDialogueIdx(pendingNavIdxRef.current ?? currentIdx))
+  const handleSkip = () => stepTo(nextDialogueIdx(currentIdx))
+  const handleBack = () => stepTo(prevDialogueIdx(currentIdx))
 
   const handleLineSelect = (idx: number) => {
     if (isPlaying || phase === 'paused') {
@@ -1348,12 +1359,12 @@ export function RehearsalMode() {
           <CtrlBtn onClick={() => setLoopEnabled((v) => !v)} active={loopEnabled} title="Repeat"><IconRepeat /></CtrlBtn>
 
           {/* Transport */}
-          <CtrlBtn onClick={handleBack} disabled={phase === 'idle' || phase === 'done'} title="Previous"><IconSkipBack /></CtrlBtn>
+          <CtrlBtn onClick={handleBack} disabled={navLocked || phase === 'idle' || phase === 'done'} title="Previous"><IconSkipBack /></CtrlBtn>
           <CtrlBtn onClick={isPlaying ? handlePause : handlePlay} disabled={!isPlaying && !myCharacter} title={isPlaying ? 'Pause' : 'Play'}>
             {isPlaying ? <IconPause /> : <IconPlay />}
           </CtrlBtn>
           <CtrlBtn onClick={handleStop} disabled={phase === 'idle' || phase === 'done'} title="Stop"><IconStop /></CtrlBtn>
-          <CtrlBtn onClick={handleSkip} disabled={phase === 'idle' || phase === 'done'} title="Next"><IconSkipForward /></CtrlBtn>
+          <CtrlBtn onClick={handleSkip} disabled={navLocked || phase === 'idle' || phase === 'done'} title="Next"><IconSkipForward /></CtrlBtn>
 
           {/* Condensed — right, opens menu */}
           <div className="relative">
@@ -1552,9 +1563,7 @@ const LineRow = ({
             const sentenceHasRecording = hasRecordingAt?.(idx) ?? false
             const isRecordingThisSentence = recordingLocalIdx === idx
             const isCurrentSentence = currentSentenceLocalIdx === idx
-            const sentenceRingClass = isCurrentSentence && isActiveMyLine
-              ? 'ring-1 ring-[var(--color-stage-accent)]'
-              : isCurrentSentence && isActiveLine
+            const sentenceRingClass = isCurrentSentence && (isActiveMyLine || isActiveLine)
               ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
               : ''
             return (
