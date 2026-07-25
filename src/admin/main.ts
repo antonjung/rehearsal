@@ -43,7 +43,6 @@ let currentUid: string | null = null
 let allEntries: SharedLibraryAdminEntry[] = []
 let sortKey: 'name' | 'createdAt' = 'createdAt'
 let sortDir: 'asc' | 'desc' = 'desc'
-const voiceTracksCache = new Map<string, VoiceTrackEntry[]>()
 const expandedVoiceIds = new Set<string>()
 
 signInBtn.addEventListener('click', async () => {
@@ -182,27 +181,39 @@ async function toggleVoiceTracks(
   await renderVoiceTracksInto(entry, detailTd)
 }
 
+// Always fetches fresh — never cached — since voice tracks can be uploaded
+// from the app at any time and this list should reflect that immediately,
+// including via the inline "Refresh" button without collapsing the row.
 async function renderVoiceTracksInto(entry: SharedLibraryAdminEntry, cell: HTMLTableCellElement) {
   cell.innerHTML = ''
-  if (!voiceTracksCache.has(entry.id)) {
-    const loading = document.createElement('span')
-    loading.className = 'muted'
-    loading.textContent = 'Loading voice tracks…'
-    cell.appendChild(loading)
-    try {
-      voiceTracksCache.set(entry.id, await listVoiceTracks(entry.org, entry.name))
-    } catch (err) {
-      cell.innerHTML = ''
-      const errEl = document.createElement('span')
-      errEl.className = 'err'
-      errEl.textContent = err instanceof Error ? err.message : 'Failed to load voice tracks'
-      cell.appendChild(errEl)
-      return
-    }
+  const loading = document.createElement('span')
+  loading.className = 'muted'
+  loading.textContent = 'Loading voice tracks…'
+  cell.appendChild(loading)
+
+  let tracks: VoiceTrackEntry[]
+  try {
+    tracks = await listVoiceTracks(entry.org, entry.name)
+  } catch (err) {
+    cell.innerHTML = ''
+    const errEl = document.createElement('span')
+    errEl.className = 'err'
+    errEl.textContent = err instanceof Error ? err.message : 'Failed to load voice tracks'
+    cell.appendChild(errEl)
+    return
   }
 
-  const tracks = voiceTracksCache.get(entry.id) ?? []
   cell.innerHTML = ''
+
+  const header = document.createElement('div')
+  header.className = 'voice-detail-header'
+  const refreshVoicesBtn = document.createElement('button')
+  refreshVoicesBtn.className = 'voices-refresh-btn'
+  refreshVoicesBtn.textContent = '↻ Refresh'
+  refreshVoicesBtn.addEventListener('click', () => void renderVoiceTracksInto(entry, cell))
+  header.appendChild(refreshVoicesBtn)
+  cell.appendChild(header)
+
   if (tracks.length === 0) {
     const span = document.createElement('span')
     span.className = 'muted'
