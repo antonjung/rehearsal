@@ -272,6 +272,10 @@ export function RehearsalMode() {
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
   const recDurMapRef = useRef<Map<number, number>>(new Map())
+  // Debounces the skip back/forward buttons — rapid presses accumulate into
+  // one final target instead of each press independently restarting playback.
+  const navDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingNavIdxRef = useRef<number | null>(null)
   const sceneGroupsRef = useRef(sceneGroups)
   const handlePlayRef = useRef<() => void>(() => {})
   const runPlaybackRef = useRef<(start: number, end: number) => void>(() => {})
@@ -411,7 +415,12 @@ export function RehearsalMode() {
   }, [script?.id, firstLine, sceneEnd, lines])
 
   useEffect(() => {
-    return () => { stopRef.current = true; cancel(); abort() }
+    return () => {
+      stopRef.current = true
+      cancel()
+      abort()
+      if (navDebounceRef.current) clearTimeout(navDebounceRef.current)
+    }
   }, [cancel, abort])
 
   // Reset scene/character when selected script changes while on rehearse tab
@@ -879,7 +888,13 @@ export function RehearsalMode() {
 
   handlePlayRef.current = handlePlay
 
+  const cancelPendingNav = () => {
+    if (navDebounceRef.current) { clearTimeout(navDebounceRef.current); navDebounceRef.current = null }
+    pendingNavIdxRef.current = null
+  }
+
   const handlePause = () => {
+    cancelPendingNav()
     pauseRef.current = true
     cancel()
     cancelRecording()
@@ -891,21 +906,45 @@ export function RehearsalMode() {
     setPhase('paused')
   }
 
-  const handleStop = () => { interruptPlayback(); setPhase('idle') }
+  const handleStop = () => { cancelPendingNav(); interruptPlayback(); setPhase('idle') }
 
   // Sentence-level, not turn-level — each dialogue line is already one
-  // sentence, so stepping by one absolute line index is exactly right.
-  const handleSkip = () =>
-    interruptPlayback(() => {
-      stopRef.current = false
-      runPlayback(Math.min(currentIdx + 1, blockEnd), blockEnd)
-    })
+  // sentence, so stepping by one absolute line index is exactly right. Stage
+  // directions are skipped over (not stopped on); headings still are, so
+  // scene boundaries stay visible.
+  const nextDialogueIdx = (idx: number) => {
+    let i = Math.min(idx + 1, blockEnd)
+    while (i < blockEnd && lines[i]?.type === 'direction') i++
+    return i
+  }
+  const prevDialogueIdx = (idx: number) => {
+    let i = Math.max(idx - 1, blockStart)
+    while (i > blockStart && lines[i]?.type === 'direction') i--
+    return i
+  }
 
-  const handleBack = () =>
-    interruptPlayback(() => {
+  // Debounced: each press immediately halts any current audio and updates the
+  // visual "current" position, but only schedules an actual resume 300ms
+  // after the last press — so mashing the button doesn't restart playback
+  // once per tap, and rapid presses accumulate into one final destination.
+  const scheduleNav = (target: number) => {
+    pendingNavIdxRef.current = target
+    setCurrentIdx(target)
+    scrollToLine(target)
+    interruptPlayback()
+    if (navDebounceRef.current) clearTimeout(navDebounceRef.current)
+    navDebounceRef.current = setTimeout(() => {
+      navDebounceRef.current = null
+      const idx = pendingNavIdxRef.current
+      pendingNavIdxRef.current = null
+      if (idx == null) return
       stopRef.current = false
-      runPlayback(Math.max(currentIdx - 1, blockStart), blockEnd)
-    })
+      runPlayback(idx, blockEnd)
+    }, 300)
+  }
+
+  const handleSkip = () => scheduleNav(nextDialogueIdx(pendingNavIdxRef.current ?? currentIdx))
+  const handleBack = () => scheduleNav(prevDialogueIdx(pendingNavIdxRef.current ?? currentIdx))
 
   const handleLineSelect = (idx: number) => {
     if (isPlaying || phase === 'paused') {
