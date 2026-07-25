@@ -91,13 +91,21 @@
       }
       td.action-cell {
         display: flex;
-        flex-direction: column;
-        align-items: flex-end;
+        flex-direction: row;
+        justify-content: flex-end;
+        align-items: center;
         gap: 4px;
         white-space: normal;
         overflow: visible;
       }
-      button.voices-btn { width: 100%; }
+      td.action-cell button.icon-btn {
+        padding: 5px;
+        line-height: 0;
+      }
+      button.voices-btn.active {
+        color: #a78bfa;
+        border-color: #7c3aed;
+      }
       td.voice-detail-cell {
         width: auto;
         white-space: normal;

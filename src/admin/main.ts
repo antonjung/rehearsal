@@ -57,6 +57,8 @@ signInBtn.addEventListener('click', async () => {
 signOutBtn.addEventListener('click', () => { void signOut(auth) })
 
 const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+const MIC_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>'
+const TRASH_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>'
 
 copyUidBtn.addEventListener('click', () => {
   if (!currentUid) return
@@ -128,12 +130,17 @@ function renderTable() {
     actionTd.className = 'action-cell'
 
     const voicesBtn = document.createElement('button')
-    voicesBtn.className = 'voices-btn'
-    voicesBtn.textContent = expandedVoiceIds.has(entry.id) ? 'Voices ▾' : 'Voices ▸'
+    voicesBtn.className = 'icon-btn voices-btn' + (expandedVoiceIds.has(entry.id) ? ' active' : '')
+    voicesBtn.innerHTML = MIC_ICON_SVG
+    voicesBtn.title = 'Voice tracks'
+    voicesBtn.setAttribute('aria-label', 'Voice tracks')
     actionTd.appendChild(voicesBtn)
 
     const delBtn = document.createElement('button')
-    delBtn.textContent = 'Delete'
+    delBtn.className = 'icon-btn'
+    delBtn.innerHTML = TRASH_ICON_SVG
+    delBtn.title = 'Delete'
+    delBtn.setAttribute('aria-label', 'Delete')
     delBtn.addEventListener('click', () => void handleDelete(entry.id, entry.org, entry.name, delBtn))
     actionTd.appendChild(delBtn)
 
@@ -172,11 +179,11 @@ async function toggleVoiceTracks(
   if (expandedVoiceIds.has(entry.id)) {
     expandedVoiceIds.delete(entry.id)
     detailTr.style.display = 'none'
-    toggleBtn.textContent = 'Voices ▸'
+    toggleBtn.classList.remove('active')
     return
   }
   expandedVoiceIds.add(entry.id)
-  toggleBtn.textContent = 'Voices ▾'
+  toggleBtn.classList.add('active')
   detailTr.style.display = 'table-row'
   await renderVoiceTracksInto(entry, detailTd)
 }
@@ -270,7 +277,7 @@ async function handleDelete(id: string, org: string, name: string, btn: HTMLButt
   } catch (err) {
     alert(err instanceof Error ? err.message : 'Delete failed — check the Firestore rules allow your UID to delete.')
     btn.disabled = false
-    btn.textContent = 'Delete'
+    btn.innerHTML = TRASH_ICON_SVG
   }
 }
 
