@@ -135,6 +135,9 @@ function renderTable() {
     voicesBtn.title = 'Voice tracks'
     voicesBtn.setAttribute('aria-label', 'Voice tracks')
     actionTd.appendChild(voicesBtn)
+    listVoiceTracks(entry.org, entry.name).then((tracks) => {
+      if (tracks.length > 0) voicesBtn.classList.add('has-voices')
+    }).catch(() => {})
 
     const delBtn = document.createElement('button')
     delBtn.className = 'icon-btn'
