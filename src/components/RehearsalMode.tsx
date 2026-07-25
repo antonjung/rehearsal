@@ -774,12 +774,19 @@ export function RehearsalMode() {
           }
         }
 
-        // Condensed mode: after user's line, skip large other-character sections
-        if (isMyLine && !stopRef.current && !pauseRef.current) {
+        // Condensed mode: after user's line, skip large other-character sections.
+        // In 'sentence' gap-unit mode each sentence of a multi-sentence speech
+        // gets its own outer-loop iteration with isMyLine still true, so this
+        // must only evaluate once the WHOLE speech has finished (groupEnd at
+        // or past the visual group's end) — otherwise it fires after the
+        // first sentence and skips the rest of the user's own speech.
+        const myVisualGi = isMyLine ? sceneGroupsRef.current.findIndex((g) => g.startIdx <= lineIdx && lineIdx <= g.endIdx) : -1
+        const myVisualGroup = myVisualGi >= 0 ? sceneGroupsRef.current[myVisualGi] : null
+        if (isMyLine && myVisualGroup && groupEnd >= myVisualGroup.endIdx && !stopRef.current && !pauseRef.current) {
           const condensedThreshold = condensedLinesRef.current
           if (condensedThreshold > 0) {
             const groups = sceneGroupsRef.current
-            const myGi = groups.findIndex((g) => g.startIdx <= lineIdx && lineIdx <= g.endIdx)
+            const myGi = myVisualGi
             let nextUserGi = -1
             for (let gi = myGi + 1; gi < groups.length; gi++) {
               if (groups[gi].type === 'dialogue' && groups[gi].character != null && myCharactersRef.current.includes(groups[gi].character!)) {
