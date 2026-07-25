@@ -4,6 +4,7 @@ import type { ScriptLine, Track } from '../types'
 import { IconTrack, IconSearch } from './Icons'
 import { getAllRecordings } from '../utils/recordingStore'
 import { characterGroups } from '../utils/characterGroups'
+import { DEFAULT_REHEARSAL_SETTINGS } from '../utils/rehearsalDefaults'
 
 const HIGHLIGHTER_COLORS: Record<string, { background: string; color: string }> = {
   yellow: { background: 'rgba(255,255,0,0.65)',  color: '#111' },
@@ -49,7 +50,7 @@ interface TrackForm {
 }
 
 export function CharacterTable() {
-  const { scripts, selectedScriptId, rehearsalSettings, updateScript, scriptFontSize } = useAppStore()
+  const { scripts, selectedScriptId, rehearsalSettings, saveRehearsalSettings, updateScript, scriptFontSize } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
   const [sceneMode, setSceneMode] = useState<string>('')
   const [charHighlight, setCharHighlight] = useState<{ chars: string[]; label: string; sceneId: string } | null>(null)
@@ -165,10 +166,21 @@ export function CharacterTable() {
 
   const highlightStyle = HIGHLIGHTER_COLORS[rehearsalSettings?.highlighterColor ?? 'yellow']
 
-  const toggleChip = (chars: string[], label: string, sceneId: string) =>
-    setCharHighlight((prev) =>
-      prev?.label === label && prev?.sceneId === sceneId ? null : { chars, label, sceneId },
-    )
+  // Tapping a character (or track) here also becomes "my character" for the
+  // Record and Run through tabs, via the same persisted rehearsal settings
+  // they already share — turning the highlight off does not clear it.
+  const toggleChip = (chars: string[], label: string, sceneId: string) => {
+    const turningOff = charHighlight?.label === label && charHighlight?.sceneId === sceneId
+    setCharHighlight(turningOff ? null : { chars, label, sceneId })
+    if (!turningOff) {
+      saveRehearsalSettings({
+        ...(rehearsalSettings ?? DEFAULT_REHEARSAL_SETTINGS),
+        scriptId: script.id,
+        myCharacter: label,
+        sceneId: sceneId === '__all__' ? null : sceneId,
+      })
+    }
+  }
 
   // Track management handlers
   const isTrackNameValid = (name: string, excludeId?: string | null) => {
@@ -479,7 +491,7 @@ function RecordedBadge({ recorded, total }: { recorded: number; total: number })
   if (total === 0) return <span className="text-xs text-[var(--color-stage-muted)]">—</span>
   const complete = recorded === total
   const color = complete
-    ? 'text-[var(--color-stage-accent-light)]'
+    ? 'text-green-400 font-semibold'
     : recorded === 0
       ? 'text-[var(--color-stage-muted)]'
       : 'text-amber-400'

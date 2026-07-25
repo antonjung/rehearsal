@@ -269,6 +269,7 @@ export function RehearsalMode() {
   const myLinePauseTimerRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recSourceRef = useRef<AudioBufferSourceNode | null>(null)
+  const recAudioElRef = useRef<HTMLAudioElement | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
   const recDurMapRef = useRef<Map<number, number>>(new Map())
@@ -285,7 +286,35 @@ export function RehearsalMode() {
   // --- Audio helpers ---
   // Uses AudioContext (already unlocked via unlockAudio() in handlePlay) so
   // playback works on iOS without requiring a direct user gesture per-element.
-  const playRecording = (blob: Blob): Promise<boolean> =>
+  // decodeAudioData is stricter than HTMLMediaElement about container/codec
+  // quirks in MediaRecorder output — if it rejects a blob that's otherwise a
+  // valid recording (playable fine via the Record tab's plain <audio>), fall
+  // back to a plain <audio> element here rather than silently substituting TTS.
+  const playRecordingViaAudioElement = (blob: Blob): Promise<boolean> =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      const done = (ok: boolean) => {
+        recAudioElRef.current = null
+        URL.revokeObjectURL(url)
+        recResolveRef.current = null
+        resolve(ok)
+      }
+      recAudioElRef.current = audio
+      recResolveRef.current = done
+      audio.onended = () => done(true)
+      audio.onerror = () => done(false)
+      audio.play().catch(() => done(false))
+    })
+
+  // expectedDurationMs (the recording's actual known duration, measured via
+  // <audio> metadata when it was made — see recDurMapRef) guards against a
+  // real MediaRecorder/decodeAudioData quirk: some WebM blobs decode
+  // "successfully" but to a near-zero/truncated buffer (no error thrown), so
+  // it silently plays almost nothing instead of the real recording. If the
+  // decoded duration is suspiciously shorter than what we know it should be,
+  // treat that as a failed decode too and fall back to the <audio> element.
+  const playRecording = (blob: Blob, expectedDurationMs?: number): Promise<boolean> =>
     new Promise((resolve) => {
       const audioCtx = getAudioContext()
       if (!audioCtx || audioCtx.state === 'closed') { resolve(false); return }
@@ -297,10 +326,21 @@ export function RehearsalMode() {
       }
       recResolveRef.current = done
 
+      const fallBackToAudioElement = (reason: unknown) => {
+        console.error('Recording playback via AudioContext looked broken, falling back to <audio> element', reason)
+        if (recResolveRef.current !== done) { resolve(false); return }
+        recResolveRef.current = null
+        playRecordingViaAudioElement(blob).then(resolve)
+      }
+
       blob.arrayBuffer()
         .then((buf) => audioCtx.decodeAudioData(buf))
         .then((audioBuf) => {
           if (recResolveRef.current !== done) { resolve(false); return }
+          if (expectedDurationMs && expectedDurationMs > 300 && audioBuf.duration * 1000 < expectedDurationMs * 0.5) {
+            fallBackToAudioElement(`decoded duration ${audioBuf.duration}s looks truncated vs expected ${expectedDurationMs}ms`)
+            return
+          }
           const source = audioCtx.createBufferSource()
           source.buffer = audioBuf
           source.connect(audioCtx.destination)
@@ -309,7 +349,7 @@ export function RehearsalMode() {
           source.start(0)
           if (audioCtx.state === 'suspended') void audioCtx.resume()
         })
-        .catch(() => done(false))
+        .catch(fallBackToAudioElement)
     })
 
   // Plays a run of sentences (startIdx..endIdx) in sequence, one at a time —
@@ -321,7 +361,7 @@ export function RehearsalMode() {
     for (let idx = startIdx; idx <= endIdx; idx++) {
       if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
       const rec = recMapRef.current.get(idx)
-      const ok = rec ? await playRecording(rec) : false
+      const ok = rec ? await playRecording(rec, recDurMapRef.current.get(idx)) : false
       if (ok) continue
       if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
       await speak(lines[idx].text, { rate, voiceURI: settingsRef.current.voiceURI })
@@ -331,6 +371,8 @@ export function RehearsalMode() {
   const cancelRecording = () => {
     try { recSourceRef.current?.stop() } catch { /* source not started */ }
     recSourceRef.current = null
+    try { recAudioElRef.current?.pause() } catch { /* element not playing */ }
+    recAudioElRef.current = null
     recResolveRef.current?.(false)
     recResolveRef.current = null
   }

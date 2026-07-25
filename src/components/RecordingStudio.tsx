@@ -3,6 +3,7 @@ import { IconPlay, IconRecordStop, IconRecordDot, IconDismiss, IconCheckmark } f
 import { useAppStore } from '../store/useAppStore'
 import { useMediaRecorder } from '../hooks/useMediaRecorder'
 import { getRecording, setRecording, setRecordingDuration, deleteRecording } from '../utils/recordingStore'
+import { DEFAULT_REHEARSAL_SETTINGS } from '../utils/rehearsalDefaults'
 import type { ScriptLine } from '../types'
 
 interface LineGroup {
@@ -33,11 +34,29 @@ function buildCharacterGroups(
 }
 
 export function RecordingStudio() {
-  const { scripts, selectedScriptId } = useAppStore()
+  const { scripts, selectedScriptId, scriptFontSize, rehearsalSettings, saveRehearsalSettings } = useAppStore()
   const script = scripts.find((s) => s.id === selectedScriptId)
 
-  const [character, setCharacter] = useState('')
-  const [sceneId, setSceneId] = useState<string | null>(null)
+  // Retain the last-selected character/scene across the Record and Run
+  // through tabs — both read/write the same persisted rehearsal settings.
+  const sameScriptSettings = rehearsalSettings?.scriptId === selectedScriptId ? rehearsalSettings : null
+  const initialCharacter = sameScriptSettings && script?.characters.includes(sameScriptSettings.myCharacter)
+    ? sameScriptSettings.myCharacter
+    : ''
+
+  const [character, setCharacter] = useState(initialCharacter)
+  const [sceneId, setSceneId] = useState<string | null>(sameScriptSettings?.sceneId ?? null)
+
+  const persistCharacterAndScene = useCallback((newCharacter: string, newSceneId: string | null) => {
+    if (!script) return
+    saveRehearsalSettings({
+      ...(rehearsalSettings ?? DEFAULT_REHEARSAL_SETTINGS),
+      scriptId: script.id,
+      myCharacter: newCharacter,
+      sceneId: newSceneId,
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [script, rehearsalSettings])
   const [hasRec, setHasRec] = useState<Record<number, boolean>>({})
   const [recordingIdx, setRecordingIdx] = useState<number | null>(null)
   const [playingIdx, setPlayingIdx] = useState<number | null>(null)
@@ -116,12 +135,15 @@ export function RecordingStudio() {
           value={character}
           onChange={(e) => {
             const c = e.target.value
-            setCharacter(c)
             // clear scene if it doesn't include the new character
+            let newSceneId = sceneId
             if (sceneId && c) {
               const sc = script.scenes.find((s) => s.id === sceneId)
-              if (sc && !sc.characters.includes(c)) setSceneId(null)
+              if (sc && !sc.characters.includes(c)) newSceneId = null
             }
+            setCharacter(c)
+            setSceneId(newSceneId)
+            persistCharacterAndScene(c, newSceneId)
           }}
           className="flex-1 select-field"
         >
@@ -139,12 +161,15 @@ export function RecordingStudio() {
             value={sceneId ?? ''}
             onChange={(e) => {
               const id = e.target.value || null
-              setSceneId(id)
               // clear character if it's not in the new scene
+              let newCharacter = character
               if (id && character) {
                 const sc = script.scenes.find((s) => s.id === id)
-                if (sc && !sc.characters.includes(character)) setCharacter('')
+                if (sc && !sc.characters.includes(character)) newCharacter = ''
               }
+              setSceneId(id)
+              setCharacter(newCharacter)
+              persistCharacterAndScene(newCharacter, id)
             }}
             className="flex-1 select-field"
           >
@@ -181,7 +206,7 @@ export function RecordingStudio() {
                 key={group.startIdx}
                 className="rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3"
               >
-                <p className="text-sm text-[var(--color-stage-text)] mb-3">
+                <p className="text-[var(--color-stage-text)] mb-3" style={{ fontSize: `${scriptFontSize}px` }}>
                   {group.text.split('\n').map((t, i) => (
                     <span key={i} className="block">{t}</span>
                   ))}
