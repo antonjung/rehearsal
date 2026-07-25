@@ -788,8 +788,15 @@ export function RehearsalMode() {
               }
             }
             if (nextUserGi > myGi + 1) {
-              const linesBetween = groups[nextUserGi].startIdx - (groupEnd + 1)
-              if (linesBetween > condensedThreshold) {
+              // Threshold is a count of intervening SPEECHES (other-character
+              // turns), not raw sentence lines — a single 10-sentence speech
+              // is one speech, not ten, regardless of how many sentences the
+              // parser split it into.
+              let speechesBetween = 0
+              for (let gi = myGi + 1; gi < nextUserGi; gi++) {
+                if (groups[gi].type === 'dialogue') speechesBetween++
+              }
+              if (speechesBetween > condensedThreshold) {
                 // Find the last dialogue group before the next user line (skip directions/headings)
                 let precedingGi = nextUserGi - 1
                 while (precedingGi > myGi && groups[precedingGi].type !== 'dialogue') {
@@ -798,10 +805,10 @@ export function RehearsalMode() {
                 const precedingGroup = groups[precedingGi]
                 // only skip if there's actually a gap (preceding group is after the current group)
                 if (precedingGroup.type === 'dialogue' && precedingGroup.startIdx > groupEnd + 1) {
-                  const skippedCount = precedingGroup.startIdx - (groupEnd + 1)
+                  const skippedCount = speechesBetween
                   await playCompletion()
                   if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) {
-                    await speak(`${skippedCount} line${skippedCount !== 1 ? 's' : ''} skipped`, { rate, voiceURI: settingsRef.current.voiceURI })
+                    await speak(`${skippedCount} speech${skippedCount !== 1 ? 'es' : ''} skipped`, { rate, voiceURI: settingsRef.current.voiceURI })
                   }
                   if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) {
                     await playCompletion()
