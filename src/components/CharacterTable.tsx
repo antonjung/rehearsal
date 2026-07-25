@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type { ScriptLine, Track } from '../types'
 import { IconTrack, IconSearch } from './Icons'
+import { getAllRecordings } from '../utils/recordingStore'
+import { characterGroupStarts } from '../utils/characterGroups'
 
 const HIGHLIGHTER_COLORS: Record<string, { background: string; color: string }> = {
   yellow: { background: 'rgba(255,255,0,0.65)',  color: '#111' },
@@ -57,6 +59,13 @@ export function CharacterTable() {
   const panelRef = useRef<HTMLDivElement>(null)
   const panelScrollRef = useRef<HTMLDivElement>(null)
 
+  // Local recording completeness (this device), whole-script — matches the
+  // same "take" granularity used by voice tracks, not raw dialogue lines.
+  const [localRecordings, setLocalRecordings] = useState<Map<string, Blob> | null>(null)
+  useEffect(() => {
+    getAllRecordings().then(setLocalRecordings)
+  }, [selectedScriptId])
+
   // Track management
   const [showTrackPanel, setShowTrackPanel] = useState(false)
   const [trackForm, setTrackForm] = useState<TrackForm | null>(null)
@@ -107,6 +116,12 @@ export function CharacterTable() {
         Select a script on the Scripts tab to see its characters.
       </div>
     )
+  }
+
+  function recordedCounts(character: string): { recorded: number; total: number } {
+    const starts = characterGroupStarts(script!.lines, character)
+    const recorded = localRecordings ? starts.filter((idx) => localRecordings.has(`${script!.id}:${idx}`)).length : 0
+    return { recorded, total: starts.length }
   }
 
   const hasScenes = script.scenes.length > 0
@@ -303,6 +318,7 @@ export function CharacterTable() {
             <tr className="bg-[var(--color-stage-surface)] text-[var(--color-stage-muted)] uppercase text-xs tracking-wider">
               <th className="text-left px-4 py-3">Character</th>
               {sceneMode !== 'all' && <th className="text-right px-4 py-3">Lines</th>}
+              {sceneMode !== 'all' && <th className="text-right px-4 py-3">Recorded</th>}
             </tr>
           </thead>
           <tbody>
@@ -341,6 +357,9 @@ export function CharacterTable() {
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">
                     {lineCounts[char] ?? 0}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <RecordedBadge {...recordedCounts(char)} />
                   </td>
                 </tr>
               )
@@ -387,6 +406,12 @@ export function CharacterTable() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right text-[var(--color-stage-muted)]">{trackLineCount}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <RecordedBadge {...t.characters.reduce((acc, c) => {
+                      const { recorded, total } = recordedCounts(c)
+                      return { recorded: acc.recorded + recorded, total: acc.total + total }
+                    }, { recorded: 0, total: 0 })} />
+                  </td>
                 </tr>
               )
             })}
@@ -439,6 +464,17 @@ export function CharacterTable() {
       )}
     </div>
   )
+}
+
+function RecordedBadge({ recorded, total }: { recorded: number; total: number }) {
+  if (total === 0) return <span className="text-xs text-[var(--color-stage-muted)]">—</span>
+  const complete = recorded === total
+  const color = complete
+    ? 'text-[var(--color-stage-accent-light)]'
+    : recorded === 0
+      ? 'text-[var(--color-stage-muted)]'
+      : 'text-amber-400'
+  return <span className={`text-xs tabular-nums ${color}`}>{recorded}/{total}</span>
 }
 
 function ScenePickerButton({

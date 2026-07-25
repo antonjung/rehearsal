@@ -1,6 +1,6 @@
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, type User } from 'firebase/auth'
 import { app } from '../utils/firebaseClient'
-import { listAllSharedScripts, deleteSharedScript, uploadScriptToLibrary, type SharedLibraryAdminEntry } from '../utils/shareScript'
+import { listAllSharedScripts, deleteSharedScript, uploadScriptToLibrary, listVoiceTracks, type SharedLibraryAdminEntry, type VoiceTrackEntry } from '../utils/shareScript'
 import { parseScript } from '../utils/scriptParser'
 import { extractPdfText } from '../utils/pdfExtract'
 
@@ -43,6 +43,8 @@ let currentUid: string | null = null
 let allEntries: SharedLibraryAdminEntry[] = []
 let sortKey: 'name' | 'createdAt' = 'createdAt'
 let sortDir: 'asc' | 'desc' = 'desc'
+const voiceTracksCache = new Map<string, VoiceTrackEntry[]>()
+const expandedVoiceIds = new Set<string>()
 
 signInBtn.addEventListener('click', async () => {
   signInError.textContent = ''
@@ -124,13 +126,32 @@ function renderTable() {
     tr.appendChild(dateTd)
 
     const actionTd = document.createElement('td')
+    actionTd.className = 'action-cell'
+
+    const voicesBtn = document.createElement('button')
+    voicesBtn.className = 'voices-btn'
+    voicesBtn.textContent = expandedVoiceIds.has(entry.id) ? 'Voices ▾' : 'Voices ▸'
+    actionTd.appendChild(voicesBtn)
+
     const delBtn = document.createElement('button')
     delBtn.textContent = 'Delete'
-    delBtn.addEventListener('click', () => void handleDelete(entry.id, entry.name, delBtn))
+    delBtn.addEventListener('click', () => void handleDelete(entry.id, entry.org, entry.name, delBtn))
     actionTd.appendChild(delBtn)
-    tr.appendChild(actionTd)
 
+    tr.appendChild(actionTd)
     libraryBody.appendChild(tr)
+
+    const detailTr = document.createElement('tr')
+    detailTr.className = 'voice-detail-row'
+    detailTr.style.display = expandedVoiceIds.has(entry.id) ? 'table-row' : 'none'
+    const detailTd = document.createElement('td')
+    detailTd.className = 'voice-detail-cell'
+    detailTd.colSpan = 4
+    detailTr.appendChild(detailTd)
+    libraryBody.appendChild(detailTr)
+
+    voicesBtn.addEventListener('click', () => void toggleVoiceTracks(entry, detailTr, detailTd, voicesBtn))
+    if (expandedVoiceIds.has(entry.id)) void renderVoiceTracksInto(entry, detailTd)
   }
 
   document.querySelectorAll<HTMLButtonElement>('.sort-th').forEach((btn) => {
@@ -141,6 +162,65 @@ function renderTable() {
 
   listStatus.textContent = sorted.length === 0 ? 'Nothing matches.' : ''
   libraryTable.style.display = sorted.length === 0 ? 'none' : 'table'
+}
+
+async function toggleVoiceTracks(
+  entry: SharedLibraryAdminEntry,
+  detailTr: HTMLTableRowElement,
+  detailTd: HTMLTableCellElement,
+  toggleBtn: HTMLButtonElement,
+) {
+  if (expandedVoiceIds.has(entry.id)) {
+    expandedVoiceIds.delete(entry.id)
+    detailTr.style.display = 'none'
+    toggleBtn.textContent = 'Voices ▸'
+    return
+  }
+  expandedVoiceIds.add(entry.id)
+  toggleBtn.textContent = 'Voices ▾'
+  detailTr.style.display = 'table-row'
+  await renderVoiceTracksInto(entry, detailTd)
+}
+
+async function renderVoiceTracksInto(entry: SharedLibraryAdminEntry, cell: HTMLTableCellElement) {
+  cell.innerHTML = ''
+  if (!voiceTracksCache.has(entry.id)) {
+    const loading = document.createElement('span')
+    loading.className = 'muted'
+    loading.textContent = 'Loading voice tracks…'
+    cell.appendChild(loading)
+    try {
+      voiceTracksCache.set(entry.id, await listVoiceTracks(entry.org, entry.name))
+    } catch (err) {
+      cell.innerHTML = ''
+      const errEl = document.createElement('span')
+      errEl.className = 'err'
+      errEl.textContent = err instanceof Error ? err.message : 'Failed to load voice tracks'
+      cell.appendChild(errEl)
+      return
+    }
+  }
+
+  const tracks = voiceTracksCache.get(entry.id) ?? []
+  cell.innerHTML = ''
+  if (tracks.length === 0) {
+    const span = document.createElement('span')
+    span.className = 'muted'
+    span.textContent = 'No voice tracks uploaded.'
+    cell.appendChild(span)
+    return
+  }
+
+  const wrap = document.createElement('div')
+  wrap.className = 'voice-chips'
+  for (const t of tracks) {
+    const chip = document.createElement('span')
+    const complete = t.recordedCount === t.totalLines
+    chip.className = 'voice-chip ' + (complete ? 'complete' : t.recordedCount === 0 ? 'empty' : 'partial')
+    chip.textContent = `${t.character} ${t.recordedCount}/${t.totalLines}`
+    wrap.appendChild(chip)
+  }
+  cell.appendChild(wrap)
 }
 
 document.querySelectorAll<HTMLButtonElement>('.sort-th').forEach((btn) => {
@@ -169,12 +249,12 @@ async function refreshLibrary() {
   }
 }
 
-async function handleDelete(id: string, name: string, btn: HTMLButtonElement) {
-  if (!confirm(`Delete "${name}"? This can't be undone.`)) return
+async function handleDelete(id: string, org: string, name: string, btn: HTMLButtonElement) {
+  if (!confirm(`Delete "${name}" and any voice tracks uploaded for it? This can't be undone.`)) return
   btn.disabled = true
   btn.textContent = '…'
   try {
-    await deleteSharedScript(id)
+    await deleteSharedScript(id, org, name)
     await refreshLibrary()
   } catch (err) {
     alert(err instanceof Error ? err.message : 'Delete failed — check the Firestore rules allow your UID to delete.')

@@ -1,34 +1,33 @@
-import { useState, useEffect, useCallback } from 'react'
-import { IconEdit, IconDismiss, IconUpload, IconDownload, IconRename, IconPersonVoice, IconMore } from './Icons'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { IconEdit, IconDismiss, IconUpload, IconDownload, IconRename, IconPersonVoice, IconMore, IconPlay, IconPause } from './Icons'
 import { useAppStore } from '../store/useAppStore'
 import { ScriptEditor } from './ScriptEditor'
-import type { Script, ScriptLine } from '../types'
+import type { Script } from '../types'
 import { uploadScriptToLibrary, listSharedScripts, uploadVoiceTrack, listVoiceTracks, downloadVoiceTrackLines } from '../utils/shareScript'
 import {
   getAllRecordings, setRecordingRaw, getRecordedAt,
   getVoiceTrackUploadedAt, setVoiceTrackUploadedAt,
   getVoiceTrackDownloadedAt, setVoiceTrackDownloadedAt,
 } from '../utils/recordingStore'
+import { characterGroupStarts } from '../utils/characterGroups'
 
-// Enumerates the recordable "slots" for one character across the whole
-// script — the start index of each run of consecutive same-character
-// dialogue lines — mirroring RecordingStudio's buildCharacterGroups but
-// unscoped by scene, since a voice track covers the entire script.
-function characterGroupStarts(lines: ScriptLine[], character: string): number[] {
-  const starts: number[] = []
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (line.type === 'dialogue') {
-      let j = i
-      while (j + 1 < lines.length && lines[j + 1].type === 'dialogue' && lines[j + 1].character === line.character) j++
-      if (line.character === character) starts.push(i)
-      i = j + 1
-    } else {
-      i++
-    }
+interface VoiceConflictItem {
+  key: string
+  character: string
+  lineText: string
+  incomingBlob: Blob
+  existingBlob: Blob
+}
+
+async function blobsEqual(a: Blob, b: Blob): Promise<boolean> {
+  if (a.size !== b.size) return false
+  const [bufA, bufB] = await Promise.all([a.arrayBuffer(), b.arrayBuffer()])
+  const viewA = new Uint8Array(bufA)
+  const viewB = new Uint8Array(bufB)
+  for (let i = 0; i < viewA.length; i++) {
+    if (viewA[i] !== viewB[i]) return false
   }
-  return starts
+  return true
 }
 
 // Characters in a script that have local recordings newer than their last
@@ -69,6 +68,7 @@ export function ScriptManager() {
   const [vtErrorId, setVtErrorId] = useState<string | null>(null)
   const [vtMessageId, setVtMessageId] = useState<string | null>(null)
   const [pendingByScript, setPendingByScript] = useState<Record<string, string[]>>({})
+  const [conflicts, setConflicts] = useState<VoiceConflictItem[] | null>(null)
 
   const refreshPendingUploads = useCallback(async () => {
     const allRecordings = await getAllRecordings()
@@ -206,17 +206,34 @@ export function ScriptManager() {
       }
 
       const existing = await getAllRecordings()
+      const newConflicts: VoiceConflictItem[] = []
       for (const entry of newEntries) {
         const lines = await downloadVoiceTrackLines(entry.id, libraryOrg, libraryPin)
         for (const [lineIdxStr, blob] of lines) {
           const key = `${script.id}:${lineIdxStr}`
-          if (existing.has(key)) continue
-          await setRecordingRaw(key, blob)
+          const existingBlob = existing.get(key)
+          if (!existingBlob) {
+            await setRecordingRaw(key, blob)
+            continue
+          }
+          if (await blobsEqual(existingBlob, blob)) continue // unchanged — nothing to do
+          newConflicts.push({
+            key,
+            character: entry.character,
+            lineText: script.lines[Number(lineIdxStr)]?.text ?? '',
+            incomingBlob: blob,
+            existingBlob,
+          })
         }
         await setVoiceTrackDownloadedAt(script.id, entry.character, entry.createdAt)
       }
-      setVtDownloadedId(script.id)
-      setTimeout(() => setVtDownloadedId(null), 2500)
+
+      if (newConflicts.length > 0) {
+        setConflicts(newConflicts)
+      } else {
+        setVtDownloadedId(script.id)
+        setTimeout(() => setVtDownloadedId(null), 2500)
+      }
     } catch (err) {
       console.error('Voice track download failed', err)
       setVtErrorId(script.id)
@@ -224,6 +241,16 @@ export function ScriptManager() {
     } finally {
       setVtBusyId(null)
     }
+  }
+
+  async function handleResolveConflicts(selectedKeys: Set<string>) {
+    if (!conflicts) return
+    for (const item of conflicts) {
+      if (selectedKeys.has(item.key)) {
+        await setRecordingRaw(item.key, item.incomingBlob)
+      }
+    }
+    setConflicts(null)
   }
 
   return (
@@ -266,7 +293,120 @@ export function ScriptManager() {
       {editingScript && (
         <ScriptEditor script={editingScript} onClose={() => setEditingScript(null)} />
       )}
+
+      {conflicts && (
+        <VoiceTrackConflictModal
+          items={conflicts}
+          onResolve={(keys) => void handleResolveConflicts(keys)}
+          onCancel={() => setConflicts(null)}
+        />
+      )}
     </>
+  )
+}
+
+function VoiceTrackConflictModal({
+  items,
+  onResolve,
+  onCancel,
+}: {
+  items: VoiceConflictItem[]
+  onResolve: (selectedKeys: Set<string>) => void
+  onCancel: () => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(() => () => { audioRef.current?.pause() }, [])
+
+  function toggle(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function playVariant(item: VoiceConflictItem, variant: 'existing' | 'incoming') {
+    audioRef.current?.pause()
+    const id = `${item.key}:${variant}`
+    if (playingId === id) { setPlayingId(null); return }
+    const blob = variant === 'existing' ? item.existingBlob : item.incomingBlob
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    audioRef.current = audio
+    const cleanup = () => { URL.revokeObjectURL(url); setPlayingId(null) }
+    audio.onended = cleanup
+    audio.onerror = cleanup
+    audio.play().catch(cleanup)
+    setPlayingId(id)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={onCancel}>
+      <div
+        className="w-full max-w-md rounded-xl border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] shadow-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-[var(--color-stage-border)]">
+          <p className="font-semibold text-[var(--color-stage-text)]">Recordings already exist</p>
+          <p className="text-xs text-[var(--color-stage-muted)] mt-0.5">
+            These lines changed in the shared version. Listen to yours, then choose which to overwrite.
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-[var(--color-stage-border)]">
+          {items.map((item) => (
+            <div key={item.key} className="px-4 py-2.5 flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={selected.has(item.key)}
+                onChange={() => toggle(item.key)}
+                className="mt-1 rounded shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-[var(--color-stage-accent-light)]">{item.character}</p>
+                <p className="text-sm text-[var(--color-stage-text)] truncate">{item.lineText}</p>
+              </div>
+              <div className="flex flex-col gap-1 shrink-0">
+                <button
+                  onClick={() => playVariant(item, 'existing')}
+                  className="flex items-center gap-1 text-[10px] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors px-1.5 py-1 rounded border border-[var(--color-stage-border)]"
+                  aria-label="Play your existing recording"
+                  title="Play your existing recording"
+                >
+                  {playingId === `${item.key}:existing` ? <IconPause /> : <IconPlay />} Yours
+                </button>
+                <button
+                  onClick={() => playVariant(item, 'incoming')}
+                  className="flex items-center gap-1 text-[10px] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-accent-light)] transition-colors px-1.5 py-1 rounded border border-[var(--color-stage-border)]"
+                  aria-label="Play the downloaded recording"
+                  title="Play the downloaded recording"
+                >
+                  {playingId === `${item.key}:incoming` ? <IconPause /> : <IconPlay />} New
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-3 border-t border-[var(--color-stage-border)] flex gap-2">
+          <button
+            onClick={() => onResolve(selected)}
+            disabled={selected.size === 0}
+            className="flex-1 py-2 rounded-lg text-sm font-medium bg-[var(--color-stage-accent)] text-white disabled:opacity-30 hover:opacity-90 transition-opacity"
+          >
+            Overwrite selected ({selected.size})
+          </button>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm border border-[var(--color-stage-border)] text-[var(--color-stage-muted)] hover:text-[var(--color-stage-text)] transition-colors"
+          >
+            Keep mine
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
