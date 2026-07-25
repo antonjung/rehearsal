@@ -937,13 +937,13 @@ export function RehearsalMode() {
   // resuming continuous playback all the way to the clip end, otherwise a
   // burst of presses each kick off their own long auto-play run before being
   // interrupted, so far more lines end up spoken than the number of presses.
-  // The buttons are also locked for 200ms after each press so rapid taps
+  // The buttons are also locked for 500ms after each press so rapid taps
   // can't pile up faster than that.
   const stepTo = (target: number) => {
     if (navLocked) return
     const wasPlaying = isPlaying
     setNavLocked(true)
-    navLockTimerRef.current = setTimeout(() => { navLockTimerRef.current = null; setNavLocked(false) }, 200)
+    navLockTimerRef.current = setTimeout(() => { navLockTimerRef.current = null; setNavLocked(false) }, 500)
     interruptPlayback(() => {
       stopRef.current = false
       if (wasPlaying) {
