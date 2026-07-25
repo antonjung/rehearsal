@@ -312,6 +312,22 @@ export function RehearsalMode() {
         .catch(() => done(false))
     })
 
+  // Plays a run of sentences (startIdx..endIdx) in sequence, one at a time —
+  // each sentence's own recording if it has one, otherwise TTS for just that
+  // sentence. Recordings are made per sentence, so a multi-sentence turn (in
+  // 'speech' gap-unit mode) is reconstructed sentence-by-sentence rather than
+  // assumed to be one single recording covering the whole turn.
+  const playTurnAudio = async (startIdx: number, endIdx: number, runId: number) => {
+    for (let idx = startIdx; idx <= endIdx; idx++) {
+      if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
+      const rec = recMapRef.current.get(idx)
+      const ok = rec ? await playRecording(rec) : false
+      if (ok) continue
+      if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
+      await speak(lines[idx].text, { rate, voiceURI: settingsRef.current.voiceURI })
+    }
+  }
+
   const cancelRecording = () => {
     try { recSourceRef.current?.stop() } catch { /* source not started */ }
     recSourceRef.current = null
@@ -513,7 +529,11 @@ export function RehearsalMode() {
         const groupText = line.type === 'dialogue' ? groupLineTexts.join('\n') : line.text
         // Per-sentence share of the group's gap, so the progress bar can advance
         // sentence-by-sentence even when several sentences share one combined gap.
-        const sentenceDurations = groupLineTexts.map((t) => estimateDuration(t, rate) * (settingsRef.current.voiceCalibration ?? 1))
+        // Prefers each sentence's actual recorded duration when available, since
+        // recordings are made per sentence rather than per whole turn.
+        const sentenceDurations = groupLineTexts.map((t, offset) =>
+          recDurMapRef.current.get(lineIdx + offset) ?? estimateDuration(t, rate) * (settingsRef.current.voiceCalibration ?? 1)
+        )
         const sentenceDurationTotal = sentenceDurations.reduce((a, b) => a + b, 0) || 1
 
         setCurrentIdx(lineIdx)
@@ -537,16 +557,10 @@ export function RehearsalMode() {
         }
 
         const isMyLine = line.character != null && myCharactersRef.current.includes(line.character)
-        const gap = estimateDuration(groupText, rate) * (settingsRef.current.voiceCalibration ?? 1)
 
         if (!isMyLine) {
           setPhase('playing-other')
-          const rec = recMapRef.current.get(lineIdx)
-          const speakOther = async () => {
-            if (!rec || !(await playRecording(rec))) {
-              if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI })
-            }
-          }
+          const speakOther = () => playTurnAudio(lineIdx, groupEnd, runId)
           if (handsFreeRef.current && supported) {
             let otherCmd: HandsFreeCmd | null = null
             let speakDone = false
@@ -560,7 +574,7 @@ export function RehearsalMode() {
               if (stopRef.current) break
               if (heard) {
                 const cmd = matchHandsFreeCommand(heard, voiceCmdWordsRef.current)
-                if (cmd) { otherCmd = cmd; cancel(); cancelRecording(); break }
+                if (cmd) { otherCmd = cmd; runIdRef.current++; cancel(); cancelRecording(); break }
               }
             }
             if (otherCmd && !stopRef.current) { execHandsFreeCommand(otherCmd, lineIdx); return }
@@ -574,9 +588,10 @@ export function RehearsalMode() {
             await playClipStart()
           }
 
-          // ELT: use actual recording duration when available, otherwise calibrated estimate.
-          // A minimum gap is always added on top so short lines still get a usable pause.
-          const elt = (recDurMapRef.current.get(lineIdx) ?? gap) + (settingsRef.current.minGapMs ?? 1000)
+          // ELT: sum of each sentence's actual recorded duration (or calibrated
+          // estimate where unrecorded). A minimum gap is always added on top so
+          // short lines still get a usable pause.
+          const elt = sentenceDurationTotal + (settingsRef.current.minGapMs ?? 1000)
 
           // The rendered (visual) group is always the maximal consecutive run of
           // same-character dialogue, regardless of gap unit — in 'speech' mode that's
@@ -700,23 +715,20 @@ export function RehearsalMode() {
           } else if (myLineMode === 'read') {
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+            await playTurnAudio(lineIdx, groupEnd, runId)
           } else if (myLineMode === 'gap-before') {
             setPhase('my-line-silence')
             await waitWithProgress()
             if (!stopRef.current) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
-              const rec = recMapRef.current.get(lineIdx)
-              if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+              await playTurnAudio(lineIdx, groupEnd, runId)
             }
           } else if (myLineMode === 'gap-after') {
             // read the line, then wait for user to repeat
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+            await playTurnAudio(lineIdx, groupEnd, runId)
             if (!stopRef.current) {
               setPhase('my-line-silence')
               await waitWithProgress()
@@ -728,8 +740,7 @@ export function RehearsalMode() {
             if (!stopRef.current) {
               setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
               setPhase('my-line-reading')
-              const rec = recMapRef.current.get(lineIdx)
-              if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+              await playTurnAudio(lineIdx, groupEnd, runId)
             }
             if (!stopRef.current) {
               setPhase('my-line-silence')
@@ -739,16 +750,14 @@ export function RehearsalMode() {
             // read → wait → read again
             setRevealedLines((r) => ({ ...r, [lineIdx]: true }))
             setPhase('my-line-reading')
-            const rec = recMapRef.current.get(lineIdx)
-            if (!rec || !(await playRecording(rec))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+            await playTurnAudio(lineIdx, groupEnd, runId)
             if (!stopRef.current) {
               setPhase('my-line-silence')
               await waitWithProgress()
             }
             if (!stopRef.current) {
               setPhase('my-line-reading')
-              const rec2 = recMapRef.current.get(lineIdx)
-              if (!rec2 || !(await playRecording(rec2))) { if (!stopRef.current && !pauseRef.current && runIdRef.current === runId) await speak(groupText, { rate, voiceURI: settingsRef.current.voiceURI }) }
+              await playTurnAudio(lineIdx, groupEnd, runId)
             }
           }
         }

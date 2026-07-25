@@ -1,21 +1,25 @@
 import type { ScriptLine } from '../types'
 
-// Enumerates the recordable "slots" for one character across the whole
-// script — the start index of each run of consecutive same-character
-// dialogue lines (one recorded take covers a whole run).
-export function characterGroupStarts(lines: ScriptLine[], character: string): number[] {
-  const starts: number[] = []
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (line.type === 'dialogue') {
-      let j = i
-      while (j + 1 < lines.length && lines[j + 1].type === 'dialogue' && lines[j + 1].character === line.character) j++
-      if (line.character === character) starts.push(i)
-      i = j + 1
-    } else {
-      i++
+export interface CharacterGroup {
+  startIdx: number
+  lineCount: number
+}
+
+// Enumerates the recordable "takes" for one character — one per dialogue
+// line. Each ScriptLine is already exactly one sentence (the parser splits
+// dialogue at sentence boundaries), and recordings are made per sentence so
+// that sentence-level gap playback can play/gap each one independently.
+export function characterGroups(lines: ScriptLine[], character: string): CharacterGroup[] {
+  const groups: CharacterGroup[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].type === 'dialogue' && lines[i].character === character) {
+      groups.push({ startIdx: i, lineCount: 1 })
     }
   }
-  return starts
+  return groups
+}
+
+// Just the take start indices — used to key/write recordings.
+export function characterGroupStarts(lines: ScriptLine[], character: string): number[] {
+  return characterGroups(lines, character).map((g) => g.startIdx)
 }

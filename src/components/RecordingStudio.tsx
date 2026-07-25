@@ -12,6 +12,10 @@ interface LineGroup {
   text: string
 }
 
+// Each dialogue ScriptLine is already exactly one sentence (the parser
+// splits dialogue at sentence boundaries), and recordings are made one per
+// sentence — so that sentence-level gap playback in rehearsal mode can play
+// (or gap) each sentence independently rather than as one fixed multi-sentence take.
 function buildCharacterGroups(
   lines: ScriptLine[],
   character: string,
@@ -19,30 +23,10 @@ function buildCharacterGroups(
   endLine: number,
 ): LineGroup[] {
   const groups: LineGroup[] = []
-  let i = 0
-  while (i < lines.length) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (line.type === 'dialogue') {
-      let j = i
-      const texts = [line.text]
-      while (
-        j + 1 < lines.length &&
-        lines[j + 1].type === 'dialogue' &&
-        lines[j + 1].character === line.character
-      ) {
-        j++
-        texts.push(lines[j].text)
-      }
-      if (
-        line.character === character &&
-        i >= startLine &&
-        i <= endLine
-      ) {
-        groups.push({ startIdx: i, endIdx: j, character: line.character!, text: texts.join('\n') })
-      }
-      i = j + 1
-    } else {
-      i++
+    if (line.type === 'dialogue' && line.character === character && i >= startLine && i <= endLine) {
+      groups.push({ startIdx: i, endIdx: i, character: line.character, text: line.text })
     }
   }
   return groups

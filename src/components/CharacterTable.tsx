@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore'
 import type { ScriptLine, Track } from '../types'
 import { IconTrack, IconSearch } from './Icons'
 import { getAllRecordings } from '../utils/recordingStore'
-import { characterGroupStarts } from '../utils/characterGroups'
+import { characterGroups } from '../utils/characterGroups'
 
 const HIGHLIGHTER_COLORS: Record<string, { background: string; color: string }> = {
   yellow: { background: 'rgba(255,255,0,0.65)',  color: '#111' },
@@ -118,12 +118,6 @@ export function CharacterTable() {
     )
   }
 
-  function recordedCounts(character: string): { recorded: number; total: number } {
-    const starts = characterGroupStarts(script!.lines, character)
-    const recorded = localRecordings ? starts.filter((idx) => localRecordings.has(`${script!.id}:${idx}`)).length : 0
-    return { recorded, total: starts.length }
-  }
-
   const hasScenes = script.scenes.length > 0
   const specificScene = sceneMode !== '' && sceneMode !== 'all'
     ? script.scenes.find((s) => s.id === sceneMode) ?? null
@@ -138,6 +132,21 @@ export function CharacterTable() {
     if (l.type === 'dialogue' && l.character)
       lineCounts[l.character] = (lineCounts[l.character] ?? 0) + 1
   })
+
+  // Recorded/total in the same units as the Lines column (raw dialogue
+  // lines, scoped the same way) — a recorded "take" covers a run of
+  // consecutive lines, so its whole lineCount counts once it's recorded.
+  function recordedCounts(character: string): { recorded: number; total: number } {
+    const groups = characterGroups(script!.lines, character)
+    const inScope = specificScene
+      ? groups.filter((g) => g.startIdx >= specificScene.startLineIndex && g.startIdx <= specificScene.endLineIndex)
+      : groups
+    const total = inScope.reduce((sum, g) => sum + g.lineCount, 0)
+    const recorded = localRecordings
+      ? inScope.filter((g) => localRecordings.has(`${script!.id}:${g.startIdx}`)).reduce((sum, g) => sum + g.lineCount, 0)
+      : 0
+    return { recorded, total }
+  }
 
   const characters = specificScene ? specificScene.characters : script.characters
   const sorted = characters.slice().sort((a, b) => (lineCounts[b] ?? 0) - (lineCounts[a] ?? 0))
