@@ -1562,12 +1562,15 @@ const LineRow = ({
             const thisProgress = lineProgress != null && lineProgress.activeLocalIdx === idx ? lineProgress : null
             const sentenceHasRecording = hasRecordingAt?.(idx) ?? false
             const isRecordingThisSentence = recordingLocalIdx === idx
-            const isCurrentSentence = currentSentenceLocalIdx === idx
-            const sentenceRingClass = isCurrentSentence && (isActiveMyLine || isActiveLine)
-              ? 'bg-[var(--color-stage-gold)]/10 ring-1 ring-[var(--color-stage-gold)]/50'
+            const isCurrentSentence = currentSentenceLocalIdx === idx && (isActiveMyLine || isActiveLine)
+            const sentenceRingClass = isCurrentSentence
+              ? 'bg-[var(--color-stage-gold)]/10 ring-2 ring-[var(--color-stage-gold)]/60'
               : ''
             return (
               <div key={idx} className={`flex items-start gap-0.5 rounded ${sentenceRingClass}`}>
+                <span className="shrink-0 w-3.5 mt-0.5 text-[var(--color-stage-gold)] text-xs leading-none" aria-hidden="true">
+                  {isCurrentSentence ? '▶' : ''}
+                </span>
                 <span
                   ref={(el) => onSentenceRef?.(group.startIdx + idx, el)}
                   onClick={onSelectSentence ? (e) => { e.stopPropagation(); onSelectSentence(idx) } : undefined}
