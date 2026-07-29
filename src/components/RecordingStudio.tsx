@@ -200,12 +200,19 @@ export function RecordingStudio() {
             const isRecordingThis = recordingIdx === group.startIdx
             const isPlayingThis = playingIdx === group.startIdx
             const recorded = hasRec[group.startIdx] ?? false
+            const prevLine = group.startIdx > 0 ? script.lines[group.startIdx - 1] : null
 
             return (
               <div
                 key={group.startIdx}
                 className="rounded-lg border border-[var(--color-stage-border)] bg-[var(--color-stage-surface)] px-4 py-3"
               >
+                {prevLine && (
+                  <p className="text-sm italic text-[var(--color-stage-muted)] mb-2 border-l-2 border-[var(--color-stage-border)] pl-2">
+                    {prevLine.character && <span className="not-italic font-medium">{prevLine.character}: </span>}
+                    {prevLine.text}
+                  </p>
+                )}
                 <p className="text-[var(--color-stage-text)] mb-3" style={{ fontSize: `${scriptFontSize}px` }}>
                   {group.text.split('\n').map((t, i) => (
                     <span key={i} className="block">{t}</span>
