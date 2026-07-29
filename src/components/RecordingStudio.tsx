@@ -200,7 +200,8 @@ export function RecordingStudio() {
             const isRecordingThis = recordingIdx === group.startIdx
             const isPlayingThis = playingIdx === group.startIdx
             const recorded = hasRec[group.startIdx] ?? false
-            const prevLine = group.startIdx > 0 ? script.lines[group.startIdx - 1] : null
+            const prevLineRaw = group.startIdx > 0 ? script.lines[group.startIdx - 1] : null
+            const prevLine = prevLineRaw && prevLineRaw.character === group.character ? null : prevLineRaw
 
             return (
               <div
