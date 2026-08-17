@@ -273,6 +273,12 @@ export function RehearsalMode() {
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
   const recDurMapRef = useRef<Map<number, number>>(new Map())
+  // Resolves once the current scene's recordings have finished loading into
+  // recMapRef — awaited before the first recording-vs-TTS decision so playback
+  // started right after mount (or a scene switch) doesn't race the async
+  // IndexedDB preload below and wrongly fall back to TTS for lines that do
+  // have a recording.
+  const recordingsReadyRef = useRef<Promise<void>>(Promise.resolve())
   const navLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sceneGroupsRef = useRef(sceneGroups)
   const handlePlayRef = useRef<() => void>(() => {})
@@ -323,6 +329,8 @@ export function RehearsalMode() {
   // 'speech' gap-unit mode) is reconstructed sentence-by-sentence rather than
   // assumed to be one single recording covering the whole turn.
   const playTurnAudio = async (startIdx: number, endIdx: number, runId: number) => {
+    await recordingsReadyRef.current
+    if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
     for (let idx = startIdx; idx <= endIdx; idx++) {
       if (stopRef.current || pauseRef.current || runIdRef.current !== runId) return
       setCurrentIdx(idx)
@@ -391,24 +399,28 @@ export function RehearsalMode() {
       if (!script) return
       const map = new Map<number, Blob>()
       const durMap = new Map<number, number>()
+      const dialogueIdxs: number[] = []
       for (let i = firstLine; i <= sceneEnd; i++) {
-        if (lines[i]?.type === 'dialogue') {
-          const blob = await getRecording(script.id, i)
-          if (blob) {
-            map.set(i, blob)
-            const stored = await getRecordingDuration(script.id, i)
-            if (stored && stored > 0) {
-              durMap.set(i, stored)
-            } else {
-              const ms = await getBlobDuration(blob)
-              if (ms > 0) durMap.set(i, ms)
-            }
-          }
-        }
+        if (lines[i]?.type === 'dialogue') dialogueIdxs.push(i)
       }
+      // Loaded in parallel (rather than one IndexedDB round-trip at a time) so
+      // recordingsReadyRef resolves fast enough that pressing ▶ right after
+      // opening the scene doesn't run ahead of the preload.
+      await Promise.all(dialogueIdxs.map(async (i) => {
+        const blob = await getRecording(script.id, i)
+        if (!blob) return
+        map.set(i, blob)
+        const stored = await getRecordingDuration(script.id, i)
+        if (stored && stored > 0) {
+          durMap.set(i, stored)
+        } else {
+          const ms = await getBlobDuration(blob)
+          if (ms > 0) durMap.set(i, ms)
+        }
+      }))
       if (!cancelled) { recMapRef.current = map; recDurMapRef.current = durMap }
     }
-    load()
+    recordingsReadyRef.current = load()
     return () => { cancelled = true }
   }, [script?.id, firstLine, sceneEnd, lines])
 
