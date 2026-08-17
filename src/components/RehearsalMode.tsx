@@ -221,6 +221,17 @@ export function RehearsalMode() {
     return sceneEnd
   }, [sceneGroups, myCharacters, sceneEnd])
 
+  // The user's own first dialogue line in the scene — distinct from
+  // defaultBlockStart, which backs up one group to include a line of context
+  // before it. This is the scroll target when the character/scene selection
+  // changes, so picking a character or scene jumps straight to their line.
+  const myFirstLineIdx = useMemo(() => {
+    const idx = sceneGroups.findIndex(
+      (g) => g.type === 'dialogue' && g.character != null && myCharacters.includes(g.character),
+    )
+    return idx >= 0 ? sceneGroups[idx].startIdx : firstLine
+  }, [sceneGroups, myCharacters, firstLine])
+
   // --- State ---
   const [currentIdx, setCurrentIdx] = useState(defaultBlockStart)
   const [blockStart, setBlockStart] = useState(defaultBlockStart)
@@ -428,14 +439,6 @@ export function RehearsalMode() {
     longPressTouchRef.current = null
   }
 
-  // Scroll to clip start on mount
-  useEffect(() => {
-    const t = setTimeout(() => {
-      lineRefs.current[blockStart]?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    }, 100)
-    return () => clearTimeout(t)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
   // --- Pre-load all recordings (sync lookup during playback avoids IDB async mid-loop) ---
   const getBlobDuration = (blob: Blob): Promise<number> =>
     new Promise((resolve) => {
@@ -503,7 +506,10 @@ export function RehearsalMode() {
     abort()
   }, [selectedScriptId, cancel, abort])
 
-  // Reset clip markers and position when scene/character changes
+  // Reset clip markers and position when scene/character changes, and jump
+  // the view to the character's first line in the scene (also covers the
+  // initial mount, since myCharacter/sceneId already have their starting
+  // values then).
   useEffect(() => {
     setBlockStart(defaultBlockStart)
     setBlockEnd(defaultBlockEnd)
@@ -513,6 +519,10 @@ export function RehearsalMode() {
     setRevealedLines({})
     setLineProgress(null)
     setPhase('idle')
+    const t = setTimeout(() => {
+      lineRefs.current[myFirstLineIdx]?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }, 100)
+    return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myCharacter, sceneId])
 
