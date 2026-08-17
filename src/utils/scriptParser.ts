@@ -38,9 +38,25 @@ const isPageNumber = (s: string) => /^\d{1,4}$/.test(s)
 // Non-character all-caps keywords used as script labels or production directions
 const LABEL_KEYWORDS = new Set(['SETTING', 'SCENE', 'TIME', 'PLACE', 'NOTE', 'NOTES', 'CAST', 'MUSIC', 'SOUND', 'SFX', 'EFFECTS', 'SFXS'])
 
+// Titles/abbreviations whose trailing "." is not a sentence boundary.
+const ABBREVIATIONS = new Set([
+  'mr', 'mrs', 'ms', 'mx', 'dr', 'st', 'jr', 'sr', 'prof', 'capt', 'lt',
+  'col', 'gen', 'rev', 'sgt', 'messrs', 'mmes', 'ft', 'vs', 'etc',
+])
+
+// True if the "." at text[dotIndex] immediately follows a known abbreviation
+// (e.g. the "." in "Mr." or "Dr."), so it should not end the sentence.
+function isAbbreviationDot(text: string, dotIndex: number): boolean {
+  let start = dotIndex
+  while (start > 0 && /[A-Za-z]/.test(text[start - 1])) start--
+  const word = text.slice(start, dotIndex).toLowerCase()
+  return ABBREVIATIONS.has(word)
+}
+
 // Splits collated dialogue text into sentences. A sentence ends at a single
 // ".", "!" or "?" — a run of dots ("...") is an ellipsis and does NOT end the
-// sentence, since it marks a trailing-off thought that continues.
+// sentence, since it marks a trailing-off thought that continues. A "."
+// following a known abbreviation (e.g. "Mr.", "Dr.") also does not end it.
 function splitIntoSentences(text: string): string[] {
   const sentences: string[] = []
   let start = 0
@@ -50,6 +66,10 @@ function splitIntoSentences(text: string): string[] {
     if (ch === '.' && text[i + 1] === '.') {
       // Ellipsis — skip over the whole run of dots without splitting.
       while (text[i] === '.') i++
+      continue
+    }
+    if (ch === '.' && isAbbreviationDot(text, i)) {
+      i++
       continue
     }
     if (ch === '.' || ch === '!' || ch === '?') {

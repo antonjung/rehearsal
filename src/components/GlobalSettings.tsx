@@ -208,7 +208,7 @@ export function GlobalSettings({ onClose }: Props) {
               ))}
             </div>
             <SettingsRow label="Script font size">
-              <Stepper value={scriptFontSize} min={11} max={22} step={1}
+              <Stepper value={scriptFontSize} min={11} max={48} step={1}
                 display={`${scriptFontSize}px`} onChange={setScriptFontSize} />
             </SettingsRow>
             <p className="text-[var(--color-stage-muted)]" style={{ fontSize: `${scriptFontSize}px` }}>
