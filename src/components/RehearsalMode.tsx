@@ -10,6 +10,34 @@ import { unlockAudio, playCompletion, playClipStart } from '../utils/sounds'
 import type { VoiceCommandWords } from '../types'
 import { DEFAULT_VOICE_COMMANDS } from '../types'
 
+// A ~1ms silent WAV, built at runtime rather than embedded as a literal data
+// URI so its bytes are easy to verify. Used once per session to "unlock" the
+// persistent recording-playback <audio> element inside a real user gesture —
+// see unlockRecAudio.
+function buildSilentWavUrl(): string {
+  const dataSize = 8 // 8 samples of 8-bit PCM silence
+  const buffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(buffer)
+  const writeStr = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
+  }
+  writeStr(0, 'RIFF')
+  view.setUint32(4, 36 + dataSize, true)
+  writeStr(8, 'WAVE')
+  writeStr(12, 'fmt ')
+  view.setUint32(16, 16, true)      // fmt chunk size
+  view.setUint16(20, 1, true)       // PCM
+  view.setUint16(22, 1, true)       // mono
+  view.setUint32(24, 8000, true)    // sample rate
+  view.setUint32(28, 8000, true)    // byte rate (8000 Hz * 1 channel * 1 byte)
+  view.setUint16(32, 1, true)       // block align
+  view.setUint16(34, 8, true)       // bits per sample
+  writeStr(36, 'data')
+  view.setUint32(40, dataSize, true)
+  for (let i = 0; i < dataSize; i++) view.setUint8(44 + i, 128) // 8-bit PCM silence midpoint
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }))
+}
+
 const DEFAULT_SETTINGS = {
   myLineMode: 'silence' as const,
   readStageDirections: false,
@@ -270,6 +298,7 @@ export function RehearsalMode() {
   const myLinePauseTimerRef = useRef<(() => void) | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const recAudioElRef = useRef<HTMLAudioElement | null>(null)
+  const silentWavUrlRef = useRef<string | null>(null)
   const recResolveRef = useRef<((ok: boolean) => void) | null>(null)
   const recMapRef = useRef<Map<number, Blob>>(new Map())
   const recDurMapRef = useRef<Map<number, number>>(new Map())
@@ -298,25 +327,52 @@ export function RehearsalMode() {
   // speechSynthesis (TTS, used for every other line) across a long rehearsal
   // session leaves it "silently deaf": scheduling and playback report success
   // (no error, no unusually short/quiet buffer) but no sound reaches the
-  // speakers, because TTS's own audio session activation disrupts it. Plain
-  // <audio> playback is what the Record tab already uses successfully, and
-  // since TTS keeps working throughout the whole rehearsal (proving the
-  // audio session stays unlocked), <audio> elements played deep in this same
-  // async chain work reliably too — so it's the primary path, not a fallback.
+  // speakers, because TTS's own audio session activation disrupts it.
+  //
+  // Plain <audio> avoids that, but has its own iOS gate: WebKit only grants
+  // autoplay to a *specific element* that has itself been played inside a
+  // user gesture — a brand-new `new Audio()` created later in an async chain
+  // (e.g. several lines into a run-through) gets silently rejected even
+  // though the audio session is demonstrably unlocked (TTS keeps working).
+  // So a single persistent element (recAudioElRef) is unlocked once, inside
+  // handlePlay's synchronous gesture handler, by playing a silent clip on
+  // it — every subsequent recorded-line playback reuses that same element
+  // (just swapping .src) rather than constructing a fresh one.
+  const getRecAudioEl = (): HTMLAudioElement => {
+    if (!recAudioElRef.current) recAudioElRef.current = new Audio()
+    return recAudioElRef.current
+  }
+
+  const unlockRecAudio = () => {
+    try {
+      const el = getRecAudioEl()
+      if (!silentWavUrlRef.current) silentWavUrlRef.current = buildSilentWavUrl()
+      el.muted = true
+      el.src = silentWavUrlRef.current
+      el.play().then(() => {
+        el.pause()
+        el.currentTime = 0
+        el.muted = false
+      }).catch(() => { el.muted = false })
+    } catch { /* ignore */ }
+  }
+
   const playRecording = (blob: Blob): Promise<boolean> =>
     new Promise((resolve) => {
       const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
+      const audio = getRecAudioEl()
       const done = (ok: boolean) => {
-        recAudioElRef.current = null
+        audio.onended = null
+        audio.onerror = null
         URL.revokeObjectURL(url)
         recResolveRef.current = null
         resolve(ok)
       }
-      recAudioElRef.current = audio
       recResolveRef.current = done
       audio.onended = () => done(true)
       audio.onerror = () => done(false)
+      audio.src = url
+      audio.currentTime = 0
       audio.play().catch((err) => {
         console.error('Recording playback via <audio> element failed', err)
         done(false)
@@ -344,8 +400,10 @@ export function RehearsalMode() {
   }
 
   const cancelRecording = () => {
+    // Pause, but keep recAudioElRef itself — it's the persistent element
+    // unlocked in handlePlay's gesture handler; discarding it here would mean
+    // the next recorded line plays on a fresh, un-unlocked element.
     try { recAudioElRef.current?.pause() } catch { /* element not playing */ }
-    recAudioElRef.current = null
     recResolveRef.current?.(false)
     recResolveRef.current = null
   }
@@ -910,6 +968,7 @@ export function RehearsalMode() {
     } catch { /* ignore */ }
     speechSynthesis.cancel()
     unlockAudio()
+    unlockRecAudio()
     setLineProgress(null)
     setRevealedLines({})
     if (phase === 'paused') {
@@ -1015,6 +1074,7 @@ export function RehearsalMode() {
   }
 
   const handleDeleteRecording = (lineIdx: number) => {
+    if (!window.confirm('Delete this recording?')) return
     recMapRef.current.delete(lineIdx)
     recDurMapRef.current.delete(lineIdx)
     void deleteRecording(script!.id, lineIdx)
