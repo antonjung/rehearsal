@@ -52,9 +52,17 @@ async function pendingUploadCharacters(
     let hasAny = false
     for (const idx of groupStarts) {
       if (!allRecordings.has(`${script.id}:${idx}`)) continue
-      hasAny = true
+      // A line downloaded from someone else's shared voice track has a blob
+      // but no recordedAt (only setRecording, used for self-recorded lines,
+      // stamps one) — it's not ours to upload, so it shouldn't count here.
+      // Otherwise a character whose lines were only ever downloaded (or one
+      // where deleting your own recording leaves only downloaded lines
+      // behind) falls through to "never uploaded" below and gets wrongly
+      // flagged as pending.
       const at = await getRecordedAt(script.id, idx)
-      if (at && at > newestRecordedAt) newestRecordedAt = at
+      if (!at) continue
+      hasAny = true
+      if (at > newestRecordedAt) newestRecordedAt = at
     }
     if (!hasAny) continue
 
