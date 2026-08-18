@@ -114,6 +114,7 @@ export function RecordingStudio() {
   }, [script])
 
   const handleDelete = useCallback(async (group: LineGroup) => {
+    if (!window.confirm('Delete this recording?')) return
     await deleteRecording(script!.id, group.startIdx)
     setHasRec((h) => ({ ...h, [group.startIdx]: false }))
   }, [script])
