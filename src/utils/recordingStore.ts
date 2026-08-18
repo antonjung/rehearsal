@@ -142,3 +142,27 @@ export function getVoiceTrackDownloadedAt(scriptId: string, character: string): 
 export function setVoiceTrackDownloadedAt(scriptId: string, character: string, ms: number): Promise<void> {
   return setMeta(`${scriptId}:${character}:vtDownloadedAt`, ms)
 }
+
+// The line indices a (script, character) voice track last supplied — recorded
+// alongside vtDownloadedAt so a later "check voice tracks" can tell whether
+// one of them has since been deleted locally (e.g. by the user), even when
+// the track itself hasn't changed on the server since the last download.
+export async function getVoiceTrackLineIdxs(scriptId: string, character: string): Promise<number[] | null> {
+  try {
+    const db = await getDb()
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(STORE).objectStore(STORE).get(`${scriptId}:${character}:vtLines`)
+      req.onsuccess = () => resolve(Array.isArray(req.result) ? (req.result as number[]) : null)
+      req.onerror = () => reject(req.error)
+    })
+  } catch { return null }
+}
+
+export async function setVoiceTrackLineIdxs(scriptId: string, character: string, idxs: number[]): Promise<void> {
+  const db = await getDb()
+  await new Promise<void>((resolve, reject) => {
+    const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(idxs, `${scriptId}:${character}:vtLines`)
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}

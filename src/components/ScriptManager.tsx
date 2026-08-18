@@ -8,6 +8,7 @@ import {
   getAllRecordings, setRecordingRaw, getRecordedAt,
   getVoiceTrackUploadedAt, setVoiceTrackUploadedAt,
   getVoiceTrackDownloadedAt, setVoiceTrackDownloadedAt,
+  getVoiceTrackLineIdxs, setVoiceTrackLineIdxs,
 } from '../utils/recordingStore'
 import { characterGroupStarts } from '../utils/characterGroups'
 
@@ -183,6 +184,7 @@ export function ScriptManager() {
         // This device already has the content it just sent — treat it as
         // downloaded too, so "check voice tracks" doesn't re-offer our own upload.
         await setVoiceTrackDownloadedAt(script.id, character, createdAt)
+        await setVoiceTrackLineIdxs(script.id, character, [...recordings.keys()])
       }
       setVtUploadedId(script.id)
       setTimeout(() => setVtUploadedId(null), 2500)
@@ -206,11 +208,23 @@ export function ScriptManager() {
     setVtBusyId(script.id)
     try {
       const entries = await listVoiceTracks(libraryOrg, script.name)
+      const existing = await getAllRecordings()
 
+      // An entry needs (re-)downloading either because the server has a
+      // newer version than we last pulled, or — even with nothing new on the
+      // server — because a line from the version we already have has since
+      // been deleted locally (e.g. via the ✕ in Record or Run Through) and
+      // should be restored from the shared library.
       const newEntries = []
       for (const entry of entries) {
         const lastDownloaded = await getVoiceTrackDownloadedAt(script.id, entry.character)
-        if (!lastDownloaded || entry.createdAt > lastDownloaded) newEntries.push(entry)
+        if (!lastDownloaded || entry.createdAt > lastDownloaded) {
+          newEntries.push(entry)
+          continue
+        }
+        const knownLineIdxs = await getVoiceTrackLineIdxs(script.id, entry.character)
+        const deletedLocally = (knownLineIdxs ?? []).some((idx) => !existing.has(`${script.id}:${idx}`))
+        if (deletedLocally) newEntries.push(entry)
       }
 
       if (newEntries.length === 0) {
@@ -226,7 +240,6 @@ export function ScriptManager() {
         return
       }
 
-      const existing = await getAllRecordings()
       const newConflicts: VoiceConflictItem[] = []
       for (const entry of newEntries) {
         const lines = await downloadVoiceTrackLines(entry.id, libraryOrg, libraryPin)
@@ -247,6 +260,7 @@ export function ScriptManager() {
           })
         }
         await setVoiceTrackDownloadedAt(script.id, entry.character, entry.createdAt)
+        await setVoiceTrackLineIdxs(script.id, entry.character, [...lines.keys()].map(Number))
       }
 
       if (newConflicts.length > 0) {
